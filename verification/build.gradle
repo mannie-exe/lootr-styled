@@ -1,0 +1,6 @@
+plugins {
+    alias(libs.plugins.loom) apply false
+    alias(libs.plugins.loom.remap) apply false
+    alias(libs.plugins.moddev) apply false
+}
+allprojects { group = 'design.inherent.lootr_styled.verification'; version = '1.0.0' }

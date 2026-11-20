@@ -1,0 +1,86 @@
+{
+  "format": 1,
+  "inputs": [
+    {
+      "file": "entity_model_features-3.3.12-1.21-fabric.jar",
+      "target": "1.21.1-fabric",
+      "source": "https://api.modrinth.com/v2/version/90RfzkYP",
+      "url": "https://cdn.modrinth.com/data/4I1XuqiY/versions/90RfzkYP/entity_model_features-3.3.12-1.21-fabric.jar",
+      "sha512": "0ab99fec33bb27334adf002b911f2834bd5cecc1e9a02acb6b7eda1b5e989cc704b7c35a0ee716fe86d43e4f20b5307a2dd55766b1018c4e1422c863d411c013",
+      "bytes": 653743,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "entity_model_features-3.3.12-1.21-neoforge.jar",
+      "target": "1.21.1-neoforge",
+      "source": "https://api.modrinth.com/v2/version/197m3VoU",
+      "url": "https://cdn.modrinth.com/data/4I1XuqiY/versions/197m3VoU/entity_model_features-3.3.12-1.21-neoforge.jar",
+      "sha512": "b18bde755c6719c62579d65c96e6e768c99b25fba9f987dc843b2a64ce4d713ba2f8151da4a98efe76d854550f40356ac4fdfa952568cf1fb11771353dfc70e8",
+      "bytes": 656382,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "entity_model_features-3.3.12-26.3-fabric.jar",
+      "target": "26.3-fabric",
+      "source": "https://api.modrinth.com/v2/version/vF6qLXsA",
+      "url": "https://cdn.modrinth.com/data/4I1XuqiY/versions/vF6qLXsA/entity_model_features-3.3.12-26.3-fabric.jar",
+      "sha512": "4572fc065e757264947aff35a96d17d5e45d4b43e8e385b9a207f5380a8f43da5dbf8e10f30a7bc7cc4c0c8f7999717b4dd22d325667bdf8a0de6e839ad81efc",
+      "bytes": 665386,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "entity_model_features-3.3.12-26.3-neoforge.jar",
+      "target": "26.3-neoforge",
+      "source": "https://api.modrinth.com/v2/version/a1TEBxBW",
+      "url": "https://cdn.modrinth.com/data/4I1XuqiY/versions/a1TEBxBW/entity_model_features-3.3.12-26.3-neoforge.jar",
+      "sha512": "a663bc65981490157c0ecbef5e935a84aad2597d2a43cdbd2890d70d59fc7ea660116fa09f11fb4d620a90eb8635b37f99ac46d4b11a89a6d0f1d553b4de644b",
+      "bytes": 665542,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "entity_texture_features-7.2.7-1.21-fabric.jar",
+      "target": "1.21.1-fabric",
+      "source": "https://api.modrinth.com/v2/version/AMUABkxD",
+      "url": "https://cdn.modrinth.com/data/BVzZfTc1/versions/AMUABkxD/entity_texture_features-7.2.7-1.21-fabric.jar",
+      "sha512": "a21a652b63aaa56f0fb306ec07d33061f28eca6bf89ce6dc99c37b7efc963adbc98bdada1d0074277e4da6b3eb3c63ac453541bf80ecd5dc142203e3ca7f6219",
+      "bytes": 805015,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "entity_texture_features-7.2.7-1.21-neoforge.jar",
+      "target": "1.21.1-neoforge",
+      "source": "https://api.modrinth.com/v2/version/1DVPB3a4",
+      "url": "https://cdn.modrinth.com/data/BVzZfTc1/versions/1DVPB3a4/entity_texture_features-7.2.7-1.21-neoforge.jar",
+      "sha512": "eca787ad7c15819f9cb14e29a3748b49d0d2a6af01e3a18295293ccacac636090bf71d6756ac640b81f5079f21814e306493f6b94be35e6b8cef198363ecb337",
+      "bytes": 811876,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "entity_texture_features-7.2.7-26.3-fabric.jar",
+      "target": "26.3-fabric",
+      "source": "https://api.modrinth.com/v2/version/svwZ2o4d",
+      "url": "https://cdn.modrinth.com/data/BVzZfTc1/versions/svwZ2o4d/entity_texture_features-7.2.7-26.3-fabric.jar",
+      "sha512": "69193c58d4d05e08fea9afa34cc47563e9b9e95aa2da276441085ade44ed36f8123b9cc1a2938f9ecac9aea6fd9ceb51120dd20f7284337a3bb592bc3b904336",
+      "bytes": 798322,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "entity_texture_features-7.2.7-26.3-neoforge.jar",
+      "target": "26.3-neoforge",
+      "source": "https://api.modrinth.com/v2/version/Eb2ksYtk",
+      "url": "https://cdn.modrinth.com/data/BVzZfTc1/versions/Eb2ksYtk/entity_texture_features-7.2.7-26.3-neoforge.jar",
+      "sha512": "1ae6b309d838631d71fbffc7729fad85b27ecc842302775ac3305cbde8b638d7354a232bd966897b607d4d08258f4306ea882da5201577032801bd08808432a5",
+      "bytes": 798826,
+      "scope": "Optional native verification dependency; never bundled"
+    },
+    {
+      "file": "FA+Objects-v2.1.2.zip",
+      "target": "all",
+      "source": "https://modrinth.com/resourcepack/fresh-animations-objects/version/AIGgXNdl",
+      "url": "https://cdn.modrinth.com/data/23O9JVMV/versions/AIGgXNdl/FA%2BObjects-v2.1.2.zip",
+      "sha512": "61b76ed37e5ecfc4b5d25c545b011bb5bb59c49c97733d0f8b3afa725c886ed82e787d177df068f7e2fb3d5bb6fc253c5822d833658ff3ba48bd53b5c6c1ed21",
+      "bytes": 142277,
+      "scope": "External rig for installed/local testing only; no permission to bundle or relicense is inferred"
+    }
+  ]
+}

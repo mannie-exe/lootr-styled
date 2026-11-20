@@ -63,6 +63,30 @@ class NativeResourceGenerationTest {
   }
 
   @Test
+  void currentFabricKnownPackIdentityIsNativeWhileSameNameWithoutMetadataIsExplicit()
+      throws Exception {
+    for (var known :
+        List.of(
+            Optional.of(new KnownPack("vanilla", "lootr", "test")), Optional.<KnownPack>empty())) {
+      var pack = new TestPack("lootr", known);
+      String target = TARGETS.barrels().getFirst().target().toString();
+      pack.put(target, "{}");
+      try (var resources = new MultiPackResourceManager(PackType.CLIENT_RESOURCES, List.of(pack))) {
+        var origin =
+            new NativeSources(resources)
+                .find(design.inherent.lootr_styled.ResourceId.parse(target))
+                .orElseThrow()
+                .origin();
+        assertEquals(
+            known.isPresent()
+                ? design.inherent.lootr_styled.resources.ResourceAccess.Origin.LOOTR
+                : design.inherent.lootr_styled.resources.ResourceAccess.Origin.OTHER,
+            origin);
+      }
+    }
+  }
+
+  @Test
   void defaultBarrelHasFourMaterialStatesAndDoesNotPublishVanillaModels() throws Exception {
     try (var manager = manager(inputs())) {
       for (var barrel : TARGETS.barrels()) {

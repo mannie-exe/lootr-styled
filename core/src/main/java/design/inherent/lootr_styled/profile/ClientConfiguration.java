@@ -38,18 +38,55 @@ public final class ClientConfiguration {
     directory(root);
     create(root.resolve("settings.json"), ClientSettings.STARTER);
     Path starter = root.resolve("default");
+    if (Files.exists(starter, LinkOption.NOFOLLOW_LINKS)
+        && !Files.isDirectory(starter, LinkOption.NOFOLLOW_LINKS)) return;
     Files.createDirectories(starter);
     directory(starter);
     create(starter.resolve("profile.json"), LOCAL_STARTER);
   }
 
   public ClientSettings load() throws IOException {
+    return snapshot().settings();
+  }
+
+  public Snapshot snapshot() throws IOException {
+    byte[] bytes = settingsBytes();
+    return new Snapshot(ClientSettings.parse(bytes), hash(bytes));
+  }
+
+  private byte[] settingsBytes() throws IOException {
     seed();
     Path file = root.resolve("settings.json");
     if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS))
       throw new IOException("Settings must be a regular file");
     try (var input = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
-      return ClientSettings.parse(input.readNBytes(16385));
+      byte[] bytes = input.readNBytes(16385);
+      if (bytes.length > 16384) throw new IOException("Settings exceed 16 KiB");
+      return bytes;
+    }
+  }
+
+  /** Detect observed external changes before an explicit editor save. */
+  public synchronized Snapshot save(ClientSettings settings, Snapshot expected) throws IOException {
+    if (!hash(settingsBytes()).equals(expected.contentHash()))
+      throw new IOException("Settings changed on disk; reopen before saving");
+    save(settings);
+    return snapshot();
+  }
+
+  public record Snapshot(ClientSettings settings, String contentHash) {
+    public Snapshot {
+      java.util.Objects.requireNonNull(settings);
+      java.util.Objects.requireNonNull(contentHash);
+    }
+  }
+
+  private static String hash(byte[] bytes) {
+    try {
+      return java.util.HexFormat.of()
+          .formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+    } catch (java.security.NoSuchAlgorithmException impossible) {
+      throw new AssertionError(impossible);
     }
   }
 

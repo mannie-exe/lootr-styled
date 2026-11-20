@@ -20,6 +20,8 @@ def verify(path, minecraft, loader, version):
             if names.count(required) != 1:
                 raise ValueError(f'{path.name}: missing or duplicate {required}')
         for name in names:
+            if name.startswith('design/inherent/lootr_styled/verification/'):
+                raise ValueError(f'{path.name}: verification-only code {name}')
             if name.startswith('/') or '\\' in name or '..' in Path(name).parts:
                 raise ValueError(f'{path.name}: unsafe archive path {name}')
             if name.lower().endswith(('.png', '.jem', '.jpm', '.zip', '.jar')):
@@ -38,8 +40,11 @@ def verify(path, minecraft, loader, version):
             value = json.loads(archive.read('fabric.mod.json'))
             if (value['id'], value['version'], value['environment']) != ('lootr_styled', version, 'client'):
                 raise ValueError(f'{path.name}: wrong Fabric identity or side')
-            if value['depends']['minecraft'] != minecraft or not value['depends'].get('lootr'):
+            if (value['depends']['minecraft'] != minecraft or not value['depends'].get('lootr')
+                    or not value['depends'].get('fabric-command-api-v2')):
                 raise ValueError(f'{path.name}: wrong Fabric dependency scope')
+            if not value['depends'].get('fabric-command-api-v2'):
+                raise ValueError(f'{path.name}: missing required client-command API')
             if 'META-INF/neoforge.mods.toml' in names:
                 raise ValueError(f'{path.name}: mixed loader metadata')
         else:
@@ -67,6 +72,8 @@ def distribution(root, version):
             verify(path, minecraft, loader, version)
             sources = root / f'{prefix}-sources.jar'
             with zipfile.ZipFile(sources) as archive:
+                if any(n.startswith('design/inherent/lootr_styled/verification/') for n in archive.namelist()):
+                    raise ValueError(f'{sources.name}: verification-only sources')
                 if archive.testzip() is not None or 'design/inherent/lootr_styled/ResourceId.java' not in archive.namelist():
                     raise ValueError(f'{sources.name}: missing or corrupt own sources')
                 if any(n.endswith(('.png', '.jem', '.jpm', '.zip', '.jar')) for n in archive.namelist()):

@@ -7,3 +7,15 @@ dependencies {
     testImplementation libs.junit.jupiter
     testRuntimeOnly libs.junit.launcher
 }
+
+tasks.named('test') {
+    if (providers.gradleProperty('proofVectors').isPresent()) {
+        def vectors = rootProject.file(providers.gradleProperty('proofVectors').get())
+        inputs.file vectors
+        systemProperty 'lootr.styled.proofVectors', vectors.absolutePath
+    }
+}
+
+tasks.named('processTestResources') {
+    from(rootProject.file('proofs/source-vectors.csv')) { into 'proofs' }
+}

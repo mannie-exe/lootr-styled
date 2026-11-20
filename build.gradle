@@ -10,7 +10,7 @@ repositories { mavenCentral() }
 
 spotless {
     java {
-        target 'platform/**/src/**/*.java', 'minecraft-*/src/**/*.java'
+        target 'platform/**/src/**/*.java', 'minecraft-*/src/**/*.java', 'verification/**/src/**/*.java'
         googleJavaFormat(libs.versions.google.java.format.get())
         removeUnusedImports()
         trimTrailingWhitespace()

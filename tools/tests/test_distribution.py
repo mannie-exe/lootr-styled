@@ -52,6 +52,12 @@ class DistributionTest(unittest.TestCase):
             entries[name] = b'not-admitted'
             self.refused(entries, 'unadmitted artwork/rig/archive')
 
+    def test_verification_consumer_cannot_ship(self):
+        entries = dict(self.entries)
+        entries['design/inherent/lootr_styled/verification/NativeProbe.class'] = self.entries[
+            'design/inherent/lootr_styled/ResourceId.class']
+        self.refused(entries, 'verification-only code')
+
     def test_vanilla_model_override(self):
         entries = dict(self.entries)
         entries['assets/minecraft/models/block/barrel.json'] = b'{}'

@@ -1,0 +1,42 @@
+apply plugin: 'java'
+def modern = project.name.endsWith('26_3')
+def game = modern ? '26.3' : '1.21.1'
+def loaderKind = project.name.startsWith('fabric') ? 'fabric' : 'neoforge'
+def productVersion = providers.gradleProperty('styledVersion').get()
+def fixtureMode = providers.gradleProperty('probeMode').getOrElse('native')
+if (!(fixtureMode in ['native', 'fresh', 'off'])) throw new GradleException('Unsupported verification mode')
+ext.game = game
+ext.modern = modern
+ext.loaderKind = loaderKind
+ext.fixtureMode = fixtureMode
+ext.fixtureDirectory = fixtureMode + (providers.gradleProperty('profileProbe').getOrElse('false') == 'true' ? '-profile' : '') + (providers.gradleProperty('scene').getOrElse('false') == 'true' ? '-scene' : '')
+ext.productJar = rootProject.file("../build/distributions/lootr-styled-${game}-${loaderKind}-${productVersion}.jar")
+java { toolchain.languageVersion = JavaLanguageVersion.of(modern ? 25 : 21) }
+tasks.withType(JavaCompile).configureEach {
+    options.release = modern ? 25 : 21
+    options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
+}
+sourceSets.main.java.srcDir rootProject.file('common/src/main/java')
+sourceSets.main.java.srcDir rootProject.file("${modern ? 'minecraft-26_3' : 'minecraft-1_21_1'}/src/main/java")
+sourceSets.main.java.srcDir rootProject.file("platform/${loaderKind}/src/main/java")
+sourceSets.main.resources.srcDir rootProject.file("platform/${loaderKind}/src/main/resources")
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.shedaniel.me/' }
+    exclusiveContent {
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeModule('maven.modrinth', 'lootr') }
+    }
+}
+tasks.register('verifyProduct') {
+    doLast {
+        if (!productJar.isFile()) throw new GradleException('Build the product artifact before running this separate consumer')
+        String expected = providers.gradleProperty('styledSha256').get()
+        String actual = java.security.MessageDigest.getInstance('SHA-256').digest(productJar.bytes).encodeHex().toString()
+        if (actual != expected) throw new GradleException('Packaged product SHA-256 differs from requested snapshot')
+        println "Packaged Lootr: Styled input SHA-256: ${actual}"
+    }
+}
+tasks.withType(JavaCompile).configureEach { dependsOn 'verifyProduct' }
+tasks.matching { it.name in ['runClient', 'runServer'] }.configureEach { dependsOn 'verifyProduct' }
+if (project.name.endsWith('26_3')) { dependencies { compileOnly libs.error.prone.annotations } }

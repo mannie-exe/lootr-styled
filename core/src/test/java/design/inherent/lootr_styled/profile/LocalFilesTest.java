@@ -121,6 +121,27 @@ class LocalFilesTest {
   }
 
   @Test
+  void linkedStarterCannotDisableBuiltinOrOtherProfiles() throws Exception {
+    var configuration = new ClientConfiguration(temp);
+    Files.createDirectories(configuration.root());
+    Path outside = Files.createDirectory(temp.resolve("outside"));
+    Files.createSymbolicLink(configuration.root().resolve("default"), outside);
+    assertEquals(ClientSettings.DEFAULTS, configuration.load());
+    assertFalse(Files.exists(outside.resolve("profile.json")));
+  }
+
+  @Test
+  void editorSaveRejectsObservedExternalEditsAndPreservesInvalidDrafts() throws Exception {
+    var configuration = new ClientConfiguration(temp);
+    var snapshot = configuration.snapshot();
+    Path file = configuration.root().resolve("settings.json");
+    Files.writeString(file, "invalid user draft");
+    assertThrows(IOException.class, () -> configuration.save(ClientSettings.DEFAULTS, snapshot));
+    assertEquals("invalid user draft", Files.readString(file));
+    assertThrows(IllegalArgumentException.class, configuration::snapshot);
+  }
+
+  @Test
   void unsupportedProvidersRefuseInsteadOfUsingAnUnanchoredFallback() throws Exception {
     var zip = temp.resolve("test.zip");
     try (var fs =

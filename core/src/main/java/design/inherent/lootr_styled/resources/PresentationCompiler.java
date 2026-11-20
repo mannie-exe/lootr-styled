@@ -26,8 +26,35 @@ public final class PresentationCompiler {
       ResourceAccess nativeSources,
       LocalFiles local,
       Consumer<byte[]> nativeModelValidator) {
+    return compile(
+        targets, settings, nativeSources, local, nativeModelValidator, EmfSupport.ABSENT);
+  }
+
+  public static Result compile(
+      ContainerTargets targets,
+      ClientSettings settings,
+      ResourceAccess nativeSources,
+      LocalFiles local,
+      Consumer<byte[]> nativeModelValidator,
+      EmfSupport emf) {
+    return compile(targets, settings, nativeSources, local, nativeModelValidator, emf, false);
+  }
+
+  public static Result compile(
+      ContainerTargets targets,
+      ClientSettings settings,
+      ResourceAccess nativeSources,
+      LocalFiles local,
+      Consumer<byte[]> nativeModelValidator,
+      EmfSupport emf,
+      boolean ordinaryChestIsolated) {
     if (!settings.enabled())
-      return new Result(FrozenResources.EMPTY, List.of("Disabled"), List.of());
+      return new Result(
+          FrozenResources.EMPTY,
+          List.of("Disabled"),
+          List.of(
+              new Choice(ClientSettings.DEFAULT, "Default", "Built-in"),
+              new Choice(ClientSettings.VANILLA, "Inherited", "Built-in")));
     var budget = new ResourceInputs.Budget();
     var nativeInputs = new ResourceInputs(nativeSources, budget);
     var catalogue = ProfileCatalogue.discover(targets, nativeSources, local, budget);
@@ -43,15 +70,8 @@ public final class PresentationCompiler {
     } catch (IllegalArgumentException ex) {
       status.add("Model profile " + models.profile().id() + " refused: " + ex.getMessage());
       status.add("Models: effective " + ClientSettings.VANILLA + " after profile refusal");
-      output =
-          models(
-              targets,
-              catalogue.find(ClientSettings.VANILLA).orElseThrow(),
-              nativeInputs,
-              budget,
-              images,
-              nativeModelValidator,
-              status);
+      models = catalogue.find(ClientSettings.VANILLA).orElseThrow();
+      output = models(targets, models, nativeInputs, budget, images, nativeModelValidator, status);
     }
     try {
       output.putAll(artwork(targets, artwork, budget, images));
@@ -61,7 +81,18 @@ public final class PresentationCompiler {
       status.add("Artwork profile " + artwork.profile().id() + " refused: " + ex.getMessage());
       status.add("Artwork: effective " + ClientSettings.VANILLA + " after profile refusal");
     }
-    status.add("Fresh Objects: " + settings.fresh() + " (adapter pending)");
+    output.putAll(
+        ChestPresentation.compile(
+            targets,
+            settings.fresh(),
+            emf,
+            models,
+            nativeInputs,
+            budget,
+            status,
+            ordinaryChestIsolated));
+    BarrelWrapper.adapt(targets, nativeInputs, output, status);
+    status.add("Fresh Objects requested: " + settings.fresh());
     var choices =
         catalogue.entries().stream()
             .map(e -> new Choice(e.profile().id(), e.profile().title(), e.description()))
@@ -94,8 +125,10 @@ public final class PresentationCompiler {
       List<String> status) {
     Set<ResourceId> admitted =
         targets.barrels().stream().map(ContainerTargets.Barrel::target).collect(Collectors.toSet());
+    targets.chests().forEach(chest -> admitted.add(chest.target()));
     if (!admitted.containsAll(selected.profile().models().keySet())) {
-      throw new IllegalArgumentException("Model target is not an admitted barrel JSON slot");
+      throw new IllegalArgumentException(
+          "Model target is not an admitted barrel JSON or Lootr JEM slot");
     }
     var output = new HashMap<ResourceId, byte[]>();
     var selectedInputs = new ResourceInputs(selected.sources(), budget);
@@ -167,7 +200,7 @@ public final class PresentationCompiler {
       if (captured.orElseThrow().source().origin() != ResourceAccess.Origin.LOCAL) continue;
       var size = images.validate(bytes);
       String path =
-          "generated/"
+          "block/generated/"
               + TextureImages.hash(profile.toString().getBytes(StandardCharsets.UTF_8))
               + "/"
               + TextureImages.hash(asset.toString().getBytes(StandardCharsets.UTF_8));

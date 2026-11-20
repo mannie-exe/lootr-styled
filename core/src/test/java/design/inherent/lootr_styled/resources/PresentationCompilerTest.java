@@ -53,6 +53,87 @@ class PresentationCompilerTest {
   }
 
   @Test
+  void actualLocalModelAndPngCompileWithoutPublishingAVanillaOverride(
+      @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+    var memory = inputs();
+    var directory = root.resolve("custom");
+    java.nio.file.Files.createDirectories(directory.resolve("assets/example/models"));
+    java.nio.file.Files.createDirectories(directory.resolve("assets/example/textures/block"));
+    String target = TARGETS.barrels().getFirst().target().toString();
+    java.nio.file.Files.writeString(
+        directory.resolve("profile.json"),
+        "{\"format\":1,\"models\":{\"" + target + "\":\"example:models/local.json\"}}");
+    java.nio.file.Files.writeString(
+        directory.resolve("assets/example/models/local.json"),
+        "{\"textures\":{\"side\":\"example:block/local\"},\"elements\":[{\"from\":[0,0,0],\"to\":[16,16,16],\"faces\":{\"north\":{\"texture\":\"#side\",\"uv\":[1,2,3,4]}}}]}");
+    byte[] image = png();
+    java.nio.file.Files.write(directory.resolve("assets/example/textures/block/local.png"), image);
+    try (var local = design.inherent.lootr_styled.profile.LocalFiles.open(root)) {
+      var result =
+          PresentationCompiler.compile(
+              TARGETS,
+              settings("lootr_styled_local:custom", "lootr_styled:vanilla"),
+              memory,
+              local,
+              bytes -> BlockModels.validate(JsonDocuments.object(bytes)));
+      local.validateCurrent();
+      assertTrue(
+          result.resources().ids().stream().noneMatch(id -> id.namespace().equals("minecraft")));
+      var texture =
+          result.resources().ids().stream()
+              .filter(id -> id.path().endsWith(".png"))
+              .findFirst()
+              .orElseThrow();
+      try (var input = result.resources().open(texture).orElseThrow()) {
+        assertArrayEquals(image, input.readAllBytes());
+      }
+      try (var input = result.resources().open(ResourceId.parse(target)).orElseThrow()) {
+        var model = JsonDocuments.object(input.readAllBytes());
+        assertTrue(
+            model
+                .getAsJsonObject("textures")
+                .get("side")
+                .getAsString()
+                .startsWith("lootr_styled:block/generated/"));
+        assertEquals(
+            "[1,2,3,4]",
+            model
+                .getAsJsonArray("elements")
+                .get(0)
+                .getAsJsonObject()
+                .getAsJsonObject("faces")
+                .getAsJsonObject("north")
+                .get("uv")
+                .toString());
+      }
+    }
+  }
+
+  @Test
+  void recognizedNativeOpenWrapperUsesOpenLeavesButForeignWrappersRemainOwned() throws Exception {
+    var memory = inputs();
+    var wrapper = ResourceId.parse("lootr:models/block/lootr_barrel_open.json");
+    String declaration =
+        "{\"loader\":\"lootr:barrel\",\"unopened\":{\"parent\":\"lootr:block/lootr_barrel_unopened\"},\"opened\":{\"parent\":\"lootr:block/lootr_opened_barrel\"},\"old_opened\":{\"parent\":\"lootr:block/old_lootr_opened_barrel_open\"}}";
+    memory.put(wrapper, bytes(declaration), ResourceAccess.Origin.LOOTR);
+    var result = compile(memory, ClientSettings.DEFAULTS);
+    try (var stream = result.resources().open(wrapper).orElseThrow()) {
+      var parsed = JsonDocuments.object(stream.readAllBytes());
+      assertEquals(
+          "lootr:block/lootr_barrel_unopened_open",
+          parsed.getAsJsonObject("unopened").get("parent").getAsString());
+      assertEquals(
+          "lootr:block/lootr_opened_barrel_open",
+          parsed.getAsJsonObject("opened").get("parent").getAsString());
+      assertEquals(
+          "lootr:block/old_lootr_opened_barrel_open",
+          parsed.getAsJsonObject("old_opened").get("parent").getAsString());
+    }
+    memory.put(wrapper, bytes(declaration), ResourceAccess.Origin.OTHER);
+    assertFalse(compile(memory, ClientSettings.DEFAULTS).resources().ids().contains(wrapper));
+  }
+
+  @Test
   void resourceProfileUsesTheSameCompilerAsBuiltinAndDoesNotNeedUnusedVanillaInput()
       throws Exception {
     var memory = inputs();

@@ -10,7 +10,7 @@ public final class BarrelCompiler {
 
   private BarrelCompiler() {}
 
-  static void retarget(JsonObject model, ContainerTargets.Barrel barrel) {
+  public static void retarget(JsonObject model, ContainerTargets.Barrel barrel) {
     if (!model.has("textures")) return;
     var textures = model.getAsJsonObject("textures");
     for (var entry : textures.entrySet()) {

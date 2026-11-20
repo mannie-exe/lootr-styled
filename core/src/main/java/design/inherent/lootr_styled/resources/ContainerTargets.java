@@ -53,5 +53,16 @@ public enum ContainerTargets {
     return Set.copyOf(result);
   }
 
+  public List<Chest> chests() {
+    String prefix = this == LEGACY ? "lootr_lootr_" : "lootr_";
+    return List.of(
+        new Chest("chest", ResourceId.parse("minecraft:emf/cem/" + prefix + "chest.jem")),
+        new Chest(
+            "trapped_chest",
+            ResourceId.parse("minecraft:emf/cem/" + prefix + "trapped_chest.jem")));
+  }
+
+  public record Chest(String vanillaName, ResourceId target) {}
+
   public record Barrel(ResourceId target, ResourceId vanilla, String material, boolean open) {}
 }

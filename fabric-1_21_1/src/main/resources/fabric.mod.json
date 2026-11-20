@@ -18,7 +18,8 @@
     "fabricloader": ">=0.19.5",
     "minecraft": "1.21.1",
     "java": ">=21",
-    "lootr": ">=1.21.1-1.11.38.127"
+    "lootr": ">=1.21.1-1.11.38.127",
+    "fabric-command-api-v2": "*"
   },
   "mixins": [
     "lootr_styled.mixins.json"

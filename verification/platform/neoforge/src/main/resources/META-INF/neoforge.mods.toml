@@ -1,0 +1,9 @@
+modLoader="javafml"
+loaderVersion="[2,)"
+license="Apache-2.0"
+[[mods]]
+modId="lootr_styled_probe"
+version="1.0.0"
+displayName="Lootr Styled verification fixture"
+[[mixins]]
+config="lootr_styled_probe.mixins.json"

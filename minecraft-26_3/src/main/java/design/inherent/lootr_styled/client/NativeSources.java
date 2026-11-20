@@ -41,8 +41,8 @@ final class NativeSources implements ResourceAccess {
             .map(
                 pack -> {
                   if (pack.namespace().equals("neoforge") && pack.id().equals("mod/lootr")
-                      || pack.namespace().equals("fabric") && pack.id().equals("lootr"))
-                    return Origin.LOOTR;
+                      || (pack.namespace().equals("fabric") || pack.namespace().equals("vanilla"))
+                          && pack.id().equals("lootr")) return Origin.LOOTR;
                   if (pack.namespace().equals("minecraft")) return Origin.MINECRAFT;
                   return Origin.OTHER;
                 })

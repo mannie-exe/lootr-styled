@@ -15,4 +15,5 @@ __pycache__/
 .env
 mise.local.toml
 artifacts/
+/verification/full-pack-input/
 logs/

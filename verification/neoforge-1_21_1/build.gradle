@@ -1,0 +1,19 @@
+plugins { alias(libs.plugins.moddev) }
+apply from: rootProject.file('common.gradle')
+neoForge {
+    version = libs.versions.neoforge.legacy.get()
+    mods { lootr_styled_probe { sourceSet sourceSets.main } }
+    runs {
+        client { client(); gameDirectory = file("runs/${fixtureDirectory}"); jvmArgument '-Xmx2G' }
+    }
+}
+dependencies {
+    implementation files(productJar)
+    implementation 'maven.modrinth:lootr:SPOrIzX8'
+    if (fixtureMode != 'native') {
+        runtimeOnly files(rootProject.file('../build/inputs/entity_model_features-3.3.12-1.21-neoforge.jar'))
+        runtimeOnly files(rootProject.file('../build/inputs/entity_texture_features-7.2.7-1.21-neoforge.jar'))
+    }
+}
+
+sourceSets.main.resources.srcDir rootProject.file('minecraft-1_21_1/src/main/resources')

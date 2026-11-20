@@ -17,13 +17,22 @@ import net.minecraft.client.renderer.block.model.BlockModel;
 public final class ClientRuntime {
   private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
   private static volatile ClientConfiguration config;
+  private static volatile java.util.function.Supplier<java.util.Optional<String>> emfVersion =
+      java.util.Optional::empty;
   private static volatile List<String> status = List.of("Not reloaded");
   private static volatile List<PresentationCompiler.Choice> choices = List.of();
 
   private ClientRuntime() {}
 
   public static void initialize(Path configDirectory) {
+    initialize(configDirectory, java.util.Optional::empty);
+  }
+
+  public static void initialize(
+      Path configDirectory,
+      java.util.function.Supplier<java.util.Optional<String>> optionalEmfVersion) {
     config = new ClientConfiguration(configDirectory);
+    emfVersion = java.util.Objects.requireNonNull(optionalEmfVersion);
   }
 
   public static List<String> status() {
@@ -32,6 +41,10 @@ public final class ClientRuntime {
 
   public static List<PresentationCompiler.Choice> choices() {
     return choices;
+  }
+
+  public static ContainerTargets targets() {
+    return ContainerTargets.LEGACY;
   }
 
   public static ClientConfiguration configuration() {
@@ -53,7 +66,14 @@ public final class ClientRuntime {
       }
       var result =
           PresentationCompiler.compile(
-              ContainerTargets.LEGACY, settings, access, local, ClientRuntime::validateModel);
+              ContainerTargets.LEGACY,
+              settings,
+              access,
+              local,
+              ClientRuntime::validateModel,
+              settings.enabled()
+                  ? design.inherent.lootr_styled.resources.EmfSupport.inspect(emfVersion.get())
+                  : design.inherent.lootr_styled.resources.EmfSupport.ABSENT);
       if (local != null) local.validateCurrent();
       notes.addAll(result.status());
       status = List.copyOf(notes);
