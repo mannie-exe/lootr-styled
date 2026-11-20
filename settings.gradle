@@ -1,0 +1,9 @@
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.fabricmc.net/' }
+        gradlePluginPortal()
+        maven { url = 'https://maven.neoforged.net/releases/' }
+    }
+}
+rootProject.name = 'lootr-styled'
+include 'core', 'fabric-1_21_1', 'neoforge-1_21_1', 'fabric-26_3', 'neoforge-26_3'

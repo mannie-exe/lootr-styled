@@ -1,0 +1,29 @@
+apply plugin: 'java-library'
+
+def minecraftTarget = project.name.endsWith('26_3') ? '26.3' : '1.21.1'
+def versionDirectory = minecraftTarget == '26.3' ? 'minecraft-26_3' : 'minecraft-1_21_1'
+def platform = project.name.startsWith('fabric') ? 'fabric' : 'neoforge'
+ext.minecraftTarget = minecraftTarget
+ext.platform = platform
+base { archivesName = "lootr-styled-${minecraftTarget}-${platform}" }
+sourceSets.main.java.srcDir rootProject.file("${versionDirectory}/src/main/java")
+sourceSets.main.java.srcDir rootProject.file("platform/${platform}/src/main/java")
+sourceSets.main.resources.srcDir rootProject.file("${versionDirectory}/src/main/resources")
+sourceSets.main.resources.srcDir rootProject.file('resources')
+
+dependencies {
+    compileOnly project(':core')
+}
+
+tasks.named('jar') {
+    from project(':core').sourceSets.main.output
+}
+tasks.named('sourcesJar') {
+    from project(':core').sourceSets.main.allSource
+}
+repositories {
+    exclusiveContent {
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeModule('maven.modrinth', 'lootr') }
+    }
+}

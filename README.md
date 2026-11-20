@@ -1,0 +1,11 @@
+# Lootr: Styled
+
+Client-side chest and barrel styling for Minecraft and Lootr, developed under inherent.design. The project targets Minecraft 1.21.1 and 26.3 on Fabric and NeoForge.
+
+This is an unreleased development project. The bootstrap builds four native artifacts and their sources, but standalone rendering, profiles and resource-pack integration are not implemented or qualified yet. Do not install a bootstrap JAR expecting the planned model changes.
+
+The selected design adapts supported effective vanilla chest/barrel models and animation resources to Lootr, with explicit Lootr-specific profile/resource overrides taking precedence. No replacement chest geometry or vanilla model override is shipped. The Default profile contributes our Lootr-only barrel geometry without replacement artwork. Custom profiles may provide models, artwork or both, with optional adaptation of installed Fresh Objects resources. Native loot, inventories and per-player container state stay with Minecraft and Lootr.
+
+Own code is [Apache-2.0](LICENSE). External artwork and rigs retain their own terms. Permission-pending preview content is separate from distributable product content; installed native resources remain the fallback.
+
+See [architecture](docs/architecture.md), [profiles](docs/profiles.md), [development](docs/development.md), [dependencies](docs/dependencies.md) and [verification](docs/verification.md). Follow [contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md) for changes and disclosures.

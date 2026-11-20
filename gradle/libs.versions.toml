@@ -1,0 +1,27 @@
+[versions]
+loom = "1.18.4"
+moddev = "2.0.148"
+spotless = "8.11.0"
+google-java-format = "1.35.0"
+fabric-loader = "0.19.5"
+fabric-api-legacy = "0.116.18+1.21.1"
+fabric-api-modern = "0.162.0+26.3"
+neoforge-legacy = "21.1.265"
+neoforge-modern = "26.3.0.69-beta"
+cloth = "15.0.140"
+junit = "5.13.1"
+
+[libraries]
+fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
+fabric-api-legacy = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api-legacy" }
+fabric-api-modern = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api-modern" }
+cloth = { module = "me.shedaniel.cloth:cloth-config-fabric", version.ref = "cloth" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }
+loom-remap = { id = "net.fabricmc.fabric-loom-remap", version.ref = "loom" }
+moddev = { id = "net.neoforged.moddev", version.ref = "moddev" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

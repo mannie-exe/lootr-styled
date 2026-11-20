@@ -1,0 +1,26 @@
+plugins { alias(libs.plugins.loom) }
+apply from: rootProject.file('gradle/native-common.gradle')
+loom {
+    mods {
+        lootr_styled {
+            sourceSet sourceSets.main
+            sourceSet project(':core').sourceSets.main
+        }
+    }
+    runs {
+        client { client(); runDir 'runs/client' }
+    }
+}
+repositories {
+    maven { url = 'https://maven.shedaniel.me/' }
+}
+dependencies {
+    minecraft 'com.mojang:minecraft:26.3'
+    implementation libs.fabric.loader
+    implementation libs.fabric.api.modern
+    implementation 'maven.modrinth:lootr:gVwn7m2v'
+}
+tasks.named('processResources') {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}

@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[2,)"
+license="Apache-2.0"
+[[mods]]
+modId="lootr_styled"
+version="${version}"
+displayName="Lootr: Styled"
+authors="inherent.design"
+description="Client-side model and artwork compatibility for Lootr."
+[[dependencies.lootr_styled]]
+modId="minecraft"
+type="required"
+versionRange="[26.3]"
+side="CLIENT"
+[[dependencies.lootr_styled]]
+modId="neoforge"
+type="required"
+versionRange="[26.3.0.22-beta,)"
+side="CLIENT"
+[[dependencies.lootr_styled]]
+modId="lootr"
+type="required"
+versionRange="[1.25.42.124,)"
+side="CLIENT"

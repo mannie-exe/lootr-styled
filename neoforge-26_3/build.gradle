@@ -1,0 +1,21 @@
+plugins { alias(libs.plugins.moddev) }
+apply from: rootProject.file('gradle/native-common.gradle')
+neoForge {
+    version = libs.versions.neoforge.modern.get()
+    mods {
+        lootr_styled {
+            sourceSet sourceSets.main
+            sourceSet project(':core').sourceSets.main
+        }
+    }
+    runs {
+        client { client(); gameDirectory = file('runs/client') }
+    }
+}
+dependencies {
+    implementation 'maven.modrinth:lootr:PdFGq3vT'
+}
+tasks.named('processResources') {
+    inputs.property 'version', project.version
+    filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
+}

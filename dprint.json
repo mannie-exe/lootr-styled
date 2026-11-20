@@ -1,0 +1,6 @@
+{
+  "markdown": { "textWrap": "never" },
+  "includes": ["**/*.md"],
+  "excludes": ["**/build/**", "**/.gradle/**", "**/runs/**", "**/.git/**", "artifacts/**"],
+  "plugins": ["https://plugins.dprint.dev/markdown-0.21.1.wasm"]
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "lootr_styled",
+  "version": "${version}",
+  "name": "Lootr: Styled",
+  "description": "Client-side model and artwork compatibility for Lootr.",
+  "authors": [
+    "inherent.design"
+  ],
+  "license": "Apache-2.0",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "design.inherent.lootr_styled.fabric.LootrStyledFabric"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "26.3",
+    "java": ">=25",
+    "lootr": ">=1.25.42.124"
+  }
+}

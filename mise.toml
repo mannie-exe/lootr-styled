@@ -1,0 +1,15 @@
+[tools]
+dprint = "0.51.1"
+actionlint = "1.7.12"
+
+[tasks."check:docs"]
+run = ["dprint check", "python3 tools/check_docs.py"]
+
+[tasks."format:markdown"]
+run = "dprint fmt"
+
+[tasks."check:ci"]
+run = "actionlint"
+
+[tasks.check]
+run = ["mise run check:docs", "mise run check:ci", "./gradlew --no-daemon check build"]

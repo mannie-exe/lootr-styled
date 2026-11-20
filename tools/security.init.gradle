@@ -1,0 +1,14 @@
+// Write an isolated core/test inventory; do not add locks to the source projects.
+gradle.projectsEvaluated {
+    def owner = rootProject.project(':core')
+    def inventory = rootProject.layout.buildDirectory.file('security/gradle.lockfile')
+    owner.dependencyLocking.lockFile = inventory
+    def classpaths = ['runtimeClasspath', 'testRuntimeClasspath'].collect {
+        owner.configurations.getByName(it)
+    }
+    classpaths.each { it.resolutionStrategy.activateDependencyLocking() }
+    owner.tasks.register('securityDependencies') {
+        group = 'verification'
+        doLast { classpaths.each { it.resolve() } }
+    }
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "configMigration": true,
+  "automerge": false,
+  "prConcurrentLimit": 5,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^gradle/libs\\.versions\\.toml$/"
+      ],
+      "matchStrings": [
+        "google-java-format\\s*=\\s*\"(?<currentValue>[0-9.]+)\""
+      ],
+      "datasourceTemplate": "maven",
+      "depNameTemplate": "com.google.googlejavaformat:google-java-format"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/.github/workflows/.*\\.yml$/"
+      ],
+      "matchStrings": [
+        "version: (?<currentValue>v[0-9.]+) # renovate: depName=(?<depName>[^\\s]+)"
+      ],
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Minecraft target changes are deliberate compatibility work",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDatasources": [
+        "java-version"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "net.fabricmc.fabric-api:fabric-api"
+      ],
+      "matchCurrentValue": "/\\+1\\.21\\.1$/",
+      "allowedVersions": "/\\+1\\.21\\.1$/"
+    },
+    {
+      "matchPackageNames": [
+        "net.fabricmc.fabric-api:fabric-api"
+      ],
+      "matchCurrentValue": "/\\+26\\.3$/",
+      "allowedVersions": "/\\+26\\.3$/"
+    },
+    {
+      "matchPackageNames": [
+        "net.neoforged:neoforge"
+      ],
+      "matchCurrentValue": "/^21\\.1\\./",
+      "allowedVersions": "/^21\\.1\\./"
+    },
+    {
+      "matchPackageNames": [
+        "net.neoforged:neoforge"
+      ],
+      "matchCurrentValue": "/^26\\.3\\./",
+      "allowedVersions": "/^26\\.3\\./"
+    },
+    {
+      "matchPackageNames": [
+        "/^org\\.junit[.:]/"
+      ],
+      "groupName": "JUnit"
+    }
+  ]
+}
