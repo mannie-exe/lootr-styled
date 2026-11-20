@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "resource": "lootr_styled:models/block/barrel_clasps.json",
+  "kind": "model geometry; no texture image",
+  "origin": "Create: Skyweave authored barrel material-mask extrusion recipe",
+  "sourceEntry": "assets/create_skyweave/models/block/lootr_barrel_clasps.json",
+  "sourceEntrySha256": "8a1f2cd5a3d031a8475da98f0456437a1e206d03b73be2d4db6975227429f530",
+  "textures": "Installed native Lootr references; no artwork included",
+  "changes": [
+    "Native block/block parent retains item transforms",
+    "Resource IDs move to the product namespace; original geometry provenance and native texture references retained"
+  ],
+  "permissionScope": "Proof-of-concept provenance; source licensing does not clear external artwork"
+}

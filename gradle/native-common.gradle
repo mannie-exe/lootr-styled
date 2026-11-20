@@ -2,17 +2,32 @@ apply plugin: 'java-library'
 
 def minecraftTarget = project.name.endsWith('26_3') ? '26.3' : '1.21.1'
 def versionDirectory = minecraftTarget == '26.3' ? 'minecraft-26_3' : 'minecraft-1_21_1'
-def platform = project.name.startsWith('fabric') ? 'fabric' : 'neoforge'
+def loaderKind = project.name.startsWith('fabric') ? 'fabric' : 'neoforge'
 ext.minecraftTarget = minecraftTarget
-ext.platform = platform
-base { archivesName = "lootr-styled-${minecraftTarget}-${platform}" }
+ext.platform = loaderKind
+base { archivesName = "lootr-styled-${minecraftTarget}-${loaderKind}" }
 sourceSets.main.java.srcDir rootProject.file("${versionDirectory}/src/main/java")
-sourceSets.main.java.srcDir rootProject.file("platform/${platform}/src/main/java")
+sourceSets.main.java.srcDir rootProject.file("platform/${loaderKind}/src/main/java")
 sourceSets.main.resources.srcDir rootProject.file("${versionDirectory}/src/main/resources")
 sourceSets.main.resources.srcDir rootProject.file('resources')
+sourceSets.test.java.srcDir rootProject.file("${versionDirectory}/src/test/java")
 
 dependencies {
     compileOnly project(':core')
+    runtimeOnly project(':core')
+    testImplementation project(':core')
+    testImplementation rootProject.project(':core').sourceSets.test.output
+    testImplementation platform(rootProject.libs.junit.bom)
+    testImplementation rootProject.libs.junit.jupiter
+    testRuntimeOnly rootProject.libs.junit.launcher
+    if (project.name.endsWith('26_3')) {
+        testCompileOnly rootProject.libs.error.prone.annotations
+    }
+}
+
+tasks.named('test') {
+    dependsOn ':core:testClasses'
+    testClassesDirs += rootProject.project(':core').sourceSets.test.output.classesDirs
 }
 
 tasks.named('jar') {

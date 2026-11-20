@@ -10,6 +10,8 @@ neoforge-legacy = "21.1.265"
 neoforge-modern = "26.3.0.69-beta"
 cloth = "15.0.140"
 junit = "5.13.1"
+gson = "2.10.1"
+error-prone-annotations = "2.48.0"
 
 [libraries]
 fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
@@ -19,6 +21,9 @@ cloth = { module = "me.shedaniel.cloth:cloth-config-fabric", version.ref = "clot
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+
+error-prone-annotations = { module = "com.google.errorprone:error_prone_annotations", version.ref = "error-prone-annotations" }
 
 [plugins]
 loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }

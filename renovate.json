@@ -77,6 +77,13 @@
         "/^org\\.junit[.:]/"
       ],
       "groupName": "JUnit"
+    },
+    {
+      "description": "Keep the profile reader on the minimum game-provided Gson ABI",
+      "matchPackageNames": [
+        "com.google.code.gson:gson"
+      ],
+      "enabled": false
     }
   ]
 }

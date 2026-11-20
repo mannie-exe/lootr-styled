@@ -19,5 +19,8 @@
     "minecraft": "26.3",
     "java": ">=25",
     "lootr": ">=1.25.42.124"
-  }
+  },
+  "mixins": [
+    "lootr_styled.mixins.json"
+  ]
 }

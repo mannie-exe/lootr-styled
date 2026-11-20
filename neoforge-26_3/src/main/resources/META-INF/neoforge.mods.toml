@@ -22,3 +22,6 @@ modId="lootr"
 type="required"
 versionRange="[1.25.42.124,)"
 side="CLIENT"
+
+[[mixins]]
+config="lootr_styled.mixins.json"

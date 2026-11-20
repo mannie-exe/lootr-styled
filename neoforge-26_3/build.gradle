@@ -2,6 +2,7 @@ plugins { alias(libs.plugins.moddev) }
 apply from: rootProject.file('gradle/native-common.gradle')
 neoForge {
     version = libs.versions.neoforge.modern.get()
+    addModdingDependenciesTo sourceSets.test
     mods {
         lootr_styled {
             sourceSet sourceSets.main
