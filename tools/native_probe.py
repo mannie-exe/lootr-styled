@@ -43,7 +43,7 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None):
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2):
     library = reform_dependency(target, reform_repository)
     game = '26.3' if target.endswith('26_3') else '1.21.1'
     loader = 'fabric' if target.startswith('fabric') else 'neoforge'
@@ -69,6 +69,8 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         raise ValueError('Refusing a pre-existing directory without this fixture owner marker')
     fixture.mkdir(parents=True, exist_ok=True)
     marker.write_text('lootr-styled-native-verification-v1\n')
+    for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt', '.lootr-styled-probe-pid'):
+        (fixture / previous).unlink(missing_ok=True)
     configuration = fixture / 'config/lootr_styled'
     configuration.mkdir(parents=True, exist_ok=True)
     selected = 'lootr_styled_local:fixture' if local_profile else None
@@ -110,7 +112,7 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
                 destination.parent.mkdir(exist_ok=True)
                 shutil.copyfile(path, destination)
                 packs.append(f'file/{entry["file"]}')
-    options = {'resourcePacks': json.dumps(packs), 'incompatibleResourcePacks': '[]', 'onboardAccessibility': 'false', 'renderDistance': '4', 'simulationDistance': '5', 'maxFps': '30', 'guiScale': '2', 'fullscreen': 'false', 'pauseOnLostFocus': 'false'}
+    options = {'resourcePacks': json.dumps(packs), 'incompatibleResourcePacks': '[]', 'onboardAccessibility': 'false', 'renderDistance': '4', 'simulationDistance': '5', 'maxFps': '30', 'guiScale': str(gui_scale), 'fullscreen': 'false', 'pauseOnLostFocus': 'false'}
     (fixture / 'options.txt').write_text(''.join(f'{key}:{value}\n' for key, value in options.items()))
     (fixture / 'lootr-styled-probe-mode.txt').write_text(mode + '\n')
     scene_marker = fixture / '.lootr-styled-scene'
@@ -118,9 +120,6 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         scene_marker.write_text('Owned native visual scene, not a personal world\n')
     else:
         scene_marker.unlink(missing_ok=True)
-    report = fixture / 'lootr-styled-probe-report.json'
-    report.unlink(missing_ok=True)
-    (fixture / '.lootr-styled-probe-pid').unlink(missing_ok=True)
     command = [str(ROOT / 'gradlew'), '--no-daemon', '-p', str(ROOT / 'verification'), f':{target}:runClient', f'-PprobeTarget={target}', f'-PstyledVersion={version}', f'-PstyledSha256={digest(product)}', f'-PprobeMode={mode}']
     if 'repository' in library:
         command.append(f'-Preform_repository={library["repository"]}')
@@ -138,11 +137,12 @@ def main():
     parser.add_argument('--fetch', action='store_true', help='Fetch missing pinned verification inputs, never product runtime content')
     parser.add_argument('--run', action='store_true', help='Launch a GUI after external desktop coordination')
     parser.add_argument('--scene', action='store_true', help='Create and render a disposable native container world')
+    parser.add_argument('--gui-scale', type=int, choices=range(5), default=2, help='Native GUI scale for this disposable fixture (0 is Auto)')
     parser.add_argument('--local-profile', type=Path, help='Copy a bounded test-owned profile into the disposable client')
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale)
     if not args.run:
         print(json.dumps({'prepared': str(fixture.relative_to(ROOT)), 'artifact': product.name, 'sha256': digest(product)}))
         return
@@ -167,7 +167,8 @@ def main():
             raise RuntimeError('Native fixture timed out; inspect its owned JVM before retrying')
     report = fixture / 'lootr-styled-probe-report.json'
     data = json.loads(report.read_text()) if report.is_file() else None
-    if result != 0 or data is None or data.get('passed') is not True:
+    if (result != 0 or data is None or data.get('passed') is not True
+            or data.get('artifactSha256') != digest(product)):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
     print(json.dumps({'target': args.target, 'mode': args.mode, 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 

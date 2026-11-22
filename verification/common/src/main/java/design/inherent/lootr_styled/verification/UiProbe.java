@@ -95,6 +95,9 @@ final class UiProbe {
         var models = editor.form().fieldControl(MODELS).orElseThrow();
         timings.addProperty("open", elapsed(openedAt));
         result.addProperty("catalogueChoices", ClientRuntime.choices().size());
+        result.addProperty("guiScaleOption", mc.options.guiScale().get());
+        result.addProperty("guiScaleFactor", mc.getWindow().getGuiScale());
+        result.addProperty("nativeViewport", root.width + "x" + root.height);
         nativeWidth = root.width;
         nativeHeight = root.height;
         editor.form().fieldControl(ARTWORK).orElseThrow();

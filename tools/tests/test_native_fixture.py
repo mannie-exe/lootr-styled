@@ -1,6 +1,7 @@
 """Fixture preparation must not rewrite a running client's input files."""
 
 import os
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -34,10 +35,32 @@ class NativeFixtureTest(unittest.TestCase):
     def test_a_live_fixture_pid_refuses_before_inputs_or_marker_are_replaced(self):
         marker = self.fixture / '.lootr-styled-probe-pid'
         marker.write_text(str(os.getpid()))
+        report = self.fixture / 'lootr-styled-probe-report.json'
+        report.write_text('Preserve live report')
         with self.assertRaisesRegex(ValueError, 'before preparing'):
             native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertEqual('Preserve running client input', self.settings.read_text())
         self.assertEqual(str(os.getpid()), marker.read_text())
+        self.assertEqual('Preserve live report', report.read_text())
+
+    def test_a_stopped_fixture_cannot_reuse_a_previous_success_receipt(self):
+        for name in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt'):
+            (self.fixture / name).write_text('Previous run')
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse((self.fixture / 'lootr-styled-probe-report.json').exists())
+        self.assertFalse((self.fixture / 'lootr-styled-probe-state.txt').exists())
+
+    def test_zero_exit_with_a_different_products_success_report_is_refused(self):
+        product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
+        (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps({
+            'passed': True, 'artifactSha256': 'previous product', 'snapshots': [{}, {}],
+        }))
+        with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
+            with patch.object(native_probe.subprocess, 'Popen') as launch:
+                launch.return_value.wait.return_value = 0
+                with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run']):
+                    with self.assertRaisesRegex(RuntimeError, 'Client did not pass'):
+                        native_probe.main()
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX fixture link refusal')
     def test_a_linked_profile_directory_is_refused_before_copying_or_rewriting(self):

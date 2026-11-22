@@ -176,8 +176,8 @@ public final class StylePreferences {
     return new ClientFormOptions<ClientSettings>(
             FormPresentation.EMPTY, Map.of(StyleSettingsStore.PROFILES, profiles))
         .withDefaults(
-            Component.literal("Reset"),
-            Component.literal("Load defaults into this draft. Save to keep them."))
+            Component.literal("Defaults"),
+            Component.literal("Load appearance defaults into this draft. Save to keep them."))
         .withReferenceTitles(StyleSettingsStore.PROFILES, profileTitles)
         .withInformation(
             definition ->

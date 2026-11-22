@@ -1,6 +1,6 @@
 # Interface writing
 
-Use short, familiar labels that describe the action: Save, Reset, Reload resources, Folder, and Export artwork. Explain an action's effect in its tooltip when the label needs context. Use sentence case and readable state names such as Auto, On, and Off. Save and reload resources names both effects; Save alone must not imply live application.
+Use short, familiar labels that describe the action: Save, Defaults, Reload resources, Folder, and Export artwork. Defaults loads the declared appearance defaults; Revert restores the editor's observed starting values. Explain an action's effect in its tooltip when the label needs context. Use sentence case and readable state names such as Auto, On, and Off. Save and reload resources names both effects; Save alone must not imply live application.
 
 Show a profile's optional `title` in selectors. Keep its ID unchanged in settings and available in tooltips; use the ID as the label only when no title is available. Built-in titles are Default and Vanilla (Inherited). Custom profiles follow the same rule.
 
