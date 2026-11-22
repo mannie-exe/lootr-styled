@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "design.inherent.lootr_styled.client.mixin.fabric",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["BarrelLightingMixin"],
+  "plugin": "design.inherent.lootr_styled.client.BarrelScopePlugin",
+  "injectors": {"defaultRequire": 1}
+}

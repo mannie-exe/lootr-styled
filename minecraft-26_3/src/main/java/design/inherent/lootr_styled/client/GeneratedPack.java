@@ -26,10 +26,25 @@ public final class GeneratedPack implements PackResources {
           PackSource.DEFAULT,
           Optional.empty());
   private final ResourceGeneration generation;
+  private final java.util.UUID id = java.util.UUID.randomUUID();
+  private final java.util.concurrent.atomic.AtomicBoolean closed =
+      new java.util.concurrent.atomic.AtomicBoolean();
+  private final java.util.concurrent.CompletableFuture<ClientRuntime.Preparation> prepared;
 
   private GeneratedPack(List<PackResources> lower) {
     var sources = new MultiPackResourceManager(PackType.CLIENT_RESOURCES, lower);
-    generation = new ResourceGeneration(() -> ClientRuntime.prepare(new NativeSources(sources)));
+    prepared = ClientRuntime.prepareAsync(new NativeSources(sources), () -> !closed.get());
+    generation = new ResourceGeneration(() -> prepared.join().resources());
+  }
+
+  public java.util.UUID id() {
+    return id;
+  }
+
+  public Optional<ClientRuntime.Preparation> preparation() {
+    return generation.state() == ResourceGeneration.State.READY
+        ? Optional.ofNullable(prepared.getNow(null))
+        : Optional.empty();
   }
 
   public static List<PackResources> append(List<PackResources> packs) {
@@ -106,6 +121,8 @@ public final class GeneratedPack implements PackResources {
 
   @Override
   public void close() {
+    closed.set(true);
     generation.close();
+    prepared.obtrudeValue(ClientRuntime.Preparation.EMPTY);
   }
 }

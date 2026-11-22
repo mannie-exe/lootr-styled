@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import design.inherent.lootr_styled.resources.BarrelCompiler;
+import design.inherent.lootr_styled.resources.ContainerTargets;
 import java.nio.charset.StandardCharsets;
 import net.minecraft.client.resources.model.cuboid.CuboidModel;
 import net.minecraft.client.resources.model.cuboid.UnbakedCuboidGeometry;
@@ -11,10 +13,11 @@ import org.junit.jupiter.api.Test;
 
 /** Native deserialization only: no sprite baking, GPU, live client or appearance qualification. */
 class NativeBarrelModelTest {
-  private static String source() throws Exception {
+  private static String source(ContainerTargets.Barrel barrel, boolean packed) throws Exception {
+    var id = BarrelCompiler.defaultModel(barrel, packed);
     try (var input =
         NativeBarrelModelTest.class.getResourceAsStream(
-            "/assets/lootr_styled/models/block/barrel_clasps.json")) {
+            "/assets/" + id.namespace() + "/" + id.path())) {
       assertNotNull(input);
       return new String(input.readAllBytes(), StandardCharsets.UTF_8);
     }
@@ -29,14 +32,20 @@ class NativeBarrelModelTest {
 
   @Test
   void nativeDeserializerAcceptsTheRetainedGeometry() throws Exception {
-    String json = source();
-    var model = parse(json);
-    assertEquals(169, ((UnbakedCuboidGeometry) model.geometry()).elements().size());
+    for (var barrel : ContainerTargets.MODERN.barrels()) {
+      for (boolean packed : java.util.List.of(false, true)) {
+        var model = parse(source(barrel, packed));
+        assertEquals(
+            barrel.open() ? 25 : 32, ((UnbakedCuboidGeometry) model.geometry()).elements().size());
+      }
+    }
   }
 
   @Test
   void nativeDeserializerRefusesOutOfEnvelopeElements() throws Exception {
-    var value = JsonParser.parseString(source()).getAsJsonObject();
+    var value =
+        JsonParser.parseString(source(ContainerTargets.MODERN.barrels().getFirst(), false))
+            .getAsJsonObject();
     value
         .getAsJsonArray("elements")
         .get(0)

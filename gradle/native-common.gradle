@@ -12,6 +12,7 @@ sourceSets.main.java.srcDir rootProject.file("platform/${loaderKind}/src/main/ja
 sourceSets.main.resources.srcDir rootProject.file("${versionDirectory}/src/main/resources")
 sourceSets.main.resources.srcDir rootProject.file('resources')
 sourceSets.test.java.srcDir rootProject.file("${versionDirectory}/src/test/java")
+sourceSets.test.java.srcDir rootProject.file('minecraft-common/src/test/java')
 
 dependencies {
     compileOnly project(':core')
@@ -43,3 +44,4 @@ repositories {
         filter { includeModule('maven.modrinth', 'lootr') }
     }
 }
+apply from: rootProject.file('gradle/reform.gradle')

@@ -7,18 +7,18 @@ import net.neoforged.fml.loading.FMLPaths;
 
 @Mod(value = "lootr_styled", dist = Dist.CLIENT)
 public final class LootrStyledNeoForge {
-  public LootrStyledNeoForge(net.neoforged.fml.ModContainer container) {
+  public LootrStyledNeoForge(
+      net.neoforged.fml.ModContainer container, net.neoforged.bus.api.IEventBus bus) {
     ClientRuntime.initialize(
         FMLPaths.CONFIGDIR.get(),
         () ->
             net.neoforged.fml.ModList.get()
                 .getModContainerById("entity_model_features")
                 .map(mod -> mod.getModInfo().getVersion().toString()));
-    container.registerExtensionPoint(
-        net.neoforged.neoforge.client.gui.IConfigScreenFactory.class,
-        (minecraft, parent) -> new design.inherent.lootr_styled.client.StyleScreen(parent));
+    design.inherent.lootr_styled.client.StylePreferences.register(
+        design.inherent.reform.neoforge.client.NeoForgeClientRegistration.of(bus, container));
     net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
-        (net.neoforged.neoforge.client.event.RegisterClientCommandsEvent event) ->
-            design.inherent.lootr_styled.client.ClientCommands.register(event.getDispatcher()));
+        net.neoforged.neoforge.event.GameShuttingDownEvent.class,
+        event -> design.inherent.lootr_styled.client.StylePreferences.close());
   }
 }

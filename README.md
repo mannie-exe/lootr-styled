@@ -1,13 +1,29 @@
 # Lootr: Styled
 
-Client-side chest and barrel styling for Minecraft and Lootr, developed under inherent.design. The project targets Minecraft 1.21.1 and 26.3 on Fabric and NeoForge.
+## Features and getting started
 
-This is an unreleased development project. Four native artifacts provide reload-scoped barrel models, local/resource-pack profiles, independent artwork selection and optional Fresh Objects adaptation. See [verification](docs/verification.md) for the exact native and pack coverage.
+Client-side chest and barrel styling for [Lootr](https://modrinth.com/mod/lootr), developed under inherent.design. Supports Minecraft 1.21.1 and 26.3 on Fabric and NeoForge.
 
-The selected design adapts supported effective vanilla chest/barrel models and animation resources to Lootr, with explicit Lootr-specific profile/resource overrides taking precedence. No replacement chest geometry or vanilla model override is shipped. The Default profile contributes our Lootr-only barrel geometry without replacement artwork. Custom profiles may provide models, artwork or both, with optional adaptation of installed Fresh Objects resources. Native loot, inventories and per-player container state stay with Minecraft and Lootr.
+- Inherit supported vanilla/resource-pack models or choose custom profiles.
+- Select models and artwork independently, with optional Fresh Objects animation support.
+- Export artwork or the Default barrel model for editing.
 
-Own code is [Apache-2.0](LICENSE). External artwork and rigs retain their own terms. Permission-pending preview content is separate from distributable product content; installed native resources remain the fallback.
+Install Lootr and the matching [re:form](https://github.com/mannie-exe/reform) library for your game and loader, then add Lootr: Styled to the client. Open `/lootrstyled`, or use the NeoForge Mods configuration button. Choose Models and Artwork, then Save and reload resources. Local profiles live under `config/lootr_styled/`.
 
-Open the local settings with `/lootrstyled`, or the NeoForge Mods configuration button. Apply saves preferences and reloads resources; changing a draft or exporting Default does not apply it. Local profiles are under `config/lootr_styled/`. [Profiles](docs/profiles.md) describes precedence, supported inputs and diagnostics.
+## Development status
 
-See [architecture](docs/architecture.md), [profiles](docs/profiles.md), [development](docs/development.md), [dependencies](docs/dependencies.md) and [verification](docs/verification.md). Follow [contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md) for changes and disclosures.
+This is an unreleased development build. [Verification](docs/verification.md) records tested behavior and limits. Default includes the selected chest and barrel artwork. Layered trim, emission, and recoloring remain design work.
+
+## Further reading and participation
+
+Read [profiles](docs/profiles.md) for editing and selection, [architecture](docs/architecture.md) for behavior, and [development](docs/development.md) and [dependencies](docs/dependencies.md) for maintenance. Follow [contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md) for changes and disclosures.
+
+## Licensing and attribution
+
+Our code is [Apache-2.0](LICENSE). Artwork and rigs retain their own terms; [NOTICE](NOTICE) records source permissions and modifications. The selected artwork combines adjusted Pixel Perfection Legacy dark-oak wood, recolored Spectral chest trims and an owner-authored barrel trim pattern.
+
+| Source                                                                               | Authors                          | Contribution                              | Terms                                                                                   |
+| ------------------------------------------------------------------------------------ | -------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| [Lootr](https://github.com/LootrMinecraft/Lootr)                                     | Noobanidus and contributors      | Original mod and native container formats | [MIT code; assets reserved](https://www.curseforge.com/minecraft/mc-mods/lootr/license) |
+| [Pixel Perfection Legacy](https://modrinth.com/resourcepack/pixel-perfection-legacy) | XSSheep; continued by NovaWostra | Dark-oak wood                             | [Published permissions](https://modrinth.com/resourcepack/pixel-perfection-legacy)      |
+| [Spectral](https://modrinth.com/resourcepack/spectral)                               | Fulmine                          | Chest trim artwork                        | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)                   |

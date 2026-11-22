@@ -30,8 +30,9 @@ class PresentationCompilerTest {
 
   private static Memory inputs() {
     var memory = new Memory();
-    memory.put(BarrelCompiler.DEFAULT_MODEL, bytes(CUBE), ResourceAccess.Origin.OTHER);
     for (var barrel : TARGETS.barrels()) {
+      memory.put(
+          BarrelCompiler.defaultModel(barrel, false), bytes(CUBE), ResourceAccess.Origin.OTHER);
       memory.put(barrel.target(), bytes("{}"), ResourceAccess.Origin.LOOTR);
       memory.put(barrel.vanilla(), bytes(CUBE), ResourceAccess.Origin.MINECRAFT);
     }
@@ -50,6 +51,239 @@ class PresentationCompilerTest {
   private static ClientSettings settings(String model, String artwork) {
     return new ClientSettings(
         true, ResourceId.parse(model), ResourceId.parse(artwork), ClientSettings.Fresh.OFF);
+  }
+
+  private static Memory artworkInputs(ContainerTargets targets) throws Exception {
+    var memory = new Memory();
+    for (var entry : targets.defaultArtwork().entrySet()) {
+      var source = entry.getValue();
+      try (var stream =
+          PresentationCompilerTest.class.getResourceAsStream(
+              "/assets/" + source.namespace() + "/" + source.path())) {
+        assertNotNull(stream, source.toString());
+        memory.put(source, stream.readAllBytes(), ResourceAccess.Origin.OTHER);
+      }
+      memory.put(entry.getKey(), png(), ResourceAccess.Origin.LOOTR);
+    }
+    return memory;
+  }
+
+  private static Memory authoredInputs() throws Exception {
+    var memory = artworkInputs(TARGETS);
+    memory.put(
+        ResourceId.parse("minecraft:models/block/block.json"),
+        bytes("{}"),
+        ResourceAccess.Origin.MINECRAFT);
+    for (var barrel : TARGETS.barrels()) {
+      memory.put(barrel.target(), bytes("{}"), ResourceAccess.Origin.LOOTR);
+      memory.put(barrel.vanilla(), bytes(CUBE), ResourceAccess.Origin.MINECRAFT);
+      for (boolean packed : java.util.List.of(false, true)) {
+        var id = BarrelCompiler.defaultModel(barrel, packed);
+        try (var stream =
+            PresentationCompilerTest.class.getResourceAsStream(
+                "/assets/" + id.namespace() + "/" + id.path())) {
+          assertNotNull(stream);
+          memory.put(id, stream.readAllBytes(), ResourceAccess.Origin.OTHER);
+        }
+      }
+      var id = BarrelCompiler.defaultSurface(barrel);
+      try (var stream =
+          PresentationCompilerTest.class.getResourceAsStream(
+              "/assets/" + id.namespace() + "/" + id.path())) {
+        assertNotNull(stream);
+        memory.put(id, stream.readAllBytes(), ResourceAccess.Origin.OTHER);
+      }
+    }
+    return memory;
+  }
+
+  private static com.google.gson.JsonObject model(
+      PresentationCompiler.Result result, ContainerTargets.Barrel barrel) throws Exception {
+    try (var stream = result.resources().open(barrel.target()).orElseThrow()) {
+      return JsonDocuments.object(stream.readAllBytes());
+    }
+  }
+
+  private static boolean occupied(com.google.gson.JsonObject model, double x, double y, double z) {
+    double[] point = {x, y, z};
+    for (var value : model.getAsJsonArray("elements")) {
+      var element = value.getAsJsonObject();
+      boolean inside = true;
+      for (int axis = 0; axis < 3; axis++) {
+        inside &=
+            point[axis] >= element.getAsJsonArray("from").get(axis).getAsDouble()
+                && point[axis] < element.getAsJsonArray("to").get(axis).getAsDouble();
+      }
+      if (inside) return true;
+    }
+    return false;
+  }
+
+  @Test
+  void completeDefaultModelsHaveRealCavitiesAndIndependentArtworkBindings() throws Exception {
+    var memory = authoredInputs();
+    var painted = compile(memory, settings("lootr_styled:default", "lootr_styled:default"));
+    var inherited = compile(memory, settings("lootr_styled:default", "lootr_styled:vanilla"));
+    assertTrue(
+        painted.status().stream().noneMatch(s -> s.contains("refused") || s.contains("fallback")));
+    for (var barrel : TARGETS.barrels()) {
+      var packed = model(painted, barrel);
+      var nativeUv = model(inherited, barrel);
+      assertEquals(barrel.open() ? 25 : 32, packed.getAsJsonArray("elements").size());
+      assertEquals(
+          packed.getAsJsonArray("elements").size(), nativeUv.getAsJsonArray("elements").size());
+      assertTrue(packed.getAsJsonObject("textures").has("surface"));
+      assertFalse(nativeUv.getAsJsonObject("textures").has("surface"));
+      assertEquals(!barrel.open(), occupied(packed, 8, 8, 8));
+      assertEquals(!barrel.open(), occupied(nativeUv, 8, 8, 8));
+      assertTrue(occupied(packed, 8, .5, 8));
+      assertEquals(
+          "lootr:block/" + barrel.material() + "_bottom",
+          nativeUv.getAsJsonObject("textures").get("bottom").getAsString());
+    }
+  }
+
+  @Test
+  void explicitAndPartialArtworkOverridesCannotKeepThePrepaintedDefaultSkin() throws Exception {
+    var memory = authoredInputs();
+    var target = ResourceId.parse("lootr:textures/block/barrel_side.png");
+    byte[] equalDefault;
+    try (var stream =
+        memory.find(TARGETS.defaultArtwork().get(target)).orElseThrow().opener().open()) {
+      equalDefault = stream.readAllBytes();
+    }
+    memory.put(target, equalDefault, ResourceAccess.Origin.OTHER);
+    var explicit = compile(memory, settings("lootr_styled:default", "lootr_styled:default"));
+    assertFalse(explicit.resources().ids().contains(target));
+    for (var barrel : TARGETS.barrels()) {
+      assertEquals(
+          barrel.material().equals("opened_barrel"),
+          model(explicit, barrel).getAsJsonObject("textures").has("surface"));
+    }
+    memory.profile(
+        "example:partial",
+        "{\"format\":1,\"artwork\":{\"lootr:textures/block/barrel_side.png\":\"example:textures/side.png\"}}");
+    memory.put(ResourceId.parse("example:textures/side.png"), png(), ResourceAccess.Origin.OTHER);
+    var partial = compile(memory, settings("lootr_styled:default", "example:partial"));
+    for (var barrel : TARGETS.barrels())
+      assertFalse(model(partial, barrel).getAsJsonObject("textures").has("surface"));
+  }
+
+  @Test
+  void refusedArtworkAndUnavailablePackedSurfaceKeepProjectedGeometry() throws Exception {
+    var memory = authoredInputs();
+    memory.put(
+        ResourceId.parse("lootr_styled:textures/default/chest.png"),
+        bytes("corrupt"),
+        ResourceAccess.Origin.OTHER);
+    var refused = compile(memory, settings("lootr_styled:default", "lootr_styled:default"));
+    for (var barrel : TARGETS.barrels())
+      assertFalse(model(refused, barrel).getAsJsonObject("textures").has("surface"));
+    assertTrue(refused.resources().ids().stream().noneMatch(id -> id.path().endsWith(".png")));
+    memory = authoredInputs();
+    var open =
+        TARGETS.barrels().stream().filter(ContainerTargets.Barrel::open).findFirst().orElseThrow();
+    memory.put(BarrelCompiler.defaultSurface(open), bytes("corrupt"), ResourceAccess.Origin.OTHER);
+    var absent = compile(memory, settings("lootr_styled:default", "lootr_styled:default"));
+    assertFalse(model(absent, open).getAsJsonObject("textures").has("surface"));
+    assertFalse(occupied(model(absent, open), 8, 8, 8));
+    assertTrue(absent.resources().ids().contains(ResourceId.parse("lootr:textures/chest.png")));
+  }
+
+  @Test
+  void defaultArtworkCoversBothNativeTargetsWithoutEnablingModelChanges() throws Exception {
+    assertEquals(ClientSettings.DEFAULT, ClientSettings.DEFAULTS.artwork());
+    assertEquals(ClientSettings.DEFAULTS, ClientSettings.parse(bytes(ClientSettings.STARTER)));
+    for (var targets : ContainerTargets.values()) {
+      var memory = artworkInputs(targets);
+      var result =
+          PresentationCompiler.compile(
+              targets,
+              settings("lootr_styled:vanilla", "lootr_styled:default"),
+              memory,
+              null,
+              bytes -> BlockModels.validate(JsonDocuments.object(bytes)));
+      assertEquals(targets.artwork(), result.resources().ids());
+      assertEquals(12, result.resources().ids().size());
+      assertTrue(result.status().stream().noneMatch(s -> s.contains("refused")));
+      for (var entry : targets.defaultArtwork().entrySet()) {
+        try (var actual = result.resources().open(entry.getKey()).orElseThrow();
+            var expected = memory.find(entry.getValue()).orElseThrow().opener().open()) {
+          assertArrayEquals(expected.readAllBytes(), actual.readAllBytes());
+        }
+      }
+      var inherited =
+          PresentationCompiler.compile(
+              targets,
+              settings("lootr_styled:vanilla", "lootr_styled:vanilla"),
+              memory,
+              null,
+              bytes -> BlockModels.validate(JsonDocuments.object(bytes)));
+      assertTrue(inherited.resources().ids().isEmpty());
+    }
+  }
+
+  @Test
+  void defaultArtworkKeepsExplicitPackImagesButCustomSelectionCanReplaceThem() throws Exception {
+    var memory = artworkInputs(TARGETS);
+    var target = ResourceId.parse("lootr:textures/chest.png");
+    byte[] explicit = png();
+    memory.put(target, explicit, ResourceAccess.Origin.OTHER);
+    var result = compile(memory, settings("lootr_styled:vanilla", "lootr_styled:default"));
+    assertFalse(result.resources().ids().contains(target));
+    assertEquals(11, result.resources().ids().size());
+    memory.profile(
+        "example:chosen",
+        "{\"format\":1,\"artwork\":{\"lootr:textures/chest.png\":\"lootr_styled:textures/default/chest.png\"}}");
+    assertTrue(
+        compile(memory, settings("lootr_styled:vanilla", "example:chosen"))
+            .resources()
+            .ids()
+            .contains(target));
+    var disabled =
+        new ClientSettings(
+            false, ClientSettings.DEFAULT, ClientSettings.DEFAULT, ClientSettings.Fresh.OFF);
+    assertTrue(compile(memory, disabled).resources().ids().isEmpty());
+  }
+
+  @Test
+  void corruptDefaultImageDoesNotPublishAPartialArtworkSet() throws Exception {
+    var memory = artworkInputs(TARGETS);
+    memory.put(
+        ResourceId.parse("lootr_styled:textures/default/block/barrel_top.png"),
+        bytes("invalid"),
+        ResourceAccess.Origin.OTHER);
+    var result = compile(memory, settings("lootr_styled:vanilla", "lootr_styled:default"));
+    assertTrue(result.resources().ids().isEmpty());
+    assertTrue(
+        result.status().stream()
+            .anyMatch(s -> s.contains("Artwork profile lootr_styled:default refused")));
+  }
+
+  @Test
+  void disabledStylingStillListsProfileTitlesWithoutCompilingTheirAssets() {
+    var memory = new Memory();
+    memory.put(
+        ResourceId.parse("example:lootr_styled/profiles/test.json"),
+        bytes(
+            "{\"format\":1,\"title\":\"Test\",\"models\":{\"lootr:models/block/lootr_barrel_unopened.json\":\"missing:models/unused.json\"}}"),
+        ResourceAccess.Origin.OTHER);
+    var settings =
+        new ClientSettings(
+            false, ClientSettings.DEFAULT, ClientSettings.VANILLA, ClientSettings.Fresh.ON);
+    var result = compile(memory, settings);
+    assertTrue(result.resources().ids().isEmpty());
+    assertTrue(
+        result.choices().stream()
+            .anyMatch(
+                c ->
+                    c.id().equals(ClientSettings.VANILLA)
+                        && c.title().equals("Vanilla (Inherited)")));
+    assertTrue(
+        result.choices().stream()
+            .anyMatch(
+                c -> c.id().equals(ResourceId.parse("example:test")) && c.title().equals("Test")));
+    assertEquals(java.util.List.of("Disabled"), result.status());
   }
 
   @Test
@@ -149,9 +383,11 @@ class PresentationCompilerTest {
     assertEquals(4, result.resources().ids().size());
     assertTrue(
         result.status().stream().noneMatch(s -> s.contains("refused") || s.contains("fallback")));
+    var expected = JsonDocuments.object(bytes(CUBE));
+    expected.addProperty(BarrelCompiler.GENERATED_MARKER, true);
     for (var barrel : TARGETS.barrels())
       try (var stream = result.resources().open(barrel.target()).orElseThrow()) {
-        assertEquals(CUBE, new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+        assertEquals(expected, JsonDocuments.object(stream.readAllBytes()));
       }
   }
 
@@ -159,7 +395,9 @@ class PresentationCompilerTest {
   void missingSelectionRetainsRequestedIdentityAndDoesNotFallBackToStyledDefault() {
     var memory = inputs();
     memory.put(
-        BarrelCompiler.DEFAULT_MODEL, bytes("{\"elements\":[]}"), ResourceAccess.Origin.OTHER);
+        BarrelCompiler.defaultModel(TARGETS.barrels().getFirst(), false),
+        bytes("{\"elements\":[]}"),
+        ResourceAccess.Origin.OTHER);
     var request = settings("missing:kept", "lootr_styled:vanilla");
     var result = compile(memory, request);
     assertEquals("missing:kept", request.models().toString());
@@ -274,7 +512,9 @@ class PresentationCompilerTest {
     for (int i = 0; i < ResourceInputs.MAX_FILES; i++) budget.lookup();
     assertThrows(
         ResourceInputs.LimitExceeded.class,
-        () -> new ResourceInputs(inputs(), budget).find(BarrelCompiler.DEFAULT_MODEL));
+        () ->
+            new ResourceInputs(inputs(), budget)
+                .find(BarrelCompiler.defaultModel(TARGETS.barrels().getFirst(), false)));
     var bytes = new ResourceInputs.Budget();
     for (int i = 0; i < 8; i++) bytes.bytes(ResourceInputs.MAX_FILE_BYTES);
     assertThrows(ResourceInputs.LimitExceeded.class, () -> bytes.bytes(1));

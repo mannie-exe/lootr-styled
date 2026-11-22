@@ -1,0 +1,66 @@
+def reformVersion = rootProject.libs.versions.reform.get()
+def module = "reform-${project.platform}-${project.minecraftTarget}"
+def coordinate = "design.inherent:${module}:${reformVersion}"
+def localRepository = providers.gradleProperty('reform_repository')
+def productRoot = project.extensions.extraProperties.has('styledRoot') ? project.styledRoot : rootProject.projectDir
+def pinsFile = new File(productRoot, 'gradle/reform.json')
+
+repositories {
+    exclusiveContent {
+        forRepository {
+            if (localRepository.isPresent()) {
+                maven { url = rootProject.uri(localRepository.get()) }
+            } else {
+                ivy {
+                    url = uri('https://github.com/mannie-exe/reform/releases/download')
+                    patternLayout {
+                        artifact "v[revision]/reform-[revision]-mc${project.minecraftTarget}-${project.platform}.[ext]"
+                    }
+                    metadataSources { artifact() }
+                }
+            }
+        }
+        filter { includeModule 'design.inherent', module }
+    }
+}
+
+configurations.create('reformArtifact') {
+    canBeConsumed = false
+    canBeResolved = true
+    transitive = false
+}
+dependencies {
+    add(project.name == 'fabric-1_21_1' ? 'modImplementation' : 'implementation', coordinate) {
+        transitive = false
+    }
+    reformArtifact(coordinate) { transitive = false }
+}
+
+def verifyReform = tasks.register('verifyReform') {
+    inputs.file pinsFile
+    inputs.files configurations.reformArtifact
+    doLast {
+        def pins = new groovy.json.JsonSlurper().parse(pinsFile)
+        if (pins.version != reformVersion || !pins.artifacts.containsKey(project.name)) {
+            throw new GradleException('Update the re:form version and four-target checksums together')
+        }
+        def jar = configurations.reformArtifact.singleFile
+        def actual = java.security.MessageDigest.getInstance('SHA-256').digest(jar.bytes).encodeHex().toString()
+        if (actual != pins.artifacts[project.name]) {
+            throw new GradleException("Resolved re:form bytes differ for ${project.name}")
+        }
+    }
+}
+tasks.named('compileJava') { dependsOn verifyReform }
+tasks.named('processResources') {
+    inputs.property 'modVersion', project.version.toString()
+    inputs.property 'reformVersion', reformVersion
+    def fabricMinimum = rootProject.libs.versions.fabric.loader.get()
+    def neoMinimum = project.name.endsWith('26_3') ? rootProject.libs.versions.neoforge.modern.get() : rootProject.libs.versions.neoforge.legacy.get()
+    inputs.property 'fabricLoaderMinimum', fabricMinimum
+    inputs.property 'neoforgeMinimum', neoMinimum
+    filesMatching(['fabric.mod.json', 'META-INF/neoforge.mods.toml']) {
+        expand version: project.version, reformVersion: reformVersion, fabricLoaderMinimum: fabricMinimum, neoforgeMinimum: neoMinimum
+    }
+}
+tasks.named('check') { dependsOn verifyReform }

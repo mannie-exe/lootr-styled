@@ -1,6 +1,6 @@
 modLoader="javafml"
 loaderVersion="[2,)"
-license="Apache-2.0"
+license="Apache-2.0 (code); artwork terms in NOTICE"
 [[mods]]
 modId="lootr_styled"
 version="${version}"
@@ -15,7 +15,7 @@ side="CLIENT"
 [[dependencies.lootr_styled]]
 modId="neoforge"
 type="required"
-versionRange="[21.1.195,)"
+versionRange="[${neoforgeMinimum},)"
 side="CLIENT"
 [[dependencies.lootr_styled]]
 modId="lootr"
@@ -23,5 +23,14 @@ type="required"
 versionRange="[1.21.1-1.11.38.127,)"
 side="CLIENT"
 
+[[dependencies.lootr_styled]]
+modId="reform"
+type="required"
+versionRange="[${reformVersion}]"
+side="CLIENT"
+
 [[mixins]]
 config="lootr_styled.mixins.json"
+
+[[mixins]]
+config="lootr_styled.neoforge.mixins.json"

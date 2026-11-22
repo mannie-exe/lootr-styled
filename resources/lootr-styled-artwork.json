@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "profile": "lootr_styled:default",
+  "title": "Default",
+  "textureLabRevision": "143a4ca7052ad18145049947d4753e3169d03934",
+  "sources": [
+    {
+      "name": "Pixel Perfection Legacy",
+      "version": "26.3-97.2",
+      "authors": [
+        "XSSheep",
+        "NovaWostra"
+      ],
+      "url": "https://modrinth.com/resourcepack/pixel-perfection-legacy",
+      "terms": "Published mixpack permission and differing CC BY / CC BY-SA labels; see NOTICE",
+      "changes": "Dark-oak wood rotated 90 degrees; brightness 1.15 and relief 0.165; mapped to container surfaces"
+    },
+    {
+      "name": "Spectral",
+      "version": "0.7.1",
+      "authors": [
+        "Fulmine"
+      ],
+      "url": "https://modrinth.com/resourcepack/spectral",
+      "license": "CC-BY-NC-SA-4.0",
+      "changes": "Chest framing recolored with five-color gold and four-color gray Skyweave ramps and geometric lighting; original trim coverage and protected details retained"
+    },
+    {
+      "name": "Create: Skyweave Lootr editing template",
+      "url": "https://www.curseforge.com/minecraft/mc-mods/lootr/license",
+      "changes": "Retained template details, including closed-barrel handles; see NOTICE"
+    },
+    {
+      "name": "Create: Skyweave barrel trim",
+      "changes": "Owner-authored barrel material pattern with face-local Skyweave relighting using five-color gold and four-color gray ramps; occupied geometry, UVs, wood and trim coverage retained"
+    }
+  ],
+  "files": {
+    "assets/lootr_styled/textures/default/chest.png": "36e8cd169fe4be8747442db9be9dcaa2c6cc3c6883c7e416012dbc02cb55828b",
+    "assets/lootr_styled/textures/default/chest_opened.png": "c7322d0656ebc3c60a022a59634fc27b98310ea303949457c8847eec6ad61ec4",
+    "assets/lootr_styled/textures/default/chest_trapped.png": "0dfcf3d32e55e6853a65323bcc6ec7bb4eb2411030ff9f0ad31c64b2fde4995d",
+    "assets/lootr_styled/textures/default/chest_trapped_opened.png": "b67434f6ec1253ac11bacdaabae05880019a9010016c139254a6572866b4d9a6",
+    "assets/lootr_styled/textures/default/block/barrel_bottom.png": "43fe755547b200dae3bb3bb03782c0100a4a4af3defd728858de2725f8b685fc",
+    "assets/lootr_styled/textures/default/block/barrel_side.png": "cc7738003f19d07cc527ddf09c72bdf047788c3039a6f18961941bef46d25c89",
+    "assets/lootr_styled/textures/default/block/barrel_top.png": "6a0ced9f63c94e6edf069fed6283afda4d7c44c51d2fdf10bbe7cde952612b27",
+    "assets/lootr_styled/textures/default/block/barrel_top_open.png": "e78f2b8a46286efed480e58d7461359befc04425f367ba9e128dc161b8092bfe",
+    "assets/lootr_styled/textures/default/block/opened_barrel_bottom.png": "0c66c5770a59d44a999c09387587c3c10f1b45cecded5292ecded834fa4ef815",
+    "assets/lootr_styled/textures/default/block/opened_barrel_side.png": "e699ab6e041919483af6a83331cec1916970af588b1743a2cef6f3e89f7fdb0a",
+    "assets/lootr_styled/textures/default/block/opened_barrel_top.png": "1ff10ce15b8d636d77c54d8a290592157953632921d2eafb436cf0946ecbd433",
+    "assets/lootr_styled/textures/default/block/opened_barrel_top_open.png": "4313cd119b19260a73c6800e4e378cc67a66711955f6095825fe8aee7f4c9a3a",
+    "assets/lootr_styled/textures/block/default/barrel/unlooted.png": "a9a48cbee348b446b40f678cb7032974d57de0e94d1b9074cf0bffbd4fa9c028",
+    "assets/lootr_styled/textures/block/default/barrel/looted.png": "8c6e2355cdf97e0cdf8eb046af3503deb4c777d912fd0596548e878eb132b37f"
+  },
+  "sourceReceiptSha256": "6499f3ea440fafbd0ef57a9840a6e28c1d0ab3dc2dd37de1332348f78bfb935f",
+  "trimPalettes": {
+    "unlooted": [
+      "b26411",
+      "dc9613",
+      "e9b115",
+      "fad64a",
+      "fdf55f"
+    ],
+    "looted": [
+      "6b6356",
+      "7e7868",
+      "8e8a7b",
+      "b0afa0"
+    ]
+  }
+}

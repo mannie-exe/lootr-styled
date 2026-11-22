@@ -59,7 +59,12 @@ class PolicyConformanceTest {
         "{}",
         explicit ? ResourceAccess.Origin.OTHER : ResourceAccess.Origin.LOOTR);
     if (inherited) put(resources, target.vanilla(), cube(1), ResourceAccess.Origin.MINECRAFT);
-    if (styled) put(resources, BarrelCompiler.DEFAULT_MODEL, cube(4), ResourceAccess.Origin.OTHER);
+    if (styled)
+      put(
+          resources,
+          BarrelCompiler.defaultModel(target, false),
+          cube(4),
+          ResourceAccess.Origin.OTHER);
     var descriptor = ResourceId.parse("example:lootr_styled/profiles/selected.json");
     if (custom) {
       put(

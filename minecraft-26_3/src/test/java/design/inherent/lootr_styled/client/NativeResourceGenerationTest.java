@@ -48,18 +48,107 @@ class NativeResourceGenerationTest {
           "{\"parent\":\"minecraft:block/block\",\"elements\":[{\"from\":[1,2,3],\"to\":[14,15,16],\"faces\":{\"up\":{\"uv\":[2,3,12,13],\"texture\":\"#top\"}}}],\"textures\":{\"top\":\"minecraft:block/barrel_top\"}}");
     }
     var own = new TestPack("mod/lootr_styled", Optional.empty());
-    try (var stream =
-        getClass().getResourceAsStream("/assets/lootr_styled/models/block/barrel_clasps.json")) {
-      assertNotNull(stream);
-      own.entries.put(
-          Identifier.parse(BarrelCompiler.DEFAULT_MODEL.toString()), stream.readAllBytes());
+    for (var barrel : TARGETS.barrels()) {
+      for (boolean packed : List.of(false, true)) {
+        var source = BarrelCompiler.defaultModel(barrel, packed);
+        try (var stream =
+            getClass().getResourceAsStream("/assets/" + source.namespace() + "/" + source.path())) {
+          assertNotNull(stream);
+          own.entries.put(Identifier.parse(source.toString()), stream.readAllBytes());
+        }
+      }
+      String state = barrel.material().equals("opened_barrel") ? "looted" : "unlooted";
+      String path = "textures/block/default/barrel/" + state + ".png";
+      try (var stream = getClass().getResourceAsStream("/assets/lootr_styled/" + path)) {
+        assertNotNull(stream);
+        own.entries.put(Identifier.parse("lootr_styled:" + path), stream.readAllBytes());
+      }
+    }
+    for (var entry : TARGETS.defaultArtwork().entrySet()) {
+      var source = entry.getValue();
+      try (var stream =
+          getClass().getResourceAsStream("/assets/" + source.namespace() + "/" + source.path())) {
+        assertNotNull(stream);
+        byte[] image = stream.readAllBytes();
+        own.entries.put(Identifier.parse(source.toString()), image);
+        nativePack.entries.put(Identifier.parse(entry.getKey().toString()), image);
+      }
     }
     return List.of(vanilla, nativePack, own);
   }
 
   private MultiPackResourceManager manager(List<PackResources> inputs) {
+    StyleTestSources.initialize(config);
     ClientRuntime.initialize(config);
     return new MultiPackResourceManager(PackType.CLIENT_RESOURCES, GeneratedPack.append(inputs));
+  }
+
+  @org.junit.jupiter.api.AfterEach
+  void closeResourceWorkers() {
+    ClientRuntime.close();
+  }
+
+  @Test
+  void defaultArtworkUsesPackagedImagesAndVanillaSelectionRetainsNativeSources() throws Exception {
+    try (var manager = manager(inputs())) {
+      for (var entry : TARGETS.defaultArtwork().entrySet()) {
+        var resource =
+            manager.getResource(Identifier.parse(entry.getKey().toString())).orElseThrow();
+        assertEquals("lootr_styled/generated", resource.sourcePackId());
+        var source = entry.getValue();
+        try (var actual = resource.open();
+            var expected =
+                getClass()
+                    .getResourceAsStream("/assets/" + source.namespace() + "/" + source.path())) {
+          assertNotNull(expected);
+          assertArrayEquals(expected.readAllBytes(), actual.readAllBytes());
+        }
+      }
+    }
+    Files.writeString(
+        config.resolve("lootr_styled/settings.json"),
+        ClientSettings.STARTER.replace(
+            "\"artwork\": \"lootr_styled:default\"", "\"artwork\": \"lootr_styled:vanilla\""));
+    try (var manager = manager(inputs())) {
+      for (var target : TARGETS.artwork()) {
+        assertEquals(
+            "mod/lootr",
+            manager.getResource(Identifier.parse(target.toString())).orElseThrow().sourcePackId());
+      }
+    }
+  }
+
+  @Test
+  void artworkExportKeepsOnlyMetadataAtOrAboveItsImageOwner() {
+    var base = new TestPack("base", Optional.empty());
+    var replacement = new TestPack("replacement", Optional.empty());
+    var metadata = new TestPack("metadata", Optional.empty());
+    String image = "lootr:textures/example.png", companion = image + ".mcmeta";
+    base.put(image, "original");
+    base.put(companion, "{}");
+    replacement.put(image, "replacement");
+    metadata.put(companion, "{\"animation\":{\"frametime\":2}}");
+    try (var manager =
+        new MultiPackResourceManager(PackType.CLIENT_RESOURCES, List.of(base, replacement))) {
+      assertTrue(
+          new NativeSources(manager)
+              .find(design.inherent.lootr_styled.ResourceId.parse(companion))
+              .isPresent());
+      assertTrue(
+          new NativeSources(manager, true)
+              .find(design.inherent.lootr_styled.ResourceId.parse(companion))
+              .isEmpty());
+    }
+    try (var manager =
+        new MultiPackResourceManager(
+            PackType.CLIENT_RESOURCES, List.of(base, replacement, metadata))) {
+      assertEquals(
+          "metadata",
+          new NativeSources(manager, true)
+              .find(design.inherent.lootr_styled.ResourceId.parse(companion))
+              .orElseThrow()
+              .description());
+    }
   }
 
   @Test
@@ -95,10 +184,11 @@ class NativeResourceGenerationTest {
         assertEquals("lootr_styled/generated", resource.sourcePackId());
         try (var stream = resource.open()) {
           var model = JsonDocuments.object(stream.readAllBytes());
-          assertEquals(169, model.getAsJsonArray("elements").size());
+          assertEquals(barrel.open() ? 25 : 32, model.getAsJsonArray("elements").size());
+          assertTrue(model.getAsJsonObject("textures").has("surface"));
           assertEquals(
-              "lootr:block/" + barrel.material() + "_" + (barrel.open() ? "top_open" : "top"),
-              model.getAsJsonObject("textures").get("top").getAsString());
+              "lootr:block/" + barrel.material() + "_side",
+              model.getAsJsonObject("textures").get("particle").getAsString());
         }
       }
       var original =
@@ -158,6 +248,7 @@ class NativeResourceGenerationTest {
   @Test
   void closingOwnedLayerDoesNotCloseBorrowedPacksAndRetiresItsSuppliers() throws Exception {
     var lower = inputs();
+    StyleTestSources.initialize(config);
     ClientRuntime.initialize(config);
     var full = GeneratedPack.append(lower);
     var generated = full.getLast();
@@ -175,10 +266,109 @@ class NativeResourceGenerationTest {
     for (var pack : lower) assertEquals(0, ((TestPack) pack).closes);
   }
 
+  @Test
+  void closingDuringPreparationCannotOpenAnotherBorrowedSource() throws Exception {
+    var lower = inputs();
+    StyleTestSources.initialize(config);
+    ClientRuntime.initialize(config);
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var resume = new java.util.concurrent.CountDownLatch(1);
+    var once = new java.util.concurrent.atomic.AtomicBoolean();
+    var retired = new java.util.concurrent.atomic.AtomicBoolean();
+    var lateOpens = new java.util.concurrent.atomic.AtomicInteger();
+    for (var pack : lower) {
+      var source = (TestPack) pack;
+      source.beforeLookup =
+          () -> {
+            if (!once.compareAndSet(false, true)) return;
+            entered.countDown();
+            try {
+              if (!resume.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                throw new IllegalStateException("Controlled source release timed out");
+            } catch (InterruptedException interrupted) {
+              Thread.currentThread().interrupt();
+              throw new IllegalStateException(interrupted);
+            }
+          };
+      source.onOpen =
+          () -> {
+            if (retired.get()) lateOpens.incrementAndGet();
+          };
+    }
+    var workers = ClientRuntime.workers();
+    var generated = GeneratedPack.append(lower).getLast();
+    try {
+      try {
+        assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        retired.set(true);
+        generated.close();
+      } finally {
+        resume.countDown();
+      }
+      ClientRuntime.close();
+      assertTrue(workers.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS));
+      assertEquals(0, lateOpens.get(), "A retired generation must not reopen borrowed resources");
+      for (var pack : lower) assertEquals(0, ((TestPack) pack).closes);
+    } finally {
+      resume.countDown();
+      generated.close();
+      ClientRuntime.close();
+    }
+  }
+
+  @Test
+  void missingSettingsNeverCreateAnImplicitEnabledGeneration() throws Exception {
+    ClientRuntime.initialize(config);
+    var id = Identifier.parse(TARGETS.barrels().getFirst().target().toString());
+    try (var before = GeneratedPack.append(inputs()).getLast()) {
+      assertNull(before.getResource(PackType.CLIENT_RESOURCES, id));
+      assertFalse(Files.exists(config.resolve("lootr_styled/settings.json")));
+    }
+    StyleTestSources.initialize(config);
+    try (var after = GeneratedPack.append(inputs()).getLast()) {
+      assertNotNull(after.getResource(PackType.CLIENT_RESOURCES, id));
+    }
+  }
+
+  @Test
+  void runtimeRetainsTheNativeOrdinaryChestIsolationCapability() throws Exception {
+    String rig =
+        "{\"textureSize\":[64,64],\"models\":[{\"part\":\"base\",\"id\":\"base\"},{\"part\":\"lid\",\"boxes\":[{\"coordinates\":[0,0,0,1,1,1],\"textureOffset\":[0,0]}]},{\"part\":\"knob\",\"id\":\"knob\"}]}";
+    try {
+      for (boolean isolated : List.of(false, true)) {
+        var lower = inputs();
+        ((TestPack) lower.getFirst()).put("minecraft:emf/cem/chest.jem", rig);
+        StyleTestSources.initialize(config);
+        ClientRuntime.initialize(config, () -> Optional.of("3.3.12"));
+        NativeScopeCapabilities.admit(isolated);
+        try (var manager =
+            new MultiPackResourceManager(PackType.CLIENT_RESOURCES, GeneratedPack.append(lower))) {
+          var target = manager.getResource(Identifier.parse("minecraft:emf/cem/lootr_chest.jem"));
+          assertEquals(isolated, target.isPresent());
+          if (isolated) {
+            assertInstanceOf(GeneratedPack.class, target.orElseThrow().source());
+            try (var stream = target.orElseThrow().open()) {
+              var document =
+                  design.inherent.lootr_styled.resources.JsonDocuments.object(
+                      stream.readAllBytes());
+              assertFalse(document.getAsJsonArray("models").isEmpty());
+            }
+          }
+        }
+        ClientRuntime.close();
+      }
+    } finally {
+      NativeScopeCapabilities.admit(false);
+      ClientRuntime.close();
+    }
+  }
+
   private static final class TestPack implements PackResources {
     private final PackLocationInfo location;
     private final Map<Identifier, byte[]> entries = new HashMap<>();
     private int closes;
+    private Runnable beforeLookup = () -> {};
+    private Runnable onOpen = () -> {};
 
     TestPack(String id, Optional<KnownPack> known) {
       location = new PackLocationInfo(id, Component.literal(id), PackSource.DEFAULT, known);
@@ -206,7 +396,12 @@ class NativeResourceGenerationTest {
     @Override
     public IoSupplier<InputStream> getResource(PackType type, Identifier id) {
       byte[] value = type == PackType.CLIENT_RESOURCES ? entries.get(id) : null;
-      return value == null ? null : () -> new ByteArrayInputStream(value);
+      if (value == null) return null;
+      beforeLookup.run();
+      return () -> {
+        onOpen.run();
+        return new ByteArrayInputStream(value);
+      };
     }
 
     @Override

@@ -18,4 +18,5 @@ tasks.named('test') {
 
 tasks.named('processTestResources') {
     from(rootProject.file('proofs/source-vectors.csv')) { into 'proofs' }
+    from rootProject.file('resources')
 }

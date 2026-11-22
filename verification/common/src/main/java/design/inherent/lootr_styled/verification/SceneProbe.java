@@ -29,7 +29,7 @@ final class SceneProbe {
   private static volatile boolean captured;
   private static final BlockPos ORDINARY = new BlockPos(2, 101, 6);
   private static final BlockPos TRAPPED = new BlockPos(2, 101, 10);
-  private static final BlockPos BARREL = new BlockPos(8, 101, 2);
+  private static final BlockPos BARREL = new BlockPos(14, 101, 2);
 
   private SceneProbe() {}
 
@@ -96,14 +96,14 @@ final class SceneProbe {
       NativeWorld.screenshot(mc, "scene-ordinary-open", () -> captured = true);
       stage = 6;
     } else if (stage == 6 && captured) {
-      mc.player.clientSideCloseContainer();
+      close(mc);
       open(mc, TRAPPED);
       ticks = 0;
       stage = 7;
     } else if (stage == 7 && readyOperation() && ++ticks > 40) {
       REPORT.add("trappedOpened", observe(mc));
       assertOpen(mc, TRAPPED);
-      mc.player.clientSideCloseContainer();
+      close(mc);
       open(mc, BARREL);
       ticks = 0;
       stage = 8;
@@ -119,7 +119,93 @@ final class SceneProbe {
       NativeWorld.screenshot(mc, "scene-looted", () -> captured = true);
       stage = 10;
     } else if (stage == 10 && captured) {
-      mc.player.clientSideCloseContainer();
+      close(mc);
+      ticks = 0;
+      stage = 11;
+    } else if (stage == 11 && readyOperation() && ++ticks > 40) {
+      if (mc.level.getBlockState(BARREL).getValue(BlockStateProperties.OPEN))
+        throw new IllegalStateException("Native barrel did not close after its viewer left");
+      REPORT.add("barrelClosedAgain", observe(mc));
+      captured = false;
+      NativeWorld.screenshot(mc, "barrel-closed-again", () -> captured = true);
+      stage = 12;
+    } else if (stage == 12 && captured) {
+      open(mc, BARREL);
+      ticks = 0;
+      stage = 13;
+    } else if (stage == 13 && readyOperation() && ++ticks > 40) {
+      if (!mc.level.getBlockState(BARREL).getValue(BlockStateProperties.OPEN))
+        throw new IllegalStateException("Native barrel did not reopen");
+      REPORT.add("barrelReopened", observe(mc));
+      NativeUi.open(null);
+      ticks = 0;
+      stage = 14;
+    } else if (stage == 14 && ++ticks > 2) {
+      captured = false;
+      NativeWorld.screenshot(mc, "barrel-reopened", () -> captured = true);
+      stage = 15;
+    } else if (stage == 15 && captured) {
+      close(mc);
+      REPORT.add("barrelCulling", NativeWorld.barrelCulling(mc));
+      mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
+      ticks = 0;
+      stage = 16;
+    } else if (stage == 16 && ++ticks > 30) {
+      captured = false;
+      NativeWorld.screenshot(mc, "barrel-third-person-item", () -> captured = true);
+      stage = 17;
+    } else if (stage == 17 && captured) {
+      mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
+      operation =
+          mc.getSingleplayerServer()
+              .submit(
+                  () ->
+                      mc.getSingleplayerServer()
+                          .getPlayerList()
+                          .getPlayers()
+                          .getFirst()
+                          .connection
+                          .teleport(18.5, 103, 25, 180, 18));
+      ticks = 0;
+      stage = 18;
+    } else if (stage == 18 && readyOperation() && ++ticks > 35) {
+      captured = false;
+      NativeWorld.screenshot(mc, "barrel-framed-and-dropped-items", () -> captured = true);
+      stage = 19;
+    } else if (stage == 19 && captured) {
+      NativeUi.open(new net.minecraft.client.gui.screens.inventory.InventoryScreen(mc.player));
+      ticks = 0;
+      stage = 20;
+    } else if (stage == 20 && ++ticks > 5) {
+      captured = false;
+      NativeWorld.screenshot(mc, "barrel-inventory-item", () -> captured = true);
+      stage = 21;
+    } else if (stage == 21 && captured) {
+      NativeUi.open(null);
+      REPORT.addProperty("heldItem", mc.player.getMainHandItem().getItem().toString());
+      if (java.nio.file.Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-pack"))) {
+        operation =
+            mc.getSingleplayerServer()
+                .submit(
+                    () ->
+                        mc.getSingleplayerServer()
+                            .getPlayerList()
+                            .getPlayers()
+                            .getFirst()
+                            .connection
+                            .teleport(34, 107, 27, 180, 25));
+        ticks = 0;
+        stage = 22;
+      } else {
+        REPORT.addProperty("passed", true);
+        return REPORT;
+      }
+    } else if (stage == 22 && readyOperation() && ++ticks > 40) {
+      captured = false;
+      NativeWorld.screenshot(mc, "barrel-neighbor-cases", () -> captured = true);
+      stage = 23;
+    } else if (stage == 23 && captured) {
+      REPORT.addProperty("renderedNeighborCases", 24);
       REPORT.addProperty("passed", true);
       return REPORT;
     }
@@ -170,8 +256,47 @@ final class SceneProbe {
                 .defaultBlockState()
                 .setValue(BlockStateProperties.FACING, barrelDirections.get(i))
                 .setValue(BlockStateProperties.OPEN, open));
+    if (java.nio.file.Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-pack"))) {
+      for (int x = 24; x < 45; x++)
+        for (int z = 0; z < 24; z++)
+          level.setBlock(new BlockPos(x, 100, z), Blocks.STONE_BRICKS.defaultBlockState(), 3);
+      var neighbors =
+          List.of(Blocks.STONE, Blocks.GLASS, Blocks.STONE_SLAB, NativeWorld.block("barrel"));
+      int column = 0;
+      for (var facing : Direction.values()) {
+        for (int row = 0; row < neighbors.size(); row++) {
+          var position = new BlockPos(25 + column * 3, 103, 3 + row * 5);
+          place(
+              level,
+              position,
+              NativeWorld.block("barrel")
+                  .defaultBlockState()
+                  .setValue(BlockStateProperties.FACING, facing)
+                  .setValue(BlockStateProperties.OPEN, true));
+          var neighbor = neighbors.get(row);
+          if (neighbor == NativeWorld.block("barrel"))
+            place(level, position.relative(facing), neighbor.defaultBlockState());
+          else level.setBlock(position.relative(facing), neighbor.defaultBlockState(), 3);
+        }
+        column++;
+      }
+    }
     server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set 6000");
     var player = server.getPlayerList().getPlayers().getFirst();
+    var stack = new net.minecraft.world.item.ItemStack(NativeWorld.block("barrel"));
+    player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, stack.copy());
+    player.getInventory().setItem(1, stack.copy());
+    level.addFreshEntity(
+        new net.minecraft.world.entity.item.ItemEntity(level, 20.0, 101.5, 21.5, stack.copy()));
+    level.setBlock(new BlockPos(18, 102, 20), Blocks.STONE_BRICKS.defaultBlockState(), 3);
+    var frame =
+        new net.minecraft.world.entity.decoration.ItemFrame(
+            level, new BlockPos(18, 102, 21), Direction.SOUTH);
+    frame.setItem(stack.copy());
+    level.addFreshEntity(frame);
+    player.inventoryMenu.broadcastChanges();
+    player.getAbilities().flying = true;
+    player.onUpdateAbilities();
     player.connection.teleport(10.5, 105, 23.5, 180, 25);
   }
 
@@ -187,6 +312,21 @@ final class SceneProbe {
     entity.setChanged();
   }
 
+  private static void close(Minecraft mc) {
+    // This fixture opens through ServerLevel. Keep close/open tasks on the same native
+    // executor, rather than racing a C2S close packet against the next server-side open.
+    mc.player.clientSideCloseContainer();
+    operation =
+        mc.getSingleplayerServer()
+            .submit(
+                () ->
+                    mc.getSingleplayerServer()
+                        .getPlayerList()
+                        .getPlayers()
+                        .getFirst()
+                        .closeContainer());
+  }
+
   private static void open(Minecraft mc, BlockPos position) {
     var server = mc.getSingleplayerServer();
     operation =
@@ -194,7 +334,12 @@ final class SceneProbe {
             () -> {
               var player = server.getPlayerList().getPlayers().getFirst();
               var level = server.overworld();
-              player.connection.teleport(position.getX() + .5, 102, position.getZ() + 3.5, 180, 20);
+              if (position.equals(BARREL))
+                player.connection.teleport(
+                    position.getX() + .5, 102.5, position.getZ() + 2.5, 180, 55);
+              else
+                player.connection.teleport(
+                    position.getX() + .5, 102, position.getZ() + 3.5, 180, 20);
               level
                   .getBlockState(position)
                   .useWithoutItem(
@@ -215,11 +360,18 @@ final class SceneProbe {
       var item = new JsonObject();
       item.addProperty("position", pos.toShortString());
       item.addProperty("class", entity.getClass().getName());
-      item.addProperty(
-          "clientLooted", (Boolean) entity.getClass().getMethod("isClientOpened").invoke(entity));
+      boolean looted = (Boolean) entity.getClass().getMethod("isClientOpened").invoke(entity);
+      if (pos.equals(new BlockPos(6, 101, 6)) && looted)
+        throw new IllegalStateException("Opening changed an untouched neighboring container");
+      if (pos.equals(BARREL) && stage >= 8 && !looted)
+        throw new IllegalStateException(
+            "Physical state transition lost the player's looted appearance");
+      item.addProperty("clientLooted", looted);
       if (entity instanceof net.minecraft.world.level.block.entity.ChestBlockEntity chest)
         item.addProperty("lid", chest.getOpenNess(1));
       var state = mc.level.getBlockState(pos);
+      if (state.hasProperty(BlockStateProperties.FACING))
+        item.addProperty("facing", state.getValue(BlockStateProperties.FACING).getName());
       if (state.hasProperty(BlockStateProperties.OPEN))
         item.addProperty("physicalOpen", state.getValue(BlockStateProperties.OPEN));
       containers.add(item);

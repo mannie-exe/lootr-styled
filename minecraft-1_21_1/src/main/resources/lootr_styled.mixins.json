@@ -4,7 +4,10 @@
   "package": "design.inherent.lootr_styled.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ResourceReloadMixin"
+    "ResourceReloadMixin",
+    "BarrelModelSourceMixin",
+    "BarrelModelDecodeMixin",
+    "BarrelBakedModelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

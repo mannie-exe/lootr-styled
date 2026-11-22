@@ -17,12 +17,33 @@ import net.minecraft.resources.ResourceLocation;
 final class NativeBindings {
   private NativeBindings() {}
 
+  static byte[] resource(Minecraft mc, String id) throws java.io.IOException {
+    try (var input =
+        mc.getResourceManager()
+            .getResource(net.minecraft.resources.ResourceLocation.parse(id))
+            .orElseThrow()
+            .open()) {
+      return input.readAllBytes();
+    }
+  }
+
   static void resize(net.minecraft.client.gui.screens.Screen screen, Minecraft mc, int w, int h) {
     screen.resize(mc, w, h);
   }
 
   static void press(net.minecraft.client.gui.components.Button button) {
     button.onPress();
+  }
+
+  static boolean activateFocused(net.minecraft.client.gui.screens.Screen screen) {
+    int key = com.mojang.blaze3d.platform.InputConstants.getKey("key.keyboard.space").getValue();
+    return screen.keyPressed(key, 0, 0);
+  }
+
+  static String narration(net.minecraft.client.gui.components.AbstractWidget widget) {
+    var collector = new net.minecraft.client.gui.narration.ScreenNarrationCollector();
+    collector.update(widget::updateNarration);
+    return collector.collectNarrationText(true);
   }
 
   static Object screen(Minecraft mc) {
@@ -36,6 +57,9 @@ final class NativeBindings {
 
   static JsonObject capture(Minecraft mc, String mode) throws Exception {
     var result = new JsonObject();
+    boolean requireDefaultArtwork =
+        java.nio.file.Files.isRegularFile(
+            mc.gameDirectory.toPath().resolve(".lootr-styled-default-artwork"));
     if (!mode.equals("native")
         && mc.getResourceManager()
             .getResource(ResourceLocation.parse("minecraft:emf/cem/chest.jem"))
@@ -53,6 +77,40 @@ final class NativeBindings {
       resources.addProperty(barrel.target().toString(), resource.sourcePackId());
       if (!resource.sourcePackId().equals("lootr_styled/generated"))
         throw new IllegalStateException("Expected generated Default barrel slot");
+      try (var stream = resource.open()) {
+        var document =
+            com.google.gson.JsonParser.parseReader(
+                    new java.io.InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))
+                .getAsJsonObject();
+        var textures = document.getAsJsonObject("textures");
+        if (requireDefaultArtwork && (textures == null || !textures.has("surface")))
+          throw new IllegalStateException("Pack fixture did not select packed Default artwork");
+        if (textures != null && textures.has("surface")) {
+          String wanted = textures.get("surface").getAsString();
+          String actual = NativeWorld.sprite(mc, wanted);
+          if (!wanted.equals(actual))
+            throw new IllegalStateException(
+                "Default surface not stitched: " + wanted + " was " + actual);
+          result.addProperty(barrel.target().toString() + "/surface", actual);
+        }
+      }
+    }
+    if (requireDefaultArtwork) {
+      int count = 0;
+      for (var image : ContainerTargets.LEGACY.defaultArtwork().entrySet()) {
+        var id = image.getValue();
+        try (var bundled =
+            ClientRuntime.class.getResourceAsStream(
+                "/assets/" + id.namespace() + "/" + id.path())) {
+          if (bundled == null
+              || !java.util.Arrays.equals(
+                  bundled.readAllBytes(), resource(mc, image.getKey().toString())))
+            throw new IllegalStateException(
+                "Pack fixture did not publish the packaged Default image: " + image.getKey());
+          count++;
+        }
+      }
+      result.addProperty("defaultArtworkImagesVerified", count);
     }
     var privateSprites = new JsonArray();
     if (java.nio.file.Files.exists(
@@ -79,7 +137,15 @@ final class NativeBindings {
           }
         }
       }
-      if (seen.size() < 6)
+      var countFile = mc.gameDirectory.toPath().resolve(".lootr-styled-expected-private-sprites");
+      if (java.nio.file.Files.isRegularFile(countFile)) {
+        if (java.nio.file.Files.size(countFile) > 3)
+          throw new IllegalStateException("Unbounded sprite expectation");
+        int expected = Integer.parseInt(java.nio.file.Files.readString(countFile));
+        if (expected < 0 || expected > 128 || seen.size() != expected)
+          throw new IllegalStateException(
+              "Private sprite count differs: " + seen.size() + " expected " + expected);
+      } else if (seen.size() < 6)
         throw new IllegalStateException("Local fixture did not exercise private model textures");
     }
     result.add("privateSprites", privateSprites);
@@ -87,6 +153,7 @@ final class NativeBindings {
     ClientRuntime.status().forEach(status::add);
     result.add("status", status);
     result.add("resources", resources);
+    result.add("barrelLighting", barrels(mc));
     Object dispatcher = mc.getBlockEntityRenderDispatcher();
     Field mapField = dispatcher.getClass().getDeclaredField("renderers");
     mapField.setAccessible(true);
@@ -147,6 +214,110 @@ final class NativeBindings {
       throw new IllegalStateException("Expected both native Lootr single-chest renderers");
     result.add("containers", containers);
     return result;
+  }
+
+  @SuppressWarnings(
+      "deprecation") // Deliberately query the admitted plain native child on both loaders.
+  private static JsonArray barrels(Minecraft mc) throws Exception {
+    var observations = new JsonArray();
+    var targets = ContainerTargets.LEGACY.barrels();
+    var facing = net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING;
+    var openProperty = net.minecraft.world.level.block.state.properties.BlockStateProperties.OPEN;
+    var barrelBlock = NativeWorld.block("barrel");
+    for (var orientation : net.minecraft.core.Direction.values()) {
+      for (boolean open : List.of(false, true)) {
+        var state =
+            barrelBlock
+                .defaultBlockState()
+                .setValue(facing, orientation)
+                .setValue(openProperty, open);
+        var wrapper = mc.getBlockRenderer().getBlockModel(state);
+        for (boolean looted : List.of(false, true)) {
+          String field = looted ? "opened" : "unopened";
+          var childField = wrapper.getClass().getDeclaredField(field);
+          childField.setAccessible(true);
+          var child = (net.minecraft.client.resources.model.BakedModel) childField.get(wrapper);
+          if (!design.inherent.lootr_styled.client.BarrelLighting.generated(child))
+            throw new IllegalStateException("Generated barrel marker did not reach native bake");
+          var target =
+              targets.stream()
+                  .filter(
+                      t ->
+                          t.open() == open
+                              && t.material().equals(looted ? "opened_barrel" : "barrel"))
+                  .findFirst()
+                  .orElseThrow();
+          var source =
+              com.google.gson.JsonParser.parseString(
+                      new String(
+                          resource(mc, target.target().toString()),
+                          java.nio.charset.StandardCharsets.UTF_8))
+                  .getAsJsonObject();
+          boolean expected =
+              !source.has("ambientocclusion") || source.get("ambientocclusion").getAsBoolean();
+          if (child.useAmbientOcclusion() != expected)
+            throw new IllegalStateException("Native barrel leaf lost its AO policy");
+          var item = new JsonObject();
+          item.addProperty("facing", orientation.getName());
+          var random = net.minecraft.util.RandomSource.create(42);
+          var quads = child.getQuads(state, null, random);
+          if (quads.isEmpty())
+            throw new IllegalStateException("Generated barrel has no native quads");
+          long queryStart = System.nanoTime();
+          for (int repeat = 0; repeat < 100; repeat++)
+            if (child.getQuads(state, null, random) != quads)
+              throw new IllegalStateException("Repeated state query rebuilt native leaf quads");
+          item.addProperty("cachedQueries", 100);
+          item.addProperty("cachedQueryNanos", System.nanoTime() - queryStart);
+          item.addProperty("unculledQuads", quads.size());
+          item.addProperty("physicalOpen", open);
+          item.addProperty("looted", looted);
+          item.addProperty("generated", true);
+          item.addProperty("leafAmbientOcclusion", expected);
+          if (wrapper.getClass().getName().contains(".neoforge.")) {
+            Class<?> dataClass =
+                Class.forName("net.neoforged.neoforge.client.model.data.ModelData");
+            Class<?> constants =
+                Class.forName("noobanidus.mods.lootr.neoforge.block.ModelDataConstants");
+            Object data =
+                constants.getField(looted ? "OPENED_MODEL_DATA" : "CLOSED_MODEL_DATA").get(null);
+            var method =
+                wrapper
+                    .getClass()
+                    .getMethod(
+                        "useAmbientOcclusion",
+                        net.minecraft.world.level.block.state.BlockState.class,
+                        dataClass,
+                        net.minecraft.client.renderer.RenderType.class);
+            method.setAccessible(true);
+            String actual = method.invoke(wrapper, state, data, null).toString();
+            if (!actual.equals(expected ? "DEFAULT" : "FALSE"))
+              throw new IllegalStateException(
+                  "Native wrapper ignored the selected barrel AO policy: " + actual);
+            item.addProperty("wrapperAmbientOcclusion", actual);
+          } else {
+            var materialField = wrapper.getClass().getDeclaredField("lootrStyled$material");
+            materialField.setAccessible(true);
+            Object cached = materialField.get(wrapper);
+            item.addProperty("renderedMaterialCached", cached != null);
+            if (cached != null) {
+              Object material =
+                  cached.getClass().getMethod("withoutAmbientOcclusion").invoke(cached);
+              Object ao =
+                  Class.forName("net.fabricmc.fabric.api.renderer.v1.material.RenderMaterial")
+                      .getMethod("ambientOcclusion")
+                      .invoke(material);
+              item.addProperty("renderedAmbientOcclusion", ao.toString());
+              if (!ao.toString().equals("FALSE"))
+                throw new IllegalStateException(
+                    "Fabric emitted a generated barrel with AO enabled");
+            }
+          }
+          observations.add(item);
+        }
+      }
+    }
+    return observations;
   }
 
   private static JsonObject part(

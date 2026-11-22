@@ -2,5 +2,56 @@ Lootr: Styled
 Copyright 2026 inherent.design contributors
 
 The Gradle Wrapper scripts and binary retain their upstream Apache-2.0 notices.
-Minecraft, Lootr, optional resource packs and their artwork are external inputs.
-Their licenses and permissions are separate from this project's own code.
+Minecraft, Lootr, optional resource packs and their artwork retain their own
+licenses. Apache-2.0 covers this project's code, not external artwork or rigs.
+
+Lootr
+Authors: Noobanidus and contributors.
+Project: https://github.com/LootrMinecraft/Lootr
+Terms: https://www.curseforge.com/minecraft/mc-mods/lootr/license
+Lootr provides the original mod, native container formats and inherited artwork.
+Its published terms license code under MIT and reserve rights to its assets.
+Using installed resources does not grant permission to redistribute them.
+The selected artwork retains details from the pack's Lootr-based editing
+template, including the closed-barrel handle; that source lineage is preserved
+in the artwork handoff.
+
+Pixel Perfection Legacy
+Authors: XSSheep; continued by NovaWostra.
+Source: Pixel Perfection Legacy 26.3-97.2, dark-oak planks.
+Project and published permissions:
+https://modrinth.com/resourcepack/pixel-perfection-legacy
+Changes for the selected artwork: rotate the wood tile 90 degrees, adjust
+brightness and relief, and map it into chest and barrel surfaces.
+The project's metadata labels CC BY 4.0, while its license link and description
+identify CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/
+Its description also reproduces XSSheep's permission to use the textures in
+mixpacks and other projects, paid or unpaid, with a request for credit. These
+published statements are retained here without treating the differing labels
+as a confirmed waiver of ShareAlike.
+
+Spectral
+Author: Fulmine.
+Source: Spectral 0.7.1, chest-frame artwork.
+Project: https://modrinth.com/resourcepack/spectral
+Artwork terms: CC BY-NC-SA 4.0.
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+Changes for the selected chest artwork: extract the framing, recolor and relight
+it with the authored Skyweave gold/gray palette and geometric lighting,
+and adapt it to Lootr chest layouts. The selected trim uses five gold shades
+and four gray shades, with the outer entries of the original ramps removed.
+Donor pixel-shading contribution
+is zero; the adapted frame design remains attributed. Spectral-derived artwork and our contributions to those adaptations
+retain its attribution, noncommercial and ShareAlike terms. They are not
+relicensed under Apache-2.0.
+
+Default barrel geometry
+The closed/open voxel references were authored by the project owner and compiled
+into complete four-state models. Packed and projected-native UV variants retain
+the same geometry. They replace the older extrusion carrier; no donor chest
+geometry or animation rig is included.
+
+Default barrel trim
+The barrel material pattern was authored by the project owner. Its directional
+shading uses the Create: Skyweave palette and face-local trim boundaries;
+Spectral's chest-frame design is not the source of this barrel pattern.

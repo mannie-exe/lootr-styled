@@ -18,32 +18,29 @@ class LocalFilesTest {
   @TempDir Path temp;
 
   @Test
-  void seedingPreservesSettingsAndInvalidDrafts() throws Exception {
-    var files = new ClientConfiguration(temp);
-    assertEquals(ClientSettings.DEFAULTS, files.load());
+  void profileSeedingPreservesSettingsAndInvalidDrafts() throws Exception {
+    var files = new ProfileDirectory(temp);
+    files.seed();
+    assertFalse(Files.exists(files.root().resolve("settings.json")));
     var profile = temp.resolve("lootr_styled/default/profile.json");
     assertTrue(Files.isRegularFile(profile));
     Files.writeString(profile, "invalid user draft");
-    files.load();
+    files.seed();
     assertEquals("invalid user draft", Files.readString(profile));
     Files.writeString(temp.resolve("lootr_styled/settings.json"), "invalid settings draft");
-    assertThrows(IllegalArgumentException.class, files::load);
+    files.seed();
     assertEquals(
         "invalid settings draft", Files.readString(temp.resolve("lootr_styled/settings.json")));
   }
 
   @Test
-  void saveRoundTripsRequestedIdentityWithoutChangingProfileDrafts() throws Exception {
-    var files = new ClientConfiguration(temp);
-    files.load();
+  void settingsCodecRetainsRequestedIdentity() {
     var request =
         new ClientSettings(
             true, ResourceId.parse("absent:kept"), ClientSettings.VANILLA, ClientSettings.Fresh.ON);
-    files.save(request);
-    assertEquals(request, files.load());
-    try (var paths = Files.list(temp.resolve("lootr_styled"))) {
-      assertTrue(paths.noneMatch(p -> p.getFileName().toString().endsWith(".tmp")));
-    }
+    assertEquals(
+        request,
+        ClientSettings.parse(request.toJson().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
   }
 
   @Test
@@ -116,29 +113,18 @@ class LocalFilesTest {
     Path link = temp.resolve("lootr_styled");
     Files.createSymbolicLink(link, outside);
     assertThrows(IOException.class, () -> LocalFiles.open(link));
-    assertThrows(IOException.class, () -> new ClientConfiguration(temp).load());
+    assertThrows(IOException.class, () -> new ProfileDirectory(temp).seed());
     assertFalse(Files.exists(outside.resolve("settings.json")));
   }
 
   @Test
   void linkedStarterCannotDisableBuiltinOrOtherProfiles() throws Exception {
-    var configuration = new ClientConfiguration(temp);
+    var configuration = new ProfileDirectory(temp);
     Files.createDirectories(configuration.root());
     Path outside = Files.createDirectory(temp.resolve("outside"));
     Files.createSymbolicLink(configuration.root().resolve("default"), outside);
-    assertEquals(ClientSettings.DEFAULTS, configuration.load());
+    configuration.seed();
     assertFalse(Files.exists(outside.resolve("profile.json")));
-  }
-
-  @Test
-  void editorSaveRejectsObservedExternalEditsAndPreservesInvalidDrafts() throws Exception {
-    var configuration = new ClientConfiguration(temp);
-    var snapshot = configuration.snapshot();
-    Path file = configuration.root().resolve("settings.json");
-    Files.writeString(file, "invalid user draft");
-    assertThrows(IOException.class, () -> configuration.save(ClientSettings.DEFAULTS, snapshot));
-    assertEquals("invalid user draft", Files.readString(file));
-    assertThrows(IllegalArgumentException.class, configuration::snapshot);
   }
 
   @Test

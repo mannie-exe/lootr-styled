@@ -48,39 +48,64 @@ public final class PresentationCompiler {
       Consumer<byte[]> nativeModelValidator,
       EmfSupport emf,
       boolean ordinaryChestIsolated) {
-    if (!settings.enabled())
-      return new Result(
-          FrozenResources.EMPTY,
-          List.of("Disabled"),
-          List.of(
-              new Choice(ClientSettings.DEFAULT, "Default", "Built-in"),
-              new Choice(ClientSettings.VANILLA, "Inherited", "Built-in")));
     var budget = new ResourceInputs.Budget();
     var nativeInputs = new ResourceInputs(nativeSources, budget);
     var catalogue = ProfileCatalogue.discover(targets, nativeSources, local, budget);
     var status = new ArrayList<>(catalogue.diagnostics());
+    var choices =
+        catalogue.entries().stream()
+            .map(e -> new Choice(e.profile().id(), e.profile().title(), e.description()))
+            .toList();
+    if (!settings.enabled()) {
+      status.add("Disabled");
+      return new Result(FrozenResources.EMPTY, status, choices);
+    }
     var images = new TextureImages();
     var models = selected(catalogue, settings.models(), "Models", status);
     var artwork = selected(catalogue, settings.artwork(), "Artwork", status);
-    Map<ResourceId, byte[]> output;
+    Map<ResourceId, byte[]> artworkOutput = Map.of();
     try {
-      output = models(targets, models, nativeInputs, budget, images, nativeModelValidator, status);
-    } catch (ResourceInputs.LimitExceeded ex) {
-      throw ex;
-    } catch (IllegalArgumentException ex) {
-      status.add("Model profile " + models.profile().id() + " refused: " + ex.getMessage());
-      status.add("Models: effective " + ClientSettings.VANILLA + " after profile refusal");
-      models = catalogue.find(ClientSettings.VANILLA).orElseThrow();
-      output = models(targets, models, nativeInputs, budget, images, nativeModelValidator, status);
-    }
-    try {
-      output.putAll(artwork(targets, artwork, budget, images));
+      artworkOutput = artwork(targets, artwork, budget, images, status);
     } catch (ResourceInputs.LimitExceeded ex) {
       throw ex;
     } catch (IllegalArgumentException ex) {
       status.add("Artwork profile " + artwork.profile().id() + " refused: " + ex.getMessage());
       status.add("Artwork: effective " + ClientSettings.VANILLA + " after profile refusal");
     }
+    var defaultArtwork =
+        artwork.profile().id().equals(ClientSettings.DEFAULT)
+            ? artworkOutput
+            : Map.<ResourceId, byte[]>of();
+    Map<ResourceId, byte[]> output;
+    try {
+      output =
+          models(
+              targets,
+              models,
+              nativeInputs,
+              budget,
+              images,
+              nativeModelValidator,
+              status,
+              defaultArtwork);
+    } catch (ResourceInputs.LimitExceeded ex) {
+      throw ex;
+    } catch (IllegalArgumentException ex) {
+      status.add("Model profile " + models.profile().id() + " refused: " + ex.getMessage());
+      status.add("Models: effective " + ClientSettings.VANILLA + " after profile refusal");
+      models = catalogue.find(ClientSettings.VANILLA).orElseThrow();
+      output =
+          models(
+              targets,
+              models,
+              nativeInputs,
+              budget,
+              images,
+              nativeModelValidator,
+              status,
+              defaultArtwork);
+    }
+    output.putAll(artworkOutput);
     output.putAll(
         ChestPresentation.compile(
             targets,
@@ -93,10 +118,6 @@ public final class PresentationCompiler {
             ordinaryChestIsolated));
     BarrelWrapper.adapt(targets, nativeInputs, output, status);
     status.add("Fresh Objects requested: " + settings.fresh());
-    var choices =
-        catalogue.entries().stream()
-            .map(e -> new Choice(e.profile().id(), e.profile().title(), e.description()))
-            .toList();
     return new Result(new FrozenResources(output, FrozenResources.DEFAULT_LIMITS), status, choices);
   }
 
@@ -122,7 +143,8 @@ public final class PresentationCompiler {
       ResourceInputs.Budget budget,
       TextureImages images,
       Consumer<byte[]> validator,
-      List<String> status) {
+      List<String> status,
+      Map<ResourceId, byte[]> defaultArtwork) {
     Set<ResourceId> admitted =
         targets.barrels().stream().map(ContainerTargets.Barrel::target).collect(Collectors.toSet());
     targets.chests().forEach(chest -> admitted.add(chest.target()));
@@ -138,6 +160,9 @@ public final class PresentationCompiler {
     for (var barrel : targets.barrels()) {
       var source = selected.profile().models().get(barrel.target());
       boolean explicit = source != null && !builtin;
+      boolean packed =
+          builtin && packedArtwork(barrel, defaultArtwork, selectedInputs, images, status);
+      if (packed) source = BarrelCompiler.defaultModel(barrel, true);
       var current = nativeInputs.find(barrel.target());
       if (!explicit
           && current.isPresent()
@@ -157,7 +182,10 @@ public final class PresentationCompiler {
         JsonObject model =
             source == null ? inherited.resolve(barrel.vanilla()) : explicitModels.resolve(source);
         if (!explicit) BarrelCompiler.retarget(model, barrel);
-        bindLocalTextures(model, selected.profile().id(), selectedInputs, images, output, explicit);
+        bindLocalTextures(
+            model, selected.profile().id(), selectedInputs, images, output, explicit || packed);
+        if (targets == ContainerTargets.LEGACY)
+          model.addProperty(BarrelCompiler.GENERATED_MARKER, true);
         byte[] bytes = model.toString().getBytes(StandardCharsets.UTF_8);
         validator.accept(bytes);
         output.put(barrel.target(), bytes);
@@ -165,7 +193,9 @@ public final class PresentationCompiler {
             barrel.target()
                 + (explicit
                     ? ": selected profile"
-                    : builtin ? ": default geometry" : ": inherited geometry/UV"));
+                    : builtin
+                        ? ": default geometry (" + (packed ? "packed" : "native") + " UVs)"
+                        : ": inherited geometry/UV"));
       } catch (ResourceInputs.LimitExceeded ex) {
         throw ex;
       } catch (IllegalArgumentException ex) {
@@ -174,6 +204,29 @@ public final class PresentationCompiler {
       }
     }
     return output;
+  }
+
+  private static boolean packedArtwork(
+      ContainerTargets.Barrel barrel,
+      Map<ResourceId, byte[]> artwork,
+      ResourceInputs inputs,
+      TextureImages images,
+      List<String> status) {
+    if (!BarrelCompiler.matchesDefaultArtwork(barrel, artwork)) return false;
+    var source = BarrelCompiler.defaultSurface(barrel);
+    try {
+      var size = images.validate(inputs.require(source).bytes());
+      var metadata = inputs.find(new ResourceId(source.namespace(), source.path() + ".mcmeta"));
+      if (metadata.isPresent())
+        TextureImages.validateMetadata(metadata.orElseThrow().bytes(), size);
+      return true;
+    } catch (ResourceInputs.LimitExceeded ex) {
+      throw ex;
+    } catch (IllegalArgumentException ex) {
+      status.add(
+          barrel.target() + ": Default surface unavailable; native UVs (" + ex.getMessage() + ")");
+      return false;
+    }
   }
 
   private static void bindLocalTextures(
@@ -220,7 +273,8 @@ public final class PresentationCompiler {
       ContainerTargets targets,
       ProfileCatalogue.Entry selected,
       ResourceInputs.Budget budget,
-      TextureImages images) {
+      TextureImages images,
+      List<String> status) {
     var output = new HashMap<ResourceId, byte[]>();
     var inputs = new ResourceInputs(selected.sources(), budget);
     for (var entry : selected.profile().artwork().entrySet()) {
@@ -228,6 +282,18 @@ public final class PresentationCompiler {
       if (!target.path().endsWith(".png")) continue;
       if (!targets.artwork().contains(target) || !entry.getValue().path().endsWith(".png"))
         throw new IllegalArgumentException("Unsupported artwork target or source");
+      if (selected.profile().id().equals(ClientSettings.DEFAULT)) {
+        var current = inputs.find(target);
+        if (current.isPresent()
+            && current.orElseThrow().source().origin() != ResourceAccess.Origin.LOOTR) {
+          status.add(
+              target
+                  + ": explicit resource kept ("
+                  + current.orElseThrow().source().description()
+                  + ")");
+          continue;
+        }
+      }
       byte[] bytes = inputs.require(entry.getValue()).bytes();
       var size = images.validate(bytes);
       output.put(target, bytes);

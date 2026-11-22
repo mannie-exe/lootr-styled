@@ -6,6 +6,9 @@ def productVersion = providers.gradleProperty('styledVersion').get()
 def fixtureMode = providers.gradleProperty('probeMode').getOrElse('native')
 if (!(fixtureMode in ['native', 'fresh', 'off'])) throw new GradleException('Unsupported verification mode')
 ext.game = game
+ext.minecraftTarget = game
+ext.platform = loaderKind
+ext.styledRoot = rootProject.file('..')
 ext.modern = modern
 ext.loaderKind = loaderKind
 ext.fixtureMode = fixtureMode
@@ -22,7 +25,6 @@ sourceSets.main.java.srcDir rootProject.file("platform/${loaderKind}/src/main/ja
 sourceSets.main.resources.srcDir rootProject.file("platform/${loaderKind}/src/main/resources")
 repositories {
     mavenCentral()
-    maven { url = 'https://maven.shedaniel.me/' }
     exclusiveContent {
         forRepository { maven { url = 'https://api.modrinth.com/maven' } }
         filter { includeModule('maven.modrinth', 'lootr') }
@@ -40,3 +42,4 @@ tasks.register('verifyProduct') {
 tasks.withType(JavaCompile).configureEach { dependsOn 'verifyProduct' }
 tasks.matching { it.name in ['runClient', 'runServer'] }.configureEach { dependsOn 'verifyProduct' }
 if (project.name.endsWith('26_3')) { dependencies { compileOnly libs.error.prone.annotations } }
+apply from: rootProject.file('../gradle/reform.gradle')

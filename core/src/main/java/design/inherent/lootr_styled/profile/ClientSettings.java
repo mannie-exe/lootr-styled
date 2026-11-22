@@ -9,14 +9,14 @@ public record ClientSettings(boolean enabled, ResourceId models, ResourceId artw
   public static final ResourceId DEFAULT = ResourceId.parse("lootr_styled:default");
   public static final ResourceId VANILLA = ResourceId.parse("lootr_styled:vanilla");
   public static final ClientSettings DEFAULTS =
-      new ClientSettings(true, DEFAULT, VANILLA, Fresh.AUTO);
+      new ClientSettings(true, DEFAULT, DEFAULT, Fresh.AUTO);
   public static final String STARTER =
       """
       {
         "format": 1,
         "enabled": true,
         "models": "lootr_styled:default",
-        "artwork": "lootr_styled:vanilla",
+        "artwork": "lootr_styled:default",
         "freshObjects": "AUTO"
       }
       """;
@@ -56,6 +56,21 @@ public record ClientSettings(boolean enabled, ResourceId models, ResourceId artw
       throw new IllegalArgumentException(field + " must be a string");
     }
     return value.getAsString();
+  }
+
+  public String toJson() {
+    var json = new com.google.gson.JsonObject();
+    json.addProperty("format", 1);
+    json.addProperty("enabled", enabled);
+    json.addProperty("models", models.toString());
+    json.addProperty("artwork", artwork.toString());
+    json.addProperty("freshObjects", fresh.name());
+    return new com.google.gson.GsonBuilder()
+            .setPrettyPrinting()
+            .disableHtmlEscaping()
+            .create()
+            .toJson(json)
+        + "\n";
   }
 
   public enum Fresh {

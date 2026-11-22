@@ -17,6 +17,16 @@ import net.minecraft.resources.Identifier;
 final class NativeBindings {
   private NativeBindings() {}
 
+  static byte[] resource(Minecraft mc, String id) throws java.io.IOException {
+    try (var input =
+        mc.getResourceManager()
+            .getResource(net.minecraft.resources.Identifier.parse(id))
+            .orElseThrow()
+            .open()) {
+      return input.readAllBytes();
+    }
+  }
+
   static void resize(net.minecraft.client.gui.screens.Screen screen, Minecraft mc, int w, int h) {
     screen.resize(w, h);
   }
@@ -32,6 +42,19 @@ final class NativeBindings {
             return 0;
           }
         });
+  }
+
+  static boolean activateFocused(net.minecraft.client.gui.screens.Screen screen) {
+    int scan = com.mojang.blaze3d.platform.InputConstants.getKey("key.keyboard.space").getValue();
+    int key = org.lwjgl.sdl.SDLKeyboard.SDL_GetKeyFromScancode(scan, (short) 0, false);
+    return screen.keyPressed(new net.minecraft.client.input.KeyEvent(scan, key, 0));
+  }
+
+  static String narration(net.minecraft.client.gui.components.AbstractWidget widget) {
+    var collector = new net.minecraft.client.gui.narration.ScreenNarrationCollector();
+    collector.update(
+        widget::updateNarration, net.minecraft.client.gui.narration.NarrationTrigger.KEYBOARD);
+    return collector.collectNarrationText(true);
   }
 
   static Object screen(Minecraft mc) {
@@ -66,6 +89,21 @@ final class NativeBindings {
                 + resource.sourcePackId()
                 + " known: "
                 + resource.knownPackInfo());
+      try (var stream = resource.open()) {
+        var document =
+            com.google.gson.JsonParser.parseReader(
+                    new java.io.InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))
+                .getAsJsonObject();
+        var textures = document.getAsJsonObject("textures");
+        if (textures != null && textures.has("surface")) {
+          String wanted = textures.get("surface").getAsString();
+          String actual = NativeWorld.sprite(mc, wanted);
+          if (!wanted.equals(actual))
+            throw new IllegalStateException(
+                "Default surface not stitched: " + wanted + " was " + actual);
+          result.addProperty(barrel.target().toString() + "/surface", actual);
+        }
+      }
     }
     var privateSprites = new JsonArray();
     if (java.nio.file.Files.exists(
@@ -92,7 +130,15 @@ final class NativeBindings {
           }
         }
       }
-      if (seen.size() < 6)
+      var countFile = mc.gameDirectory.toPath().resolve(".lootr-styled-expected-private-sprites");
+      if (java.nio.file.Files.isRegularFile(countFile)) {
+        if (java.nio.file.Files.size(countFile) > 3)
+          throw new IllegalStateException("Unbounded sprite expectation");
+        int expected = Integer.parseInt(java.nio.file.Files.readString(countFile));
+        if (expected < 0 || expected > 128 || seen.size() != expected)
+          throw new IllegalStateException(
+              "Private sprite count differs: " + seen.size() + " expected " + expected);
+      } else if (seen.size() < 6)
         throw new IllegalStateException("Local fixture did not exercise private model textures");
     }
     result.add("privateSprites", privateSprites);
@@ -100,6 +146,7 @@ final class NativeBindings {
     ClientRuntime.status().forEach(status::add);
     result.add("status", status);
     result.add("resources", resources);
+    result.add("barrelLighting", barrels(mc));
     Object dispatcher = mc.getBlockEntityRenderDispatcher();
     Field mapField = dispatcher.getClass().getDeclaredField("renderers");
     mapField.setAccessible(true);
@@ -159,6 +206,77 @@ final class NativeBindings {
       throw new IllegalStateException("Expected both native Lootr single-chest renderers");
     result.add("containers", containers);
     return result;
+  }
+
+  @SuppressWarnings("deprecation")
+  private static JsonArray barrels(Minecraft mc) throws Exception {
+    var observations = new JsonArray();
+    var owner = Class.forName("noobanidus.mods.lootr.common.client.block.UnbakedCustomModel$Baked");
+    for (var facing : net.minecraft.core.Direction.values())
+      for (boolean open : List.of(false, true)) {
+        var state =
+            NativeWorld.block("barrel")
+                .defaultBlockState()
+                .setValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING,
+                    facing)
+                .setValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.OPEN,
+                    open);
+        var wrapper = mc.getModelManager().getBlockStateModelSet().get(state);
+        for (boolean looted : List.of(false, true)) {
+          var field = owner.getDeclaredField(looted ? "opened" : "unopened");
+          field.setAccessible(true);
+          var child =
+              (net.minecraft.client.renderer.block.dispatch.BlockStateModel) field.get(wrapper);
+          var parts =
+              new java.util.ArrayList<
+                  net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
+          var random = net.minecraft.util.RandomSource.create(42);
+          child.collectParts(random, parts);
+          if (parts.size() != 1)
+            throw new IllegalStateException("Unexpected generated barrel parts");
+          var part = parts.getFirst();
+          var target =
+              ContainerTargets.MODERN.barrels().stream()
+                  .filter(
+                      t ->
+                          t.open() == open
+                              && t.material().equals(looted ? "opened_barrel" : "barrel"))
+                  .findFirst()
+                  .orElseThrow();
+          var source =
+              com.google.gson.JsonParser.parseString(
+                      new String(
+                          resource(mc, target.target().toString()),
+                          java.nio.charset.StandardCharsets.UTF_8))
+                  .getAsJsonObject();
+          boolean expected =
+              !source.has("ambientocclusion") || source.get("ambientocclusion").getAsBoolean();
+          if (part.useAmbientOcclusion() != expected)
+            throw new IllegalStateException("Native part lost selected AO policy");
+          var quads = part.getQuads(null);
+          if (quads.isEmpty())
+            throw new IllegalStateException("Generated barrel has no native quads");
+          long start = System.nanoTime();
+          for (int repeat = 0; repeat < 100; repeat++) {
+            parts.clear();
+            child.collectParts(random, parts);
+            if (parts.size() != 1 || parts.getFirst() != part || part.getQuads(null) != quads)
+              throw new IllegalStateException("Native barrel query rebuilt its cached parts");
+          }
+          var item = new JsonObject();
+          item.addProperty("facing", facing.getName());
+          item.addProperty("physicalOpen", open);
+          item.addProperty("looted", looted);
+          item.addProperty("partAmbientOcclusion", expected);
+          item.addProperty("unculledQuads", quads.size());
+          item.addProperty("cachedQueries", 100);
+          item.addProperty("cachedQueryNanos", System.nanoTime() - start);
+          observations.add(item);
+        }
+      }
+    return observations;
   }
 
   private static JsonObject part(

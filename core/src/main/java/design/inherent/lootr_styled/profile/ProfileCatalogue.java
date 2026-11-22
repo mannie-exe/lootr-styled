@@ -50,17 +50,18 @@ public final class ProfileCatalogue {
     var diagnostics = new ArrayList<String>();
     var defaultModels = new HashMap<ResourceId, ResourceId>();
     for (var barrel : targets.barrels())
-      defaultModels.put(barrel.target(), BarrelCompiler.DEFAULT_MODEL);
+      defaultModels.put(barrel.target(), BarrelCompiler.defaultModel(barrel, false));
     entries.put(
         ClientSettings.DEFAULT,
         new Entry(
-            new StyleProfile(ClientSettings.DEFAULT, "Default", defaultModels, Map.of()),
+            new StyleProfile(
+                ClientSettings.DEFAULT, "Default", defaultModels, targets.defaultArtwork()),
             nativeSources,
             "Built-in"));
     entries.put(
         ClientSettings.VANILLA,
         new Entry(
-            new StyleProfile(ClientSettings.VANILLA, "Inherited", Map.of(), Map.of()),
+            new StyleProfile(ClientSettings.VANILLA, "Vanilla (Inherited)", Map.of(), Map.of()),
             nativeSources,
             "Built-in"));
     var metadata = new ResourceInputs(nativeSources, budget);

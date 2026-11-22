@@ -1,14 +1,73 @@
 {
-  "format": 1,
-  "resource": "lootr_styled:models/block/barrel_clasps.json",
-  "kind": "model geometry; no texture image",
-  "origin": "Create: Skyweave authored barrel material-mask extrusion recipe",
-  "sourceEntry": "assets/create_skyweave/models/block/lootr_barrel_clasps.json",
-  "sourceEntrySha256": "8a1f2cd5a3d031a8475da98f0456437a1e206d03b73be2d4db6975227429f530",
-  "textures": "Installed native Lootr references; no artwork included",
-  "changes": [
-    "Native block/block parent retains item transforms",
-    "Resource IDs move to the product namespace; original geometry provenance and native texture references retained"
-  ],
-  "permissionScope": "Proof-of-concept provenance; source licensing does not clear external artwork"
+  "format": 2,
+  "kind": "Owner-authored barrel geometry with shared exterior and mip-safe material atlases",
+  "textureLabRevision": "143a4ca7052ad18145049947d4753e3169d03934",
+  "binding": "Same geometry with packed Default or effective native-slot UV bindings; independent artwork selection",
+  "files": {
+    "assets/lootr_styled/models/block/barrel/default/unlooted_closed.json": {
+      "sha256": "437afc71d7e0c16215c94ecf8442e97f58bfcebcf9ca71c562cb9e1ab5bd15f1",
+      "sourceSha256": "8616f835801a56d1515c5654eadee29622d7d2357fa52a3f6aabb76633b1a875",
+      "state": "unlooted_closed",
+      "binding": "packed",
+      "cuboids": 32,
+      "quads": 76
+    },
+    "assets/lootr_styled/models/block/barrel/default/unlooted_closed_native.json": {
+      "sha256": "906f6aad3822847aa415ea0291e8ab153da09ca869b8943a64ba9b881a57b854",
+      "sourceSha256": "906f6aad3822847aa415ea0291e8ab153da09ca869b8943a64ba9b881a57b854",
+      "state": "unlooted_closed",
+      "binding": "native",
+      "cuboids": 32,
+      "quads": 76
+    },
+    "assets/lootr_styled/models/block/barrel/default/unlooted_open.json": {
+      "sha256": "dc4d2e9d01fe97521519fee95da305bcbe105d1a43a46623a38012046b21419f",
+      "sourceSha256": "244dad4f583ce563202143f70eb939c975a974626a051c68d969d66ebbb03678",
+      "state": "unlooted_open",
+      "binding": "packed",
+      "cuboids": 25,
+      "quads": 98
+    },
+    "assets/lootr_styled/models/block/barrel/default/unlooted_open_native.json": {
+      "sha256": "df694874f49fc53c29c83e85ebf9ca2228daa45717a934773c62896d3c692a97",
+      "sourceSha256": "df694874f49fc53c29c83e85ebf9ca2228daa45717a934773c62896d3c692a97",
+      "state": "unlooted_open",
+      "binding": "native",
+      "cuboids": 25,
+      "quads": 98
+    },
+    "assets/lootr_styled/models/block/barrel/default/looted_closed.json": {
+      "sha256": "a6e2c3dc2bbf9d8a442257e6cf2eef974f38479589e3c038661affa99a99bd27",
+      "sourceSha256": "11d2b77162e8ebbd9d8226bcb3fd722f3535ae75875547c229c310a1961ac986",
+      "state": "looted_closed",
+      "binding": "packed",
+      "cuboids": 32,
+      "quads": 76
+    },
+    "assets/lootr_styled/models/block/barrel/default/looted_closed_native.json": {
+      "sha256": "bb9ceac1d1e4c9bd070b1b380119df1da7a6d68a174be546b398a04b3f3688c4",
+      "sourceSha256": "bb9ceac1d1e4c9bd070b1b380119df1da7a6d68a174be546b398a04b3f3688c4",
+      "state": "looted_closed",
+      "binding": "native",
+      "cuboids": 32,
+      "quads": 76
+    },
+    "assets/lootr_styled/models/block/barrel/default/looted_open.json": {
+      "sha256": "08654199f082f1b87bb1de263341dbb6a7c236835cbdf01ee69efb399a313e7a",
+      "sourceSha256": "bd85ccabc9dfa8cc10398558c0595d91ddd342369aed8fb29360f9bb70030e64",
+      "state": "looted_open",
+      "binding": "packed",
+      "cuboids": 25,
+      "quads": 98
+    },
+    "assets/lootr_styled/models/block/barrel/default/looted_open_native.json": {
+      "sha256": "ea1a90377fd29c60418778d90a90b1c61ead9818325e8d369b23f35a5d2c0ec2",
+      "sourceSha256": "ea1a90377fd29c60418778d90a90b1c61ead9818325e8d369b23f35a5d2c0ec2",
+      "state": "looted_open",
+      "binding": "native",
+      "cuboids": 25,
+      "quads": 98
+    }
+  },
+  "sourceReceiptSha256": "6499f3ea440fafbd0ef57a9840a6e28c1d0ab3dc2dd37de1332348f78bfb935f"
 }

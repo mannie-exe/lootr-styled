@@ -1,7 +1,9 @@
 package design.inherent.lootr_styled.resources;
 
 import design.inherent.lootr_styled.ResourceId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -51,6 +53,24 @@ public enum ContainerTargets {
       }
     }
     return Set.copyOf(result);
+  }
+
+  public Map<ResourceId, ResourceId> defaultArtwork() {
+    var result = new HashMap<ResourceId, ResourceId>();
+    for (int i = 0; i < chestNames.size(); i++) {
+      result.put(
+          ResourceId.parse("lootr:" + chestDirectory + chestNames.get(i) + ".png"),
+          ResourceId.parse("lootr_styled:textures/default/" + LEGACY.chestNames.get(i) + ".png"));
+    }
+    for (var target : artwork()) {
+      if (target.path().startsWith("textures/block/")) {
+        result.put(
+            target,
+            ResourceId.parse(
+                "lootr_styled:textures/default/" + target.path().substring("textures/".length())));
+      }
+    }
+    return Map.copyOf(result);
   }
 
   public List<Chest> chests() {

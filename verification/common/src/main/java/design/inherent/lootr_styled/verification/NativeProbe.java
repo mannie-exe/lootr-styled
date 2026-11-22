@@ -14,11 +14,13 @@ import net.minecraft.client.Minecraft;
  * A separate consumer of the packaged product. Never part of installable/source product artifacts.
  */
 public final class NativeProbe {
+  private static UiProbe ui;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
   private static boolean terminal;
   private static volatile boolean reloaded;
+  private static String lastProgress = "";
 
   private NativeProbe() {}
 
@@ -31,9 +33,27 @@ public final class NativeProbe {
     try {
       Path processFile = mc.gameDirectory.toPath().resolve(".lootr-styled-probe-pid");
       if (ticks == 1) Files.writeString(processFile, Long.toString(ProcessHandle.current().pid()));
+      Object currentScreen = NativeBindings.screen(mc);
+      String progress =
+          stage
+              + ":"
+              + (currentScreen == null ? "none" : currentScreen.getClass().getName())
+              + (ui == null ? "" : ":" + ui.progress());
+      if (!lastProgress.equals(progress)) {
+        Files.writeString(
+            mc.gameDirectory.toPath().resolve("lootr-styled-probe-state.txt"), progress + "\n");
+        lastProgress = progress;
+      }
       var warnings = ProbeWarnings.advance(NativeBindings.screen(mc));
-      if (warnings != null) REPORT.add("acknowledgedUpstreamWarnings", warnings);
+      if (warnings != null) {
+        if (!REPORT.has("acknowledgedUpstreamWarnings"))
+          REPORT.add("acknowledgedUpstreamWarnings", new JsonArray());
+        REPORT.getAsJsonArray("acknowledgedUpstreamWarnings").addAll(warnings);
+      }
       if (stage < 2 && !NativeBindings.ready(mc)) return;
+      if (stage == 0
+          && design.inherent.lootr_styled.client.StylePreferences.resourceStatus().state()
+              != design.inherent.lootr_styled.client.StyleApplication.State.APPLIED) return;
       Path modeFile = mc.gameDirectory.toPath().resolve("lootr-styled-probe-mode.txt");
       if (!Files.isRegularFile(modeFile) || Files.size(modeFile) > 32)
         throw new IllegalStateException("Missing bounded probe mode");
@@ -49,6 +69,20 @@ public final class NativeProbe {
           throw new IllegalStateException(
               "Product/core must come from the same packaged JAR, not source outputs");
         REPORT.addProperty("productCodeSource", client);
+        String library =
+            design.inherent.reform.minecraft.client.ClientFileSettings.class
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation()
+                .toString();
+        if (!library.contains(".jar"))
+          throw new IllegalStateException("re:form must be an independent packaged input");
+        REPORT.addProperty("libraryCodeSource", library);
+        REPORT.addProperty(
+            "libraryInputSha256",
+            Files.readString(
+                    mc.gameDirectory.toPath().resolve(".lootr-styled-expected-reform-sha256"))
+                .strip());
         REPORT.addProperty(
             "artifactSha256",
             Files.readString(mc.gameDirectory.toPath().resolve(".lootr-styled-expected-sha256"))
@@ -66,7 +100,12 @@ public final class NativeProbe {
       } else if (stage == 1 && reloaded) {
         snapshots.add(NativeBindings.capture(mc, mode));
         REPORT.add("snapshots", snapshots);
-        REPORT.add("nativeWidgets", UiProbe.inspect(mc));
+        ui = new UiProbe();
+        stage = 10;
+      } else if (stage == 10) {
+        var widgets = ui.tick(mc);
+        if (widgets == null) return;
+        REPORT.add("nativeWidgets", widgets);
         if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-scene"))) {
           stage = 2;
           SceneProbe.begin(mc);
@@ -78,10 +117,21 @@ public final class NativeProbe {
         var scene = SceneProbe.tick(mc);
         if (scene != null) {
           REPORT.add("scene", scene);
-          inspectShaderState(mc);
-          REPORT.addProperty("passed", true);
-          finish(mc, null);
+          REPORT.add("renderedModels", NativeBindings.capture(mc, mode));
+          reloaded = false;
+          stage = 3;
+          mc.reloadResourcePacks()
+              .whenComplete(
+                  (unused, error) -> {
+                    if (error != null) finish(mc, error);
+                    else reloaded = true;
+                  });
         }
+      } else if (stage == 3 && reloaded) {
+        REPORT.add("secondReloadInWorld", NativeBindings.capture(mc, mode));
+        inspectShaderState(mc);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
       }
     } catch (Throwable error) {
       if (stage == 2) REPORT.add("scene", SceneProbe.snapshot());

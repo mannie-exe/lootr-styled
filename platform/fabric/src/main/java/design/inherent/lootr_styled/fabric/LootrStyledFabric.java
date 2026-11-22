@@ -13,8 +13,10 @@ public final class LootrStyledFabric implements ClientModInitializer {
             FabricLoader.getInstance()
                 .getModContainer("entity_model_features")
                 .map(mod -> mod.getMetadata().getVersion().getFriendlyString()));
-    net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback.EVENT.register(
-        (dispatcher, access) ->
-            design.inherent.lootr_styled.client.ClientCommands.register(dispatcher));
+    design.inherent.lootr_styled.client.StylePreferences.register(
+        design.inherent.reform.fabric.client.FabricClientRegistration.of(
+            FabricLoader.getInstance().getModContainer("lootr_styled").orElseThrow()));
+    net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING
+        .register(client -> design.inherent.lootr_styled.client.StylePreferences.close());
   }
 }

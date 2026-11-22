@@ -1,5 +1,6 @@
 plugins { alias(libs.plugins.loom.remap) }
 apply from: rootProject.file('common.gradle')
+repositories { maven { url = 'https://maven.shedaniel.me/' } }
 loom {
     mods { lootr_styled_probe { sourceSet sourceSets.main } }
     runs { client { client(); runDir "runs/${fixtureDirectory}"; vmArg '-Xmx2G' } }
@@ -10,8 +11,8 @@ dependencies {
     modImplementation libs.fabric.loader
     modImplementation libs.fabric.api.legacy
     modImplementation 'maven.modrinth:lootr:nar56EsW'
+    modRuntimeOnly libs.cloth
     modImplementation files(productJar)
-    modImplementation libs.cloth
     if (fixtureMode != 'native') {
         modImplementation files(rootProject.file('../build/inputs/entity_model_features-3.3.12-1.21-fabric.jar'))
         modImplementation files(rootProject.file('../build/inputs/entity_texture_features-7.2.7-1.21-fabric.jar'))

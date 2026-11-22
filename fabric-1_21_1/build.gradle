@@ -1,5 +1,6 @@
 plugins { alias(libs.plugins.loom.remap) }
 apply from: rootProject.file('gradle/native-common.gradle')
+repositories { maven { url = 'https://maven.shedaniel.me/' } }
 loom {
     mods {
         lootr_styled {
@@ -11,18 +12,11 @@ loom {
         client { client(); runDir 'runs/client' }
     }
 }
-repositories {
-    maven { url = 'https://maven.shedaniel.me/' }
-}
 dependencies {
     minecraft 'com.mojang:minecraft:1.21.1'
     mappings loom.officialMojangMappings()
     modImplementation libs.fabric.loader
     modImplementation libs.fabric.api.legacy
     modImplementation 'maven.modrinth:lootr:nar56EsW'
-    modImplementation libs.cloth
-}
-tasks.named('processResources') {
-    inputs.property 'version', project.version
-    filesMatching('fabric.mod.json') { expand version: project.version }
+    modRuntimeOnly libs.cloth
 }

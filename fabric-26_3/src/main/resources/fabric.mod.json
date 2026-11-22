@@ -7,7 +7,7 @@
   "authors": [
     "inherent.design"
   ],
-  "license": "Apache-2.0",
+  "license": "Apache-2.0 (code); artwork terms in NOTICE",
   "environment": "client",
   "entrypoints": {
     "client": [
@@ -15,11 +15,12 @@
     ]
   },
   "depends": {
-    "fabricloader": ">=0.19.5",
+    "fabricloader": ">=${fabricLoaderMinimum}",
     "minecraft": "26.3",
     "java": ">=25",
     "lootr": ">=1.25.42.124",
-    "fabric-command-api-v2": "*"
+    "fabric-command-api-v2": "*",
+    "reform": "${reformVersion}"
   },
   "mixins": [
     "lootr_styled.mixins.json"

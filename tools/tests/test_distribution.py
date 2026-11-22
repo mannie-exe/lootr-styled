@@ -1,6 +1,7 @@
 """Mutate the actual four-target build products to exercise packaging refusals."""
 
 import json
+import hashlib
 from pathlib import Path
 import shutil
 import sys
@@ -10,7 +11,7 @@ import warnings
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from verify_distribution import distribution, verify
+from verify_distribution import ARTWORK_MANIFEST, distribution, verify
 
 
 class DistributionTest(unittest.TestCase):
@@ -45,12 +46,73 @@ class DistributionTest(unittest.TestCase):
             'design/inherent/lootr_styled/ResourceId.class']
         self.refused(entries, 'foreign or probe class')
 
+    def test_reform_is_required_without_bundling_library_classes(self):
+        self.assertFalse(any(n.startswith('design/inherent/reform/') for n in self.entries))
+        for version in (None, '0.1.0', '*'):
+            entries = dict(self.entries)
+            metadata = json.loads(entries['fabric.mod.json'])
+            if version is None:
+                del metadata['depends']['reform']
+            else:
+                metadata['depends']['reform'] = version
+            entries['fabric.mod.json'] = json.dumps(metadata).encode()
+            self.refused(entries, 'wrong re:form dependency')
+
+    def test_superseded_settings_ui_cannot_return_in_a_stale_build(self):
+        entries = dict(self.entries)
+        entries['design/inherent/lootr_styled/client/StyleScreen.class'] = entries['design/inherent/lootr_styled/ResourceId.class']
+        self.refused(entries, 'retired settings/UI type')
+
+    def test_loader_minimum_tracks_the_qualified_runtime(self):
+        entries = dict(self.entries)
+        metadata = json.loads(entries['fabric.mod.json'])
+        metadata['depends']['fabricloader'] = '>=0.19.5'
+        entries['fabric.mod.json'] = json.dumps(metadata).encode()
+        self.refused(entries, 'wrong Fabric Loader minimum')
+
+        root = Path(__file__).resolve().parents[2] / 'build/distributions'
+        jar = next(p for p in root.glob('lootr-styled-26.3-neoforge-*.jar') if not p.name.endswith('-sources.jar'))
+        with zipfile.ZipFile(jar) as archive:
+            modern = {name: archive.read(name) for name in archive.namelist()}
+        name = 'META-INF/neoforge.mods.toml'
+        import tomllib
+        version = tomllib.loads(modern[name].decode())['mods'][0]['version']
+        modern[name] = modern[name].replace(b'versionRange="[26.3.0.115,)"', b'versionRange="[26.3.0.22-beta,)"')
+        with self.assertRaisesRegex(ValueError, 'wrong NeoForge minimum'):
+            verify(self.write(modern), '26.3', 'neoforge', version)
+
     def test_pending_artwork_and_rig(self):
         for name in ('assets/lootr/textures/preview.png',
                      'assets/lootr_styled/preview.jem', 'upstream.jar'):
             entries = dict(self.entries)
             entries[name] = b'not-admitted'
             self.refused(entries, 'unadmitted artwork/rig/archive')
+
+    def test_default_artwork_cannot_be_missing_or_changed(self):
+        image = 'assets/lootr_styled/textures/default/chest.png'
+        entries = dict(self.entries)
+        del entries[image]
+        self.refused(entries, 'missing or duplicate default artwork')
+        entries = dict(self.entries)
+        entries[image] = b'changed'
+        self.refused(entries, 'changed default artwork')
+
+    def test_candidate_cannot_redeclare_its_own_artwork_inventory(self):
+        entries = dict(self.entries)
+        image = 'assets/lootr_styled/textures/default/chest.png'
+        entries[image] = b'changed'
+        manifest = json.loads(entries[ARTWORK_MANIFEST])
+        manifest['files'][image] = hashlib.sha256(entries[image]).hexdigest()
+        entries[ARTWORK_MANIFEST] = json.dumps(manifest).encode()
+        self.refused(entries, 'missing or changed default artwork manifest')
+
+    def test_default_model_cannot_be_changed_or_reintroduce_retired_carrier(self):
+        entries = dict(self.entries)
+        entries['assets/lootr_styled/models/block/barrel/default/unlooted_open.json'] = b'{}'
+        self.refused(entries, 'missing or changed Default model')
+        entries = dict(self.entries)
+        entries['assets/lootr_styled/models/block/barrel_clasps.json'] = b'{}'
+        self.refused(entries, 'retired barrel carrier')
 
     def test_verification_consumer_cannot_ship(self):
         entries = dict(self.entries)
@@ -76,6 +138,13 @@ class DistributionTest(unittest.TestCase):
             metadata.update(update)
             entries['fabric.mod.json'] = json.dumps(metadata).encode()
             self.refused(entries, 'identity or side|dependency scope')
+
+    def test_legacy_renderer_api_is_declared(self):
+        entries = dict(self.entries)
+        metadata = json.loads(entries['fabric.mod.json'])
+        del metadata['depends']['fabric-renderer-api-v1']
+        entries['fabric.mod.json'] = json.dumps(metadata).encode()
+        self.refused(entries, 'missing required renderer API')
 
     def test_duplicate_members(self):
         path = self.write(self.entries)
