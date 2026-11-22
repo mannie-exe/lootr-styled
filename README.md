@@ -8,11 +8,11 @@ Client-side chest and barrel styling for [Lootr](https://modrinth.com/mod/lootr)
 - Select models and artwork independently, with optional Fresh Objects animation support.
 - Export artwork or the Default barrel model for editing.
 
-Install Lootr and the matching [re:form](https://github.com/mannie-exe/reform) library for your game and loader, then add Lootr: Styled to the client. Open `/lootrstyled`, or use the NeoForge Mods configuration button. Choose Models and Artwork, then Save and reload resources. Local profiles live under `config/lootr_styled/`.
+Install Lootr and [re:form 0.2.0](https://github.com/mannie-exe/reform/releases/tag/v0.2.0) for your game and loader, then add Lootr: Styled to the client. Open `/lootrstyled`, or use the NeoForge Mods configuration button. Choose Models and Artwork, then Save and reload resources. Local profiles live under `config/lootr_styled/`.
 
 ## Development status
 
-This is an unreleased development build. [Verification](docs/verification.md) records tested behavior and limits. Default includes the selected chest and barrel artwork. Layered trim, emission, and recoloring remain design work.
+Version 0.1.0 provides client-side model and artwork profiles with re:form settings. [Verification](docs/verification.md) records tested behavior and limits. Default includes the selected chest and barrel artwork. Layered trim, emission, and recoloring remain design work.
 
 ## Further reading and participation
 
