@@ -5,7 +5,7 @@ license="Apache-2.0 (code); artwork terms in NOTICE"
 modId="lootr_styled"
 version="${version}"
 displayName="Lootr: Styled"
-authors="inherent.design"
+authors="inherent.design contributors"
 description="Client-side model and artwork compatibility for Lootr."
 [[dependencies.lootr_styled]]
 modId="minecraft"

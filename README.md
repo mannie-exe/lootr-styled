@@ -20,7 +20,7 @@ Read [profiles](docs/profiles.md) for editing and selection, [architecture](docs
 
 ## Licensing and attribution
 
-Our code is [Apache-2.0](LICENSE). Artwork and rigs retain their own terms; [NOTICE](NOTICE) records source permissions and modifications. The selected artwork combines adjusted Pixel Perfection Legacy dark-oak wood, recolored Spectral chest trims and an owner-authored barrel trim pattern.
+Project code by inherent.design contributors is licensed under [Apache-2.0](LICENSE). Artwork and rigs retain their own terms; [NOTICE](NOTICE) records source permissions and modifications. The selected artwork combines adjusted Pixel Perfection Legacy dark-oak wood, recolored Spectral chest trims and an owner-authored barrel trim pattern.
 
 | Source                                                                               | Authors                          | Contribution                              | Terms                                                                                   |
 | ------------------------------------------------------------------------------------ | -------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------- |
