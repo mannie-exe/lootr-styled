@@ -20,6 +20,8 @@ Full-pack qualification uses the production launcher rather than adding the enti
 
 The pack helper accepts a NeoForge Minecraft 1.21.1 launch profile and declares its native LWJGL 3.3.3 dependency when absent. A copied profile containing only Minecraft and NeoForge can reach Sodium's early bootstrap without LWJGL classes on its first launch. Keep this launcher dependency explicit; removing Sodium or changing the addon cannot repair that incomplete launch profile. Existing LWJGL selections remain unchanged.
 
+Prism's launch command can return after an IPC handoff, before the client starts or exits. Require the matching artifact report and observe the owned JVM's actual exit separately. A normal in-world disconnect can be tested separately from direct application stop. Retain a failed direct-stop or forced-cleanup result separately; a passed scene report alone does not establish a normal exit.
+
 The disposable pack fixtures explicitly select Default models and artwork. Their observer requires packed model bindings and compares all twelve effective artwork images with the packaged inputs. Inheriting the pack's seeded artwork choice alone does not qualify Default artwork. Personal profile selections remain untouched.
 
 If a running Prism reports that the new fixture ID is unknown, restart the launcher after its game processes have stopped so it discovers the new instance directory. Do not replace launcher account files or register a fixture by modifying a personal instance.
