@@ -14,7 +14,7 @@ Inspect both installable and source artifacts for donor files, pending artwork, 
 
 When artwork is included, carry its source credits, license links and modification notices with the assets and in the bundled [NOTICE](../NOTICE). Keep Apache-2.0 code terms distinct from artwork terms and record each donor's permission basis. [Development](development.md#artwork-handoffs) owns handoff checks.
 
-Publication requires explicit authorization. The build workflow retains artifacts for review and the security workflow checks its documented scope; neither publishes a release. A future delivery workflow must verify the version, exact artifact set and hashes before creating a draft or public release.
+Publication requires explicit authorization. The build workflow checks all targets and records distribution hashes. Manual runs can retain review artifacts for three days; ordinary checks do not depend on artifact-storage quota. The security workflow checks its documented scope. Neither workflow publishes a release. Release delivery must verify the version, exact artifact set and hashes before creating a draft or public release.
 
 The modpack cutover is a separate source integration. Pin the qualified candidate/release, remove only the duplicate Lootr-specific generated contributions and preserve the selected vanilla composition, Atlas and relighting tools. Keep pack-managed rules and explicitly seeded player/profile edits with their respective owners. Verify the final effective resource order in an isolated client. Personal instance synchronization or server/world operations require their own authorization.
 
