@@ -4,6 +4,8 @@ The build produces four installable artifacts and four source artifacts under `b
 
 Before a release, complete the current product's native acceptance and review the actual distribution inventory. Set the version through `mod_version` in `gradle.properties`, run the applicable independent tests and `./gradlew --no-daemon check build`, then retain SHA-256 identities for the exact outputs. A passing bootstrap or configured CI is insufficient for a renderer release.
 
+Compare the outputs with a clean checkout using the same qualified dependencies and toolchains. Archive order and timestamps are normalized, and empty directories are excluded, so leftover local resource directories do not become release inputs.
+
 The selected re:form dependency must resolve publicly with the exact game/loader bytes in [the pin manifest](../gradle/reform.json). Local candidate qualification uses an explicitly staged Maven repository and does not establish hosted availability. Promote or select a public library release, refresh its four hashes and metadata together, and rerun the affected acceptance before publishing this addon. Keep the library external and include its installation requirement in release instructions.
 
 Verify client-only loading, native/default and resource-pack model inheritance, explicit Lootr override priority, profile/reload behavior and optional rig absence against each advertised target. Retain the tested upstream dependency and artifact identities. Do not extrapolate one loader, Minecraft version or shader result to the others.

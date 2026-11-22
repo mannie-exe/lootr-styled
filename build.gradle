@@ -44,6 +44,7 @@ subprojects {
         tasks.withType(AbstractArchiveTask).configureEach {
             preserveFileTimestamps = false
             reproducibleFileOrder = true
+            includeEmptyDirs = false
         }
         tasks.withType(Jar).configureEach {
             from rootProject.file('LICENSE'), rootProject.file('NOTICE')
