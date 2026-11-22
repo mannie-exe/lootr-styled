@@ -40,8 +40,8 @@ Changes for the selected chest artwork: extract the framing, recolor and relight
 it with the authored Skyweave gold/gray palette and geometric lighting,
 and adapt it to Lootr chest layouts. The selected trim uses five gold shades
 and four gray shades, with the outer entries of the original ramps removed.
-Donor pixel-shading contribution
-is zero; the adapted frame design remains attributed. Spectral-derived artwork and our contributions to those adaptations
+Donor pixel-shading contribution is zero; the adapted frame design remains
+attributed. Spectral-derived artwork and our contributions to those adaptations
 retain its attribution, noncommercial and ShareAlike terms. They are not
 relicensed under Apache-2.0.
 

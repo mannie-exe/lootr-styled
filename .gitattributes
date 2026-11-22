@@ -1,4 +1,6 @@
 * text=auto
+LICENSE text eol=lf
+NOTICE text eol=lf
 *.java text eol=lf
 *.gradle text eol=lf
 *.md text eol=lf
