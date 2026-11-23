@@ -84,6 +84,9 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     marker.write_text('lootr-styled-native-verification-v1\n')
     for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt',
                      'lootr-styled-shutdown-report.json', 'lootr-styled-combinations-report.json',
+                     'lootr-styled-cleanup-failure-report.json',
+                     'lootr-styled-cleanup-failure-synchronous-report.json',
+                     'lootr-styled-cleanup-failure-replaced-report.json',
                      '.lootr-styled-probe-pid'):
         (fixture / previous).unlink(missing_ok=True)
     for previous in ('lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json',

@@ -242,7 +242,15 @@ final class PreviewAuthorityProbe {
                   com.google.gson.JsonParser.parseString(
                       "{\"container\":\"BARREL\",\"looted\":true,\"open\":true,\"lid\":1}"))
               .getOrThrow();
-      attempt = view.request(subject);
+      try {
+        attempt = view.request(subject);
+      } catch (PolicyRefusal waiting) {
+        if (waiting.report().issues().isEmpty()
+            || waiting.report().issues().stream()
+                .anyMatch(i -> !i.code().equals("preview.input_unaccepted"))) throw waiting;
+        result.addProperty("initialInputGuardObserved", true);
+        return null;
+      }
       stage = 1;
       ticks = 0;
       return null;

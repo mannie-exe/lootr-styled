@@ -50,12 +50,15 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertEqual(b'Preserve live capture', capture.read_bytes())
 
     def test_a_stopped_fixture_cannot_reuse_a_previous_success_receipt(self):
-        for name in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt', 'lootr-styled-shutdown-report.json'):
+        receipts = ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt',
+                    'lootr-styled-shutdown-report.json', 'lootr-styled-cleanup-failure-report.json',
+                    'lootr-styled-cleanup-failure-synchronous-report.json',
+                    'lootr-styled-cleanup-failure-replaced-report.json')
+        for name in receipts:
             (self.fixture / name).write_text('Previous run')
         native_probe.prepare('neoforge-1_21_1', 'native')
-        self.assertFalse((self.fixture / 'lootr-styled-probe-report.json').exists())
-        self.assertFalse((self.fixture / 'lootr-styled-probe-state.txt').exists())
-        self.assertFalse((self.fixture / 'lootr-styled-shutdown-report.json').exists())
+        for name in receipts:
+            self.assertFalse((self.fixture / name).exists(), name)
 
     def test_stopped_preparation_clears_owned_captures_but_keeps_other_files(self):
         for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png',
