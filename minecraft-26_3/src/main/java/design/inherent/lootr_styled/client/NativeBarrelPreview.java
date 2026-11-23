@@ -75,16 +75,28 @@ final class NativeBarrelPreview {
           java.util.Objects.requireNonNull(
               inputs.imageSizes().get(id), "Unvalidated preview texture");
       var frame = new FrameSize(size.width(), size.height());
+      Optional<AnimationMetadataSection> animation = Optional.empty();
+      Optional<net.minecraft.client.resources.metadata.texture.TextureMetadataSection>
+          textureMetadata = Optional.empty();
       if (meta.length > 0) {
         var json = JsonDocuments.object(meta);
-        if (json.has("animation"))
-          frame =
-              AnimationMetadataSection.CODEC
-                  .parse(com.mojang.serialization.JsonOps.INSTANCE, json.get("animation"))
-                  .getOrThrow()
-                  .calculateFrameSize(size.width(), size.height());
+        if (json.has("animation")) {
+          animation =
+              Optional.of(
+                  AnimationMetadataSection.CODEC
+                      .parse(com.mojang.serialization.JsonOps.INSTANCE, json.get("animation"))
+                      .getOrThrow());
+          frame = animation.orElseThrow().calculateFrameSize(size.width(), size.height());
+        }
+        if (json.has("texture")) {
+          textureMetadata =
+              Optional.of(
+                  net.minecraft.client.resources.metadata.texture.TextureMetadataSection.CODEC
+                      .parse(com.mojang.serialization.JsonOps.INSTANCE, json.get("texture"))
+                      .getOrThrow());
+        }
       }
-      String key = TextureImages.hash(bytes) + ":" + frame.width() + ":" + frame.height();
+      String key = TextureImages.hash(bytes) + ":" + TextureImages.hash(meta);
       var contents = owned.get(key);
       if (contents == null) {
         long area = (long) size.width() * size.height();
@@ -99,7 +111,14 @@ final class NativeBarrelPreview {
           image = NativeImage.read(new java.io.ByteArrayInputStream(bytes));
           if (image.getWidth() != size.width() || image.getHeight() != size.height())
             throw new IllegalArgumentException("Native preview image dimensions changed");
-          contents = new SpriteContents(Identifier.parse(id.toString()), frame, image);
+          contents =
+              new SpriteContents(
+                  Identifier.parse(id.toString()),
+                  frame,
+                  image,
+                  animation,
+                  List.of(),
+                  textureMetadata);
           owned.put(key, contents);
           allocations.put(key, allocation);
           decodedPixels += area;
@@ -162,33 +181,58 @@ final class NativeBarrelPreview {
             return material;
           }
         };
+    // FaceBakery needs only the interner for this owned resolved face. Refuse any new
+    // resource-resolution path rather than delegating to a live ModelManager.
+    var baker =
+        new ModelBaker() {
+          public net.minecraft.client.resources.model.ResolvedModel getModel(Identifier id) {
+            throw new UnsupportedOperationException(
+                "Detached face baking cannot resolve live models");
+          }
+
+          public net.minecraft.client.renderer.block.dispatch.BlockStateModelPart
+              missingBlockModelPart() {
+            throw new UnsupportedOperationException(
+                "Detached face baking has no missing-model fallback");
+          }
+
+          public net.minecraft.client.resources.model.sprite.MaterialBaker materials() {
+            throw new UnsupportedOperationException(
+                "Detached face baking cannot resolve live materials");
+          }
+
+          public Interner interner() {
+            return interner;
+          }
+
+          public <T> T compute(SharedOperationKey<T> key) {
+            throw new UnsupportedOperationException(
+                "Detached face baking has no global operation cache");
+          }
+        };
     try (var images = new Images(inputs, ledger)) {
       for (var element : geometry.elements())
         for (var entry : element.faces().entrySet()) {
           checkpoint.run();
           var face = entry.getValue();
           var texture = BarrelPreviewMesh.texture(json, face.texture());
+          // The admitted core texture slots are resource strings, not forced-translucent
+          // Material declarations. Preserve native per-face UV/animation transparency.
           var material =
-              new BakedQuad.MaterialInfo(
-                  images.sprite(texture),
-                  null,
-                  null,
-                  null,
-                  null,
-                  face.tintIndex(),
-                  element.shadeDirectionOverride(),
-                  element.lightEmission());
+              new net.minecraft.client.resources.model.sprite.Material.Baked(
+                  images.sprite(texture), false);
           var quad =
               FaceBakery.bakeQuad(
-                  interner,
+                  baker,
                   element.from(),
                   element.to(),
-                  face.uvs(),
-                  face.rotation(),
+                  face,
                   material,
                   entry.getKey(),
                   new ModelState() {},
-                  element.rotation());
+                  element.rotation(),
+                  element.shadeDirectionOverride(),
+                  element.lightEmission());
           var vertices = new ArrayList<BarrelPreviewMesh.Vertex>();
           for (int vertex = 0; vertex < 4; vertex++)
             vertices.add(
@@ -207,7 +251,9 @@ final class NativeBarrelPreview {
                   Optional.ofNullable(element.shadeDirectionOverride())
                       .map(net.minecraft.core.Direction::getName),
                   face.tintIndex(),
-                  element.lightEmission()));
+                  element.lightEmission(),
+                  Optional.of(
+                      BarrelPreviewMesh.Layer.valueOf(quad.materialInfo().layer().name()))));
         }
       checkpoint.run();
       return new BarrelPreviewMesh(inputs, faces, !Boolean.FALSE.equals(model.ambientOcclusion()));

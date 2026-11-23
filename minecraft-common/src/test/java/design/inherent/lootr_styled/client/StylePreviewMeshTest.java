@@ -71,6 +71,82 @@ class StylePreviewMeshTest {
   }
 
   @Test
+  void differentFaceMaterialsCanShareOneCapturedTextureWithoutLosingTheirPolicy() throws Exception {
+    var baked =
+        NativeBarrelPreview.bake(
+            NativeBarrelPreviewTest.inputs(false, false, true),
+            new GraphicLedger(LIMITS),
+            () -> {});
+    var face = baked.faces().getFirst();
+    var alternate =
+        new BarrelPreviewMesh.Face(
+            face.texture(),
+            face.vertices(),
+            face.direction(),
+            face.shade(),
+            face.shadeDirectionOverride(),
+            face.tintIndex(),
+            face.lightEmission(),
+            java.util.Optional.of(BarrelPreviewMesh.Layer.TRANSLUCENT));
+    var source =
+        new BarrelPreviewMesh(baked.inputs(), java.util.List.of(face, alternate, face), false);
+    var shared =
+        StylePreviewMesh.convert(
+            source,
+            LIMITS,
+            (original, texture) ->
+                new GraphicMaterial(
+                    texture,
+                    original.nativeLayer().orElse(BarrelPreviewMesh.Layer.SOLID)
+                            == BarrelPreviewMesh.Layer.TRANSLUCENT
+                        ? GraphicMaterial.Alpha.TRANSLUCENT
+                        : GraphicMaterial.Alpha.OPAQUE,
+                    0,
+                    GraphicMaterial.Cull.BACK,
+                    GraphicMaterial.Filter.NEAREST,
+                    GraphicMaterial.Wrap.CLAMP),
+            () -> {});
+    assertEquals(1, shared.textures().size());
+    assertEquals(2, shared.materials().size());
+    var first = shared.mesh().triangles().get(0).material();
+    var second = shared.mesh().triangles().get(2).material();
+    assertNotEquals(first, second);
+    assertEquals(first, shared.mesh().triangles().get(4).material());
+    assertEquals(GraphicMaterial.Alpha.OPAQUE, shared.materials().get(first).alpha());
+    assertEquals(GraphicMaterial.Alpha.TRANSLUCENT, shared.materials().get(second).alpha());
+    assertEquals(shared.materials().get(first).texture(), shared.materials().get(second).texture());
+    var decoded =
+        shared.prepare(
+            new GraphicLedger(LIMITS),
+            new design.inherent.reform.serialization.JsonLimits(16384, 32, 4096, 8192, 256, 128),
+            () -> {});
+    assertEquals(1, decoded.textures().size());
+    assertEquals(2, decoded.materials().size());
+  }
+
+  @Test
+  void combinedMaterialAndTextureCountIsBoundedBeforeACompleteSceneEscapes() throws Exception {
+    var baked =
+        NativeBarrelPreview.bake(
+            NativeBarrelPreviewTest.inputs(false, false, true),
+            new GraphicLedger(LIMITS),
+            () -> {});
+    var narrow =
+        new GraphicLimits(
+            LIMITS.inputBytes(),
+            LIMITS.outputBytes(),
+            LIMITS.decodedPixels(),
+            1,
+            LIMITS.nativeBytes());
+    var failed =
+        assertThrows(
+            PolicyRefusal.class,
+            () ->
+                StylePreviewMesh.convert(baked, narrow, StylePreviewMeshTest::material, () -> {}));
+    assertEquals("preview.budget", failed.report().issues().getFirst().code());
+  }
+
+  @Test
   void anInvisibleNativeModelStaysReadyWithoutMaterialPreparation() throws Exception {
     var nativeMesh =
         NativeBarrelPreview.bake(

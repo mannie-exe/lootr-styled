@@ -63,6 +63,21 @@ record StylePreviewMesh(
       Function<DocumentId, GraphicMaterial> materialPolicy,
       Runnable checkpoint)
       throws IOException {
+    var cached = new HashMap<DocumentId, GraphicMaterial>();
+    return convert(
+        source,
+        limits,
+        (face, texture) -> cached.computeIfAbsent(texture, materialPolicy),
+        checkpoint);
+  }
+
+  static StylePreviewMesh convert(
+      BarrelPreviewMesh source,
+      GraphicLimits limits,
+      java.util.function.BiFunction<BarrelPreviewMesh.Face, DocumentId, GraphicMaterial>
+          materialPolicy,
+      Runnable checkpoint)
+      throws IOException {
     checkpoint.run();
     if (source.inputs().resources().byteSize() > limits.inputBytes())
       throw new PolicyRefusal(
@@ -79,6 +94,7 @@ record StylePreviewMesh(
     var triangles = new ArrayList<GraphicMesh.Triangle>();
     var materials = new HashMap<DocumentId, GraphicMaterial>();
     var textures = new HashMap<DocumentId, GraphicTexture>();
+    var materialIds = new HashMap<GraphicMaterial, DocumentId>();
     var sources = new HashMap<DocumentId, ResourceId>();
     for (var face : source.faces()) {
       checkpoint.run();
@@ -90,15 +106,38 @@ record StylePreviewMesh(
           DocumentId.parse(
               "lootr_styled:preview/"
                   + TextureImages.hash(face.texture().toString().getBytes(StandardCharsets.UTF_8)));
+      var material = java.util.Objects.requireNonNull(materialPolicy.apply(face, id));
+      if (!material.texture().equals(id))
+        throw new IllegalArgumentException("Preview material changed its captured texture binding");
+      var materialId = materialIds.get(material);
+      if (materialId == null) {
+        materialId =
+            !materials.containsKey(id)
+                ? id
+                : DocumentId.parse(
+                    id
+                        + "/material/"
+                        + TextureImages.hash(
+                            (material.alpha().name()
+                                    + ":"
+                                    + Float.floatToIntBits(material.cutoff())
+                                    + ":"
+                                    + material.cull().name()
+                                    + ":"
+                                    + material.filter().name()
+                                    + ":"
+                                    + material.wrap().name())
+                                .getBytes(StandardCharsets.UTF_8)));
+        materials.put(materialId, material);
+        materialIds.put(material, materialId);
+      }
       if (!textures.containsKey(id)) {
-        var material = java.util.Objects.requireNonNull(materialPolicy.apply(id));
-        if (!material.texture().equals(id))
-          throw new IllegalArgumentException(
-              "Preview material changed its captured texture binding");
-        materials.put(id, material);
         textures.put(id, texture(source.inputs().resources(), face.texture(), id, limits));
         sources.put(id, face.texture());
       }
+      if ((long) materials.size() + textures.size() > limits.resources())
+        throw new PolicyRefusal(
+            "preview.budget", "The barrel exceeds the complete material and texture allowance");
       var normal = GraphicLighting.Direction.valueOf(face.direction().toUpperCase(Locale.ROOT));
       float nx =
           normal == GraphicLighting.Direction.EAST
@@ -132,8 +171,8 @@ record StylePreviewMesh(
                   .map(value -> GraphicLighting.Direction.valueOf(value.toUpperCase(Locale.ROOT))),
               face.lightEmission(),
               source.ambientOcclusion());
-      triangles.add(new GraphicMesh.Triangle(first, first + 1, first + 2, id, lighting));
-      triangles.add(new GraphicMesh.Triangle(first + 2, first + 3, first, id, lighting));
+      triangles.add(new GraphicMesh.Triangle(first, first + 1, first + 2, materialId, lighting));
+      triangles.add(new GraphicMesh.Triangle(first + 2, first + 3, first, materialId, lighting));
     }
     checkpoint.run();
     var mesh = new GraphicMesh(limits, vertices, triangles);

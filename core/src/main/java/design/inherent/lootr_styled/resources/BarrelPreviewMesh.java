@@ -24,6 +24,12 @@ public record BarrelPreviewMesh(
     }
   }
 
+  public enum Layer {
+    SOLID,
+    CUTOUT,
+    TRANSLUCENT
+  }
+
   public record Face(
       ResourceId texture,
       List<Vertex> vertices,
@@ -31,7 +37,27 @@ public record BarrelPreviewMesh(
       boolean shade,
       Optional<String> shadeDirectionOverride,
       int tintIndex,
-      int lightEmission) {
+      int lightEmission,
+      Optional<Layer> nativeLayer) {
+    public Face(
+        ResourceId texture,
+        List<Vertex> vertices,
+        String direction,
+        boolean shade,
+        Optional<String> shadeDirectionOverride,
+        int tintIndex,
+        int lightEmission) {
+      this(
+          texture,
+          vertices,
+          direction,
+          shade,
+          shadeDirectionOverride,
+          tintIndex,
+          lightEmission,
+          Optional.empty());
+    }
+
     public Face {
       java.util.Objects.requireNonNull(texture);
       vertices = List.copyOf(vertices);
@@ -39,6 +65,7 @@ public record BarrelPreviewMesh(
         throw new IllegalArgumentException("Native preview face needs four vertices");
       java.util.Objects.requireNonNull(direction);
       java.util.Objects.requireNonNull(shadeDirectionOverride);
+      java.util.Objects.requireNonNull(nativeLayer);
     }
   }
 
