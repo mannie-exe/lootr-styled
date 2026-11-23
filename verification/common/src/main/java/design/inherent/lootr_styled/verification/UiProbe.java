@@ -49,6 +49,9 @@ final class UiProbe {
       PROFILE_PREVIEW_DRAW = -20,
       PROFILE_PREVIEW_CAPTURE = -21,
       PROFILE_SUBJECT_RETIRED = -22,
+      PROFILE_VARIANT_PREPARE = -23,
+      PROFILE_VARIANT_DRAW = -24,
+      PROFILE_VARIANT_RETIRED = -25,
       HOME_RETURN = -8,
       ENTER_SETTINGS = -7;
   private static final int HOME_DIRTY = 210, RETURN_DIRTY = 211;
@@ -78,6 +81,22 @@ final class UiProbe {
   private final long openedAt = System.nanoTime();
   private long actionAt, searchAt, exportAt;
   private long profileDraws;
+  private int profileVariant = 1;
+  private final com.google.gson.JsonArray profileVariants = new com.google.gson.JsonArray();
+  private static final List<String> PROFILE_SUBJECTS =
+      List.of(
+          "barrel/unlooted/closed",
+          "barrel/unlooted/open",
+          "barrel/looted/closed",
+          "barrel/looted/open",
+          "chest/unlooted/closed",
+          "chest/unlooted/open",
+          "chest/looted/closed",
+          "chest/looted/open",
+          "trapped-chest/unlooted/closed",
+          "trapped-chest/unlooted/open",
+          "trapped-chest/looted/closed",
+          "trapped-chest/looted/open");
 
   UiProbe() throws Exception {
     result.add("timingsMs", timings);
@@ -249,6 +268,7 @@ final class UiProbe {
         result.addProperty("productionProfilePreviewRendered", true);
         result.addProperty("productionPreviewNativeBytes", profileHost.nativeOwnership().bytes());
         result.addProperty("productionPreviewOutputBytes", profileHost.retainedOutput().bytes());
+        recordProfileVariant(PROFILE_SUBJECTS.getFirst());
         captured = false;
         NativeWorld.screenshot(mc, "reform-production-preview-drawn", () -> captured = true);
         stage = PROFILE_PREVIEW_CAPTURE;
@@ -275,6 +295,53 @@ final class UiProbe {
         result.addProperty("productionSubjectRetiresWithoutNewRenderedSubmission", true);
         result.addProperty("productionSubjectRetiredNativeBytes", 0);
         result.addProperty("productionSubjectRetiredOutputBytes", 0);
+        stage = PROFILE_VARIANT_PREPARE;
+      }
+      case PROFILE_VARIANT_PREPARE -> {
+        String subject = PROFILE_SUBJECTS.get(profileVariant);
+        if (!profileSubject(root).getValue().equals(subject))
+          throw new IllegalStateException(
+              "The production subject lost its declared order: " + subject);
+        if (!profileCandidate().equals(original)
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Subject selection changed the settings draft or file");
+        profileDraws = GraphicDrawAudit.state().rendered();
+        NativeBindings.press(button(root, "Prepare draft preview"));
+        mountTicks = 0;
+        stage = PROFILE_VARIANT_DRAW;
+      }
+      case PROFILE_VARIANT_DRAW -> {
+        if (GraphicDrawAudit.state().rendered() <= profileDraws
+            || profileHost.nativeOwnership().bytes() == 0) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException(
+                "Production subject did not draw: " + PROFILE_SUBJECTS.get(profileVariant));
+          return null;
+        }
+        recordProfileVariant(PROFILE_SUBJECTS.get(profileVariant));
+        NativeBindings.press(profileSubject(root));
+        profileDraws = GraphicDrawAudit.state().rendered();
+        mountTicks = 0;
+        stage = PROFILE_VARIANT_RETIRED;
+      }
+      case PROFILE_VARIANT_RETIRED -> {
+        if (profileHost.nativeOwnership().bytes() != 0
+            || profileHost.retainedOutput().bytes() != 0) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Production subject resources did not retire");
+          return null;
+        }
+        if (++mountTicks < 4) return null;
+        if (GraphicDrawAudit.state().rendered() != profileDraws)
+          throw new IllegalStateException("Subject selection prepared an unrequested preview");
+        if (++profileVariant < PROFILE_SUBJECTS.size()) {
+          stage = PROFILE_VARIANT_PREPARE;
+          return null;
+        }
+        if (profileVariants.size() != PROFILE_SUBJECTS.size()
+            || !profileSubject(root).getValue().equals(PROFILE_SUBJECTS.getFirst()))
+          throw new IllegalStateException("The production subject cycle is incomplete");
+        result.add("productionPreviewSubjects", profileVariants.deepCopy());
         NativeBindings.press(navigation(root, "Home"));
         mountTicks = 0;
         stage = HOME_RETURN;
@@ -974,6 +1041,19 @@ final class UiProbe {
   private ClientSettings profileCandidate() {
     return ClientSettings.class.cast(
         profileOwner.view().snapshot().orElseThrow().inspect().candidate().orElseThrow().value());
+  }
+
+  private void recordProfileVariant(String subject) throws java.io.IOException {
+    if (!profileCandidate().equals(original)
+        || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+      throw new IllegalStateException("Production subject preparation changed settings");
+    var value = new JsonObject();
+    value.addProperty("subject", subject);
+    value.addProperty("rendered", true);
+    value.addProperty("nativeBytes", profileHost.nativeOwnership().bytes());
+    value.addProperty("outputBytes", profileHost.retainedOutput().bytes());
+    profileVariants.add(value);
+    result.add("productionPreviewSubjects", profileVariants.deepCopy());
   }
 
   private void recordGeometry(String key) throws java.io.IOException {
