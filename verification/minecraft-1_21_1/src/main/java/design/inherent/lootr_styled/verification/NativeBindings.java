@@ -295,6 +295,30 @@ final class NativeBindings {
               throw new IllegalStateException(
                   "Native wrapper ignored the selected barrel AO policy: " + actual);
             item.addProperty("wrapperAmbientOcclusion", actual);
+            var renderTypes =
+                wrapper
+                    .getClass()
+                    .getMethod(
+                        "getRenderTypes",
+                        net.minecraft.world.level.block.state.BlockState.class,
+                        net.minecraft.util.RandomSource.class,
+                        dataClass);
+            renderTypes.setAccessible(true);
+            var wrapperLayers = renderTypes.invoke(wrapper, state, random, data);
+            var childTypes =
+                child
+                    .getClass()
+                    .getMethod(
+                        "getRenderTypes",
+                        net.minecraft.world.level.block.state.BlockState.class,
+                        net.minecraft.util.RandomSource.class,
+                        dataClass);
+            childTypes.setAccessible(true);
+            var childLayers = childTypes.invoke(child, state, random, data);
+            var setType = Class.forName("net.neoforged.neoforge.client.ChunkRenderTypeSet");
+            var list = setType.getMethod("asList");
+            item.addProperty("wrapperChunkRenderTypes", list.invoke(wrapperLayers).toString());
+            item.addProperty("leafChunkRenderTypes", list.invoke(childLayers).toString());
           } else {
             var materialField = wrapper.getClass().getDeclaredField("lootrStyled$material");
             materialField.setAccessible(true);
