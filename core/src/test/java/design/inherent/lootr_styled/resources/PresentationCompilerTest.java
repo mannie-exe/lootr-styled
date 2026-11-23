@@ -284,6 +284,20 @@ class PresentationCompilerTest {
             .anyMatch(
                 c -> c.id().equals(ResourceId.parse("example:test")) && c.title().equals("Test")));
     assertEquals(java.util.List.of("Disabled"), result.status());
+    var custom =
+        result.choices().stream()
+            .filter(c -> c.id().equals(ResourceId.parse("example:test")))
+            .findFirst()
+            .orElseThrow();
+    assertEquals(
+        new PresentationCompiler.ContributionCounts(1, 0), custom.declarations().orElseThrow());
+    var inherited =
+        result.choices().stream()
+            .filter(c -> c.id().equals(ClientSettings.VANILLA))
+            .findFirst()
+            .orElseThrow();
+    assertEquals(
+        new PresentationCompiler.ContributionCounts(0, 0), inherited.declarations().orElseThrow());
   }
 
   @Test

@@ -14,6 +14,31 @@ import org.junit.jupiter.api.Test;
 
 final class StyleProfileReferencesTest {
   @Test
+  void declaredFactsAreCachedMetadataAndUnknownCountsAreNotReportedAsZero() {
+    var id = design.inherent.lootr_styled.ResourceId.parse("example:profile");
+    var unknown =
+        StylePreferences.profileEntry(
+            new design.inherent.lootr_styled.resources.PresentationCompiler.Choice(
+                id, "Profile", "Pack"));
+    assertEquals(Map.of("ID", id.toString(), "Source", "Pack"), unknown.preview());
+    var known =
+        StylePreferences.profileEntry(
+            new design.inherent.lootr_styled.resources.PresentationCompiler.Choice(
+                id,
+                "Profile",
+                "Pack",
+                java.util.Optional.of(
+                    new design.inherent.lootr_styled.resources.PresentationCompiler
+                        .ContributionCounts(4, 0))));
+    assertEquals("4", known.preview().get("Declared model entries"));
+    assertEquals("0", known.preview().get("Declared artwork entries"));
+    assertEquals(unknown.key(), known.key());
+    assertEquals(unknown.value(), known.value());
+    assertEquals(unknown.label(), known.label());
+    assertEquals(unknown.searchText(), known.searchText());
+  }
+
+  @Test
   void unavailableIsNotAnEmptyCatalogueOrAnUnknownProfile() {
     var stamp =
         new ReferenceStamp(

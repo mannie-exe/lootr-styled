@@ -54,7 +54,15 @@ public final class PresentationCompiler {
     var status = new ArrayList<>(catalogue.diagnostics());
     var choices =
         catalogue.entries().stream()
-            .map(e -> new Choice(e.profile().id(), e.profile().title(), e.description()))
+            .map(
+                e ->
+                    new Choice(
+                        e.profile().id(),
+                        e.profile().title(),
+                        e.description(),
+                        java.util.Optional.of(
+                            new ContributionCounts(
+                                e.profile().models().size(), e.profile().artwork().size()))))
             .toList();
     if (!settings.enabled()) {
       status.add("Disabled");
@@ -326,7 +334,34 @@ public final class PresentationCompiler {
     return output;
   }
 
-  public record Choice(ResourceId id, String title, String source) {}
+  /** Declared entries only; these counts do not assert resource validity or live application. */
+  public record ContributionCounts(int models, int artwork) {
+    public ContributionCounts {
+      if (models < 0
+          || artwork < 0
+          || (long) models + artwork
+              > design.inherent.lootr_styled.profile.StyleProfile.MAX_MAPPINGS)
+        throw new IllegalArgumentException("Invalid declared profile contribution counts");
+    }
+  }
+
+  public record Choice(
+      ResourceId id,
+      String title,
+      String source,
+      java.util.Optional<ContributionCounts> declarations) {
+    /** Older producers may omit facts; unknown counts must never be presented as zero. */
+    public Choice(ResourceId id, String title, String source) {
+      this(id, title, source, java.util.Optional.empty());
+    }
+
+    public Choice {
+      java.util.Objects.requireNonNull(id);
+      java.util.Objects.requireNonNull(title);
+      java.util.Objects.requireNonNull(source);
+      java.util.Objects.requireNonNull(declarations);
+    }
+  }
 
   public record Result(FrozenResources resources, List<String> status, List<Choice> choices) {
     public Result {

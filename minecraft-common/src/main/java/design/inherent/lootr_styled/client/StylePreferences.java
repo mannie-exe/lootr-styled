@@ -282,14 +282,7 @@ public final class StylePreferences {
     if (revision.equals(profileRevision)) return;
     var entries =
         published.map(ClientRuntime.Preparation::choices).orElse(List.of()).stream()
-            .map(
-                choice ->
-                    new ReferenceIndex.Entry<>(
-                        choice.id().toString(),
-                        choice.id().toString(),
-                        choice.title(),
-                        choice.id() + " " + choice.title() + " " + choice.source(),
-                        Map.of("ID", choice.id().toString(), "Source", choice.source())))
+            .map(StylePreferences::profileEntry)
             .toList();
     profiles.bind(revision, stamp -> profileSource(stamp, published.isPresent(), entries));
     profileTitles.replace(
@@ -298,6 +291,26 @@ public final class StylePreferences {
                 java.util.stream.Collectors.toMap(
                     ReferenceIndex.Entry::key, entry -> Component.literal(entry.label()))));
     profileRevision = revision;
+  }
+
+  static ReferenceIndex.Entry<String, String> profileEntry(
+      design.inherent.lootr_styled.resources.PresentationCompiler.Choice choice) {
+    var facts = new java.util.LinkedHashMap<String, String>();
+    facts.put("ID", choice.id().toString());
+    facts.put("Source", choice.source());
+    choice
+        .declarations()
+        .ifPresent(
+            counts -> {
+              facts.put("Declared model entries", Integer.toString(counts.models()));
+              facts.put("Declared artwork entries", Integer.toString(counts.artwork()));
+            });
+    return new ReferenceIndex.Entry<>(
+        choice.id().toString(),
+        choice.id().toString(),
+        choice.title(),
+        choice.id() + " " + choice.title() + " " + choice.source(),
+        facts);
   }
 
   static design.inherent.reform.reference.ReferenceResolver<String, String> profileSource(
