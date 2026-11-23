@@ -54,9 +54,9 @@ final class PreviewCombinationProbe {
           new Selection(
               true, ClientSettings.DEFAULT.toString(), ClientSettings.DEFAULT.toString()));
   private final ClientEditingWorkflow workflow;
-  private final ClientEditor<ClientSettings> editor;
+  private ClientEditor<ClientSettings> editor;
   private final ClientGraphicHost host;
-  private final ClientGraphicHost.View<ClientSettings, Object> view;
+  private ClientGraphicHost.View<ClientSettings, Object> view;
   private final ClientGraphicProvider<ClientSettings, Object> provider;
   private final JsonArray rows = new JsonArray();
   private final Path settings;
@@ -98,16 +98,18 @@ final class PreviewCombinationProbe {
     original = Files.readAllBytes(settings);
     workflow = StylePreferences.open(NativeUi.current());
     NativeUi.open(workflow.screen());
-    workflow.show(StyleSettingsStore.DEFINITION.id());
-    editor = workflow.editor(StyleSettingsStore.DEFINITION);
-    pending =
-        DocumentActions.result(editor.actions().ensureLoaded(EntryPoint.GUI)).toCompletableFuture();
     var limits =
         new GraphicLimits(
             16 * 1024 * 1024, 32 * 1024 * 1024, 16 * 1024 * 1024, 256, 128 * 1024 * 1024);
     provider = observedProvider(limits);
     host = workflow.graphics(limits, 1);
-    view = host.open(editor, provider);
+    pending =
+        WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION)
+            .thenAccept(
+                opened -> {
+                  editor = opened;
+                  view = host.open(opened, provider);
+                });
   }
 
   @SuppressWarnings("unchecked") // Only the actual bounded subject codec constructs parameters.

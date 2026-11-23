@@ -127,14 +127,8 @@ final class UiProbe {
         if (!captured) return null;
         NativeBindings.press(button(root, "Settings"));
         pending =
-            workflow
-                .openEditor(StyleSettingsStore.DEFINITION.id())
-                .thenCompose(
-                    opened -> {
-                      editor = opened;
-                      return DocumentActions.result(editor.actions().ensureLoaded(EntryPoint.GUI));
-                    })
-                .toCompletableFuture();
+            WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION)
+                .thenAccept(opened -> editor = opened);
         captured = false;
         mountTicks = 0;
         stage = -2;

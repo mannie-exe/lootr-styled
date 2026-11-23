@@ -4,8 +4,6 @@ import com.google.gson.JsonObject;
 import design.inherent.lootr_styled.client.*;
 import design.inherent.lootr_styled.profile.ClientSettings;
 import design.inherent.reform.minecraft.client.*;
-import design.inherent.reform.operation.DocumentActions;
-import design.inherent.reform.operation.OperationDescriptor.EntryPoint;
 import design.inherent.reform.presentation.graphics.*;
 import java.nio.file.*;
 import java.util.concurrent.CompletableFuture;
@@ -23,9 +21,9 @@ final class PreviewCleanupFailureProbe {
 
   private final Mode mode;
   private final ClientEditingWorkflow workflow;
-  private final ClientEditor<ClientSettings> editor;
+  private ClientEditor<ClientSettings> editor;
   private final ClientGraphicHost host;
-  private final ClientGraphicHost.View<ClientSettings, Object> view;
+  private ClientGraphicHost.View<ClientSettings, Object> view;
   private final ClientGraphicProvider<ClientSettings, Object> provider;
   private final Path file;
   private final byte[] original;
@@ -52,10 +50,6 @@ final class PreviewCleanupFailureProbe {
     original = Files.readAllBytes(file);
     workflow = StylePreferences.open(NativeUi.current());
     NativeUi.open(workflow.screen());
-    workflow.show(StyleSettingsStore.DEFINITION.id());
-    editor = workflow.editor(StyleSettingsStore.DEFINITION);
-    pending =
-        DocumentActions.result(editor.actions().ensureLoaded(EntryPoint.GUI)).toCompletableFuture();
     var limits =
         new GraphicLimits(
             16 * 1024 * 1024, 32 * 1024 * 1024, 16 * 1024 * 1024, 256, 128 * 1024 * 1024);
@@ -65,7 +59,13 @@ final class PreviewCleanupFailureProbe {
     constructor.setAccessible(true);
     provider = (ClientGraphicProvider<ClientSettings, Object>) constructor.newInstance(limits);
     host = workflow.graphics(limits, 1);
-    view = host.open(editor, provider);
+    pending =
+        WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION)
+            .thenAccept(
+                opened -> {
+                  editor = opened;
+                  view = host.open(opened, provider);
+                });
   }
 
   JsonObject tick(Minecraft mc) throws Exception {

@@ -38,9 +38,9 @@ final class PreviewAuthorityProbe {
   private final OwnerContext.Access access;
   private final ReferenceActions<String, String> references;
   private final ClientEditingWorkflow workflow;
-  private final ClientEditor<ClientSettings> editor;
+  private ClientEditor<ClientSettings> editor;
   private final ClientGraphicHost host;
-  private final ClientGraphicHost.View<ClientSettings, Object> view;
+  private ClientGraphicHost.View<ClientSettings, Object> view;
   private final ClientGraphicProvider<ClientSettings, Object> provider;
   private final java.util.concurrent.Executor ownerExecutor;
   private final PreviewWorkerGate gate = new PreviewWorkerGate();
@@ -200,13 +200,15 @@ final class PreviewAuthorityProbe {
           ClientEditingWorkflow.open(
               parent, Component.literal("Preview authority control"), List.of(form));
     NativeUi.open(workflow.screen());
-    workflow.show(StyleSettingsStore.DEFINITION.id());
-    editor = workflow.editor(StyleSettingsStore.DEFINITION);
-    pending =
-        DocumentActions.result(editor.actions().ensureLoaded(EntryPoint.GUI)).toCompletableFuture();
     provider = provider(limits);
     host = workflow.graphics(limits, 1);
-    view = host.open(editor, provider);
+    pending =
+        WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION)
+            .thenAccept(
+                opened -> {
+                  editor = opened;
+                  view = host.open(opened, provider);
+                });
   }
 
   @SuppressWarnings("unchecked") // The bounded provider codec is the sole subject constructor.

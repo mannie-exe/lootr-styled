@@ -22,10 +22,10 @@ import net.minecraft.network.chat.Component;
 /** Leave an actual prepared view open when requesting normal Minecraft stop. */
 final class RendererShutdownProbe {
   private final ClientEditingWorkflow workflow;
-  private final ClientEditor<ClientSettings> editor;
+  private ClientEditor<ClientSettings> editor;
   private final ClientGraphicHost host;
   private final PreviewProbeAccess.HostProvider provider;
-  private final ClientGraphicHost.View<ClientSettings, Object> view;
+  private ClientGraphicHost.View<ClientSettings, Object> view;
   private final Path settings;
   private final byte[] originalSettings;
   private CompletableFuture<?> pending;
@@ -40,16 +40,18 @@ final class RendererShutdownProbe {
     originalSettings = Files.readAllBytes(settings);
     workflow = StylePreferences.open(NativeUi.current());
     NativeUi.open(workflow.screen());
-    workflow.show(StyleSettingsStore.DEFINITION.id());
-    editor = workflow.editor(StyleSettingsStore.DEFINITION);
-    pending =
-        DocumentActions.result(editor.actions().ensureLoaded(EntryPoint.GUI)).toCompletableFuture();
     var limits =
         new GraphicLimits(
             16 * 1024 * 1024, 32 * 1024 * 1024, 16 * 1024 * 1024, 256, 128 * 1024 * 1024);
     provider = PreviewProbeAccess.hostProvider(limits);
     host = workflow.graphics(limits, 1);
-    view = host.open(editor, provider.provider());
+    pending =
+        WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION)
+            .thenAccept(
+                opened -> {
+                  editor = opened;
+                  view = host.open(opened, provider.provider());
+                });
   }
 
   void tick(Minecraft mc) {
