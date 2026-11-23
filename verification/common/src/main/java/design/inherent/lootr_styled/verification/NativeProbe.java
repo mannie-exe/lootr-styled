@@ -20,6 +20,7 @@ public final class NativeProbe {
   private static RendererShutdownProbe rendererShutdown;
   private static PreviewCombinationProbe combinations;
   private static PreviewAuthorityProbe authority;
+  private static PreviewCleanupFailureProbe cleanupFailure;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
@@ -150,9 +151,15 @@ public final class NativeProbe {
         var observations = authority.tick(mc);
         if (observations == null) return;
         REPORT.add("previewAuthority", observations);
-        rendererShutdown = new RendererShutdownProbe();
+        cleanupFailure = new PreviewCleanupFailureProbe();
         stage = 15;
       } else if (stage == 15) {
+        var observations = cleanupFailure.tick(mc);
+        if (observations == null) return;
+        REPORT.add("previewCleanupFailure", observations);
+        rendererShutdown = new RendererShutdownProbe();
+        stage = 16;
+      } else if (stage == 16) {
         rendererShutdown.tick(mc);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);

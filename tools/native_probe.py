@@ -222,6 +222,21 @@ def require_preview_authority(data):
         raise RuntimeError('Preview authority control did not pass; inspect the native report')
 
 
+def require_preview_cleanup_failure(data):
+    result = data.get('previewCleanupFailure')
+    if (not isinstance(result, dict) or result.get('actualInjectedCause') is not True
+            or result.get('releaseAttempted') is not True
+            or result.get('releaseCompleted') is not False or result.get('released') is not False
+            or result.get('injected') != 1 or result.get('outstandingUses') != 0
+            or type(result.get('pendingUsesAtClose')) is not int or result['pendingUsesAtClose'] < 1
+            or result.get('nativeBytes') != 0
+            or type(result.get('sceneBytes')) is not int or result['sceneBytes'] <= 0
+            or result.get('hostFailureCount') != 1 or result.get('hostHasCause') is not True
+            or 'preview.release_failed' not in result.get('viewCodes', [])
+            or result.get('settingsUnchanged') is not True):
+        raise RuntimeError('Deferred preview cleanup failure was not reported truthfully')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=TARGETS, required=True)
@@ -270,6 +285,7 @@ def main():
         require_renderer_shutdown(data, fixture, product, args.target)
         require_preview_combinations(data, fixture)
         require_preview_authority(data)
+        require_preview_cleanup_failure(data)
     print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 

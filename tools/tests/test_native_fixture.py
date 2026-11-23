@@ -129,7 +129,7 @@ class NativeFixtureTest(unittest.TestCase):
         report = {'passed': True, 'artifactSha256': native_probe.digest(product),
                   'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
                   'rendererShutdown': receipt, 'previewCombinations': self._combinations(),
-                  'previewAuthority': self._authority()}
+                  'previewAuthority': self._authority(), 'previewCleanupFailure': self._cleanup_failure()}
 
         def publish_after_wait(**_):
             (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
@@ -176,6 +176,25 @@ class NativeFixtureTest(unittest.TestCase):
                                 'testAndRuntimeSettingsUnchanged', 'oldExecutorActuallyRejects'), True)
         return {**result, 'pendingUsesAtEditorRetirement': 1, 'unexpectedStoppedExecutorSubmissions': 0,
                 'preparations': 3, 'revokedTerminal': 'CANCELLED'}
+
+    def _cleanup_failure(self):
+        return {'actualInjectedCause': True, 'releaseAttempted': True,
+                'releaseCompleted': False, 'released': False, 'injected': 1,
+                'outstandingUses': 0, 'pendingUsesAtClose': 1, 'nativeBytes': 0,
+                'sceneBytes': 1024, 'hostFailureCount': 1, 'hostHasCause': True,
+                'viewCodes': ['preview.release_failed'], 'settingsUnchanged': True}
+
+    def test_deferred_cleanup_gate_needs_real_failure_visible_to_host_without_false_release(self):
+        good = self._cleanup_failure()
+        native_probe.require_preview_cleanup_failure({'previewCleanupFailure': good})
+        for key, value in [('actualInjectedCause', False), ('releaseCompleted', True),
+                           ('released', True), ('pendingUsesAtClose', 0), ('nativeBytes', 1),
+                           ('sceneBytes', 0), ('hostFailureCount', 0), ('hostHasCause', False),
+                           ('viewCodes', []), ('settingsUnchanged', False)]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Deferred preview cleanup'):
+                native_probe.require_preview_cleanup_failure({'previewCleanupFailure': {**good, key: value}})
+        with self.assertRaisesRegex(RuntimeError, 'Deferred preview cleanup'):
+            native_probe.require_preview_cleanup_failure({})
 
     def test_authority_witness_needs_revocation_and_real_outstanding_use_without_owner_resurrection(self):
         good = self._authority()

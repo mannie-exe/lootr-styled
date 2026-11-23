@@ -7,7 +7,8 @@
     "ProbeTickMixin",
     "ResourceLookupMixin",
     "GraphicDrawMixin",
-    "RendererShutdownMixin"
+    "RendererShutdownMixin",
+    "NativeCleanupFaultMixin"
   ],
   "injectors": {
     "defaultRequire": 1
