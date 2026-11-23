@@ -207,6 +207,21 @@ def require_preview_combinations(data, fixture):
             raise RuntimeError('Preview combinations did not draw and retire every selection')
 
 
+def require_preview_authority(data):
+    result = data.get('previewAuthority')
+    positive = ('actualWriteDenied', 'readOnlyDomainDraw', 'permissionLossRetiresReadyLease',
+                'revokedReadRequestRefused', 'permissionLossWaitsForEnteredWork',
+                'revokedEnteredOutputDiscarded', 'retiredEditorExecutorCannotBlockGpuRelease',
+                'testAndRuntimeSettingsUnchanged', 'oldExecutorActuallyRejects')
+    if (not isinstance(result, dict) or any(result.get(key) is not True for key in positive)
+            or type(result.get('pendingUsesAtEditorRetirement')) is not int
+            or result['pendingUsesAtEditorRetirement'] < 1
+            or result.get('unexpectedStoppedExecutorSubmissions') != 0
+            or result.get('preparations') != 3
+            or result.get('revokedTerminal') not in ('CANCELLED', 'REFUSED')):
+        raise RuntimeError('Preview authority control did not pass; inspect the native report')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=TARGETS, required=True)
@@ -254,6 +269,7 @@ def main():
     if args.preview_host:
         require_renderer_shutdown(data, fixture, product, args.target)
         require_preview_combinations(data, fixture)
+        require_preview_authority(data)
     print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 

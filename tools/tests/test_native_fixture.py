@@ -128,7 +128,8 @@ class NativeFixtureTest(unittest.TestCase):
                    'afterShutdown': released}
         report = {'passed': True, 'artifactSha256': native_probe.digest(product),
                   'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
-                  'rendererShutdown': receipt, 'previewCombinations': self._combinations()}
+                  'rendererShutdown': receipt, 'previewCombinations': self._combinations(),
+                  'previewAuthority': self._authority()}
 
         def publish_after_wait(**_):
             (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
@@ -167,6 +168,25 @@ class NativeFixtureTest(unittest.TestCase):
                           'state': 'READY', 'drawn': True, 'retired': True, 'prepared': {'aoTriangles': 0}}
                          for m in ids for a in ids
                          for c, o in (('CHEST', False), ('TRAPPED_CHEST', True), ('BARREL', False), ('BARREL', True))]}
+
+    def _authority(self):
+        result = dict.fromkeys(('actualWriteDenied', 'readOnlyDomainDraw', 'permissionLossRetiresReadyLease',
+                                'revokedReadRequestRefused', 'permissionLossWaitsForEnteredWork',
+                                'revokedEnteredOutputDiscarded', 'retiredEditorExecutorCannotBlockGpuRelease',
+                                'testAndRuntimeSettingsUnchanged', 'oldExecutorActuallyRejects'), True)
+        return {**result, 'pendingUsesAtEditorRetirement': 1, 'unexpectedStoppedExecutorSubmissions': 0,
+                'preparations': 3, 'revokedTerminal': 'CANCELLED'}
+
+    def test_authority_witness_needs_revocation_and_real_outstanding_use_without_owner_resurrection(self):
+        good = self._authority()
+        native_probe.require_preview_authority({'previewAuthority': good})
+        for key, value in [(k, False) for k, v in good.items() if type(v) is bool] + [
+                ('pendingUsesAtEditorRetirement', 0), ('unexpectedStoppedExecutorSubmissions', 1),
+                ('preparations', 4), ('revokedTerminal', 'READY')]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Preview authority'):
+                native_probe.require_preview_authority({'previewAuthority': {**good, key: value}})
+        with self.assertRaisesRegex(RuntimeError, 'Preview authority'):
+            native_probe.require_preview_authority({})
 
     def test_preview_combinations_require_complete_independent_selections_and_retirement(self):
         original = self._combinations()

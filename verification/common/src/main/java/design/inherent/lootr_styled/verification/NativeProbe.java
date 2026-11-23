@@ -19,6 +19,7 @@ public final class NativeProbe {
   private static SharedGraphicHostProbe sharedHost;
   private static RendererShutdownProbe rendererShutdown;
   private static PreviewCombinationProbe combinations;
+  private static PreviewAuthorityProbe authority;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
@@ -43,6 +44,7 @@ public final class NativeProbe {
               + ":"
               + (currentScreen == null ? "none" : currentScreen.getClass().getName())
               + (ui == null ? "" : ":" + ui.progress());
+      if (authority != null) progress += ":authority=" + authority.progress();
       if (!lastProgress.equals(progress)) {
         Files.writeString(
             mc.gameDirectory.toPath().resolve("lootr-styled-probe-state.txt"), progress + "\n");
@@ -142,9 +144,15 @@ public final class NativeProbe {
         var observations = combinations.tick(mc);
         if (observations == null) return;
         REPORT.add("previewCombinations", observations);
-        rendererShutdown = new RendererShutdownProbe();
+        authority = new PreviewAuthorityProbe(mc);
         stage = 14;
       } else if (stage == 14) {
+        var observations = authority.tick(mc);
+        if (observations == null) return;
+        REPORT.add("previewAuthority", observations);
+        rendererShutdown = new RendererShutdownProbe();
+        stage = 15;
+      } else if (stage == 15) {
         rendererShutdown.tick(mc);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);
