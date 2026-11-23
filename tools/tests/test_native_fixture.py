@@ -50,6 +50,31 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertFalse((self.fixture / 'lootr-styled-probe-report.json').exists())
         self.assertFalse((self.fixture / 'lootr-styled-probe-state.txt').exists())
 
+    def test_graphics_scope_is_explicit_and_cleared_by_ordinary_preparation(self):
+        marker = self.fixture / '.lootr-styled-graphic-probe'
+        native_probe.prepare('neoforge-1_21_1', 'native', graphics_only=True)
+        self.assertTrue(marker.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
+    def test_conflicting_graphics_and_world_scopes_preserve_existing_evidence(self):
+        with self.assertRaisesRegex(ValueError, 'either isolated graphics'):
+            native_probe.prepare('neoforge-1_21_1', 'native', scene=True, graphics_only=True)
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+
+    def test_graphics_only_success_cannot_substitute_for_an_ordinary_ui_check(self):
+        product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
+        (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps({
+            'passed': True, 'artifactSha256': native_probe.digest(product),
+            'snapshots': [{}, {}], 'isolatedGraphic': {},
+        }))
+        with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
+            with patch.object(native_probe.subprocess, 'Popen') as launch:
+                launch.return_value.wait.return_value = 0
+                with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run']):
+                    with self.assertRaisesRegex(RuntimeError, 'Client did not pass'):
+                        native_probe.main()
+
     def test_invalid_sprite_expectations_preserve_settings_and_previous_evidence(self):
         report = self.fixture / 'lootr-styled-probe-report.json'
         report.write_text('Previous run')

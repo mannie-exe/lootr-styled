@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
  */
 public final class NativeProbe {
   private static UiProbe ui;
+  private static IsolatedGraphicProbe graphics;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
@@ -100,8 +101,13 @@ public final class NativeProbe {
       } else if (stage == 1 && reloaded) {
         snapshots.add(NativeBindings.capture(mc, mode));
         REPORT.add("snapshots", snapshots);
-        ui = new UiProbe();
-        stage = 10;
+        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-graphic-probe"))) {
+          graphics = new IsolatedGraphicProbe();
+          stage = 11;
+        } else {
+          ui = new UiProbe();
+          stage = 10;
+        }
       } else if (stage == 10) {
         var widgets = ui.tick(mc);
         if (widgets == null) return;
@@ -113,6 +119,12 @@ public final class NativeProbe {
           REPORT.addProperty("passed", true);
           finish(mc, null);
         }
+      } else if (stage == 11) {
+        var observations = graphics.tick(mc);
+        if (observations == null) return;
+        REPORT.add("isolatedGraphic", observations);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);
         if (scene != null) {

@@ -50,6 +50,116 @@ final class PreviewProbeAccess {
             checkpoint);
   }
 
+  record GraphicInput(
+      design.inherent.reform.presentation.graphics.GraphicScene scene,
+      boolean nativeLidHasGeometry,
+      boolean nativeLockHasGeometry) {}
+
+  static GraphicInput chestScene(
+      ChestPreviewInputs input,
+      GraphicLimits limits,
+      design.inherent.reform.presentation.graphics.GraphicLedger ledger) {
+    var prepared =
+        invoke(
+            type("NativeChestPreview"),
+            "prepare",
+            new Class<?>[] {ChestPreviewInputs.class, GraphicLimits.class, Runnable.class},
+            null,
+            input,
+            limits,
+            (Runnable) () -> {});
+    var mesh = (GraphicMesh) invoke(prepared.getClass(), "mesh", new Class<?>[0], prepared);
+    var bundle =
+        invoke(
+            type("StylePreviewMesh"),
+            "chest",
+            new Class<?>[] {
+              ChestPreviewInputs.class,
+              GraphicMesh.class,
+              GraphicLimits.class,
+              java.util.function.Function.class,
+              Runnable.class
+            },
+            null,
+            input,
+            mesh,
+            limits,
+            (java.util.function.Function<
+                    DocumentId, design.inherent.reform.presentation.graphics.GraphicMaterial>)
+                PreviewProbeAccess::testMaterial,
+            (Runnable) () -> {});
+    return new GraphicInput(
+        prepareScene(bundle, ledger),
+        (boolean) invoke(prepared.getClass(), "nativeLidHasGeometry", new Class<?>[0], prepared),
+        (boolean) invoke(prepared.getClass(), "nativeLockHasGeometry", new Class<?>[0], prepared));
+  }
+
+  static GraphicInput barrelScene(
+      design.inherent.lootr_styled.resources.BarrelPreviewInputs input,
+      GraphicLimits limits,
+      design.inherent.reform.presentation.graphics.GraphicLedger ledger) {
+    var baked =
+        invoke(
+            type("NativeBarrelPreview"),
+            "bake",
+            new Class<?>[] {
+              design.inherent.lootr_styled.resources.BarrelPreviewInputs.class,
+              design.inherent.reform.presentation.graphics.GraphicLedger.class,
+              Runnable.class
+            },
+            null,
+            input,
+            ledger,
+            (Runnable) () -> {});
+    var bundle =
+        invoke(
+            type("StylePreviewMesh"),
+            "convert",
+            new Class<?>[] {
+              design.inherent.lootr_styled.resources.BarrelPreviewMesh.class,
+              GraphicLimits.class,
+              java.util.function.Function.class,
+              Runnable.class
+            },
+            null,
+            baked,
+            limits,
+            (java.util.function.Function<
+                    DocumentId, design.inherent.reform.presentation.graphics.GraphicMaterial>)
+                PreviewProbeAccess::testMaterial,
+            (Runnable) () -> {});
+    return new GraphicInput(prepareScene(bundle, ledger), false, false);
+  }
+
+  private static design.inherent.reform.presentation.graphics.GraphicScene prepareScene(
+      Object bundle, design.inherent.reform.presentation.graphics.GraphicLedger ledger) {
+    return (design.inherent.reform.presentation.graphics.GraphicScene)
+        invoke(
+            bundle.getClass(),
+            "prepare",
+            new Class<?>[] {
+              design.inherent.reform.presentation.graphics.GraphicLedger.class,
+              design.inherent.reform.serialization.JsonLimits.class,
+              Runnable.class
+            },
+            bundle,
+            ledger,
+            new design.inherent.reform.serialization.JsonLimits(16384, 32, 4096, 8192, 256, 128),
+            (Runnable) () -> {});
+  }
+
+  // The fixture declares this exact material; it does not establish automatic native policy.
+  private static design.inherent.reform.presentation.graphics.GraphicMaterial testMaterial(
+      DocumentId id) {
+    return new design.inherent.reform.presentation.graphics.GraphicMaterial(
+        id,
+        design.inherent.reform.presentation.graphics.GraphicMaterial.Alpha.CUTOUT,
+        0.1f,
+        design.inherent.reform.presentation.graphics.GraphicMaterial.Cull.BACK,
+        design.inherent.reform.presentation.graphics.GraphicMaterial.Filter.NEAREST,
+        design.inherent.reform.presentation.graphics.GraphicMaterial.Wrap.CLAMP);
+  }
+
   static void pose(ModelPart root, float lid) {
     invoke(
         type("NativeChestPreview"),
