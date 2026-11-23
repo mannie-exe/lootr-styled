@@ -16,6 +16,8 @@ from reform import dependency as reform_dependency
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = ('fabric-1_21_1', 'neoforge-1_21_1', 'fabric-26_3', 'neoforge-26_3')
+PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST', 'BARREL')
+                         for looted in (False, True) for opened in ((False, True) if c == 'BARREL' else (False,)))
 CAPTURES = (
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
@@ -84,6 +86,7 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     marker.write_text('lootr-styled-native-verification-v1\n')
     for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt',
                      'lootr-styled-shutdown-report.json', 'lootr-styled-combinations-report.json',
+                     'lootr-styled-selection-states-report.json',
                      'lootr-styled-cleanup-failure-report.json',
                      'lootr-styled-cleanup-failure-synchronous-report.json',
                      'lootr-styled-cleanup-failure-replaced-report.json',
@@ -198,10 +201,9 @@ def require_preview_combinations(data, fixture):
             or not path.is_file() or json.loads(path.read_text()) != result):
         raise RuntimeError('Preview combinations did not complete; inspect the retained reports')
     ids = ('lootr_styled:default', 'lootr_styled:vanilla')
-    expected = {(m, a, c, o) for m in ids for a in ids
-                for c, o in (('CHEST', False), ('TRAPPED_CHEST', True), ('BARREL', False), ('BARREL', True))}
+    expected = {(m, a, c, l, o) for m in ids for a in ids for c, l, o in PREVIEW_SUBJECTS}
     rows = result.get('rows', [])
-    actual = {(r.get('models'), r.get('artwork'), r.get('container'), r.get('open')) for r in rows}
+    actual = {(r.get('models'), r.get('artwork'), r.get('container'), r.get('looted'), r.get('open')) for r in rows}
     if len(rows) != len(expected) or actual != expected:
         raise RuntimeError('Preview combinations are incomplete or duplicated')
     for row in rows:
@@ -271,6 +273,40 @@ def require_preview_review(data):
         raise RuntimeError('Required-review preview changed its guard, draft, or source')
 
 
+def require_preview_selection_states(data, fixture):
+    report = data.get('previewSelectionStates')
+    side = fixture / 'lootr-styled-selection-states-report.json'
+    if (not isinstance(report, dict) or not side.is_file() or json.loads(side.read_text()) != report
+            or report.get('complete') is not True or report.get('failures') != 0
+            or report.get('settingsUnchanged') is not True):
+        raise RuntimeError('Preview selection-state report is incomplete or mismatched')
+    rows = report.get('rows')
+    expected = {(i, c, l, o) for i in range(6) for c, l, o in PREVIEW_SUBJECTS}
+    def visual_checked(row):
+        prepared = row.get('prepared')
+        if not isinstance(prepared, dict):
+            return False
+        fingerprint = prepared.get('visualFingerprint')
+        comparison = ('Disabled reference captured' if row['selectionCase'] == 0 else
+                      'Disabled reference matched' if row['selectionCase'] == 1 else
+                      'Built-in reference matched')
+        return (isinstance(fingerprint, str) and len(fingerprint) == 64
+                and all(c in '0123456789abcdef' for c in fingerprint)
+                and (row['selectionCase'] == 0 or prepared.get('expectedVisualFingerprint') == fingerprint)
+                and prepared.get('visualComparison') == comparison)
+    if (not isinstance(rows, list) or len(rows) != 48
+            or any(not isinstance(r, dict) or type(r.get('selectionCase')) is not int
+                   or type(r.get('enabled')) is not bool or type(r.get('open')) is not bool
+                   or type(r.get('looted')) is not bool
+                   for r in rows)
+            or {(r.get('selectionCase'), r.get('container'), r.get('looted'), r.get('open')) for r in rows} != expected
+            or any(r.get('state') != 'READY' or r.get('drawn') is not True
+                   or r.get('retired') is not True or r.get('enabled') is not (r.get('selectionCase') >= 2)
+                   or not visual_checked(r)
+                   for r in rows)):
+        raise RuntimeError('Disabled, missing, or recovered preview coverage is incomplete')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=TARGETS, required=True)
@@ -322,6 +358,7 @@ def main():
         require_preview_cleanup_failure(data)
         require_preview_cleanup_modes(data)
         require_preview_review(data)
+        require_preview_selection_states(data, fixture)
     print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 

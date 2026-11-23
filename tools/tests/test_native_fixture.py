@@ -52,6 +52,7 @@ class NativeFixtureTest(unittest.TestCase):
     def test_a_stopped_fixture_cannot_reuse_a_previous_success_receipt(self):
         receipts = ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt',
                     'lootr-styled-shutdown-report.json', 'lootr-styled-cleanup-failure-report.json',
+                    'lootr-styled-selection-states-report.json',
                     'lootr-styled-cleanup-failure-synchronous-report.json',
                     'lootr-styled-cleanup-failure-replaced-report.json')
         for name in receipts:
@@ -135,11 +136,13 @@ class NativeFixtureTest(unittest.TestCase):
                   'previewAuthority': self._authority(), 'previewCleanupFailure': self._cleanup_failure()}
         report.update(self._cleanup_modes())
         report['previewReviewRequired'] = self._review()
+        report['previewSelectionStates'] = self._selection_states()
 
         def publish_after_wait(**_):
             (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
             (self.fixture / 'lootr-styled-shutdown-report.json').write_text(json.dumps(receipt))
             (self.fixture / 'lootr-styled-combinations-report.json').write_text(json.dumps(report['previewCombinations']))
+            (self.fixture / 'lootr-styled-selection-states-report.json').write_text(json.dumps(report['previewSelectionStates']))
             return 0
 
         with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
@@ -169,10 +172,11 @@ class NativeFixtureTest(unittest.TestCase):
     def _combinations(self):
         ids = ('lootr_styled:default', 'lootr_styled:vanilla')
         return {'complete': True, 'failures': 0, 'settingsUnchanged': True,
-                'rows': [{'models': m, 'artwork': a, 'container': c, 'open': o,
+                'rows': [{'models': m, 'artwork': a, 'container': c, 'looted': l, 'open': o,
                           'state': 'READY', 'drawn': True, 'retired': True, 'prepared': {'aoTriangles': 0}}
                          for m in ids for a in ids
-                         for c, o in (('CHEST', False), ('TRAPPED_CHEST', True), ('BARREL', False), ('BARREL', True))]}
+                         for c in ('CHEST', 'TRAPPED_CHEST', 'BARREL') for l in (False, True)
+                         for o in ((False, True) if c == 'BARREL' else (False,))]}
 
     def _authority(self):
         result = dict.fromkeys(('actualWriteDenied', 'readOnlyDomainDraw', 'permissionLossRetiresReadyLease',
@@ -214,6 +218,45 @@ class NativeFixtureTest(unittest.TestCase):
         return {**dict.fromkeys(('writeActuallyAllowed', 'reviewBlocksSubmission', 'dirtyPreviewDraw',
                                 'reviewGuardAndDraftPreserved', 'testAndRuntimeSettingsUnchanged'), True),
                 'preparations': 1}
+
+    def _selection_states(self):
+        return {'complete': True, 'failures': 0, 'settingsUnchanged': True,
+                'rows': [{'selectionCase': i, 'enabled': i >= 2, 'container': c, 'looted': l, 'open': o,
+                          'prepared': {'visualFingerprint': 'a' * 64, 'expectedVisualFingerprint': 'a' * 64, 'visualComparison':
+                                       'Disabled reference captured' if i == 0 else
+                                       'Disabled reference matched' if i == 1 else 'Built-in reference matched'},
+                          'state': 'READY', 'drawn': True, 'retired': True}
+                         for i in range(6) for c in ('CHEST', 'TRAPPED_CHEST', 'BARREL') for l in (False, True)
+                         for o in ((False, True) if c == 'BARREL' else (False,))]}
+
+    def test_selection_state_gate_needs_complete_matching_draw_and_retirement_evidence(self):
+        good = self._selection_states()
+        side = self.fixture / 'lootr-styled-selection-states-report.json'
+        side.write_text(json.dumps(good))
+        native_probe.require_preview_selection_states({'previewSelectionStates': good}, self.fixture)
+        cases = []
+        for key, value in [('drawn', False), ('retired', False), ('state', 'REFUSED'), ('enabled', True),
+                           ('selectionCase', False), ('open', 0)]:
+            bad = copy.deepcopy(good)
+            bad['rows'][0][key] = value
+            cases.append(bad)
+        cases.append({**good, 'rows': good['rows'][:-1]})
+        bad = copy.deepcopy(good)
+        bad['rows'][1]['prepared']['visualComparison'] = 'Unchecked'
+        cases.append(bad)
+        bad = copy.deepcopy(good)
+        bad['rows'][0]['prepared']['visualFingerprint'] = ''
+        cases.append(bad)
+        bad = copy.deepcopy(good)
+        bad['rows'][8]['prepared']['expectedVisualFingerprint'] = 'b' * 64
+        cases.append(bad)
+        for bad in cases:
+            side.write_text(json.dumps(bad))
+            with self.assertRaises(RuntimeError):
+                native_probe.require_preview_selection_states({'previewSelectionStates': bad}, self.fixture)
+        side.write_text(json.dumps({**good, 'settingsUnchanged': False}))
+        with self.assertRaises(RuntimeError):
+            native_probe.require_preview_selection_states({'previewSelectionStates': good}, self.fixture)
 
     def test_preview_read_does_not_satisfy_a_required_save_review(self):
         good = self._review()

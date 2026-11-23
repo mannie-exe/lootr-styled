@@ -146,6 +146,12 @@ public final class NativeProbe {
         var observations = combinations.tick(mc);
         if (observations == null) return;
         REPORT.add("previewCombinations", observations);
+        combinations = new PreviewCombinationProbe(observations);
+        stage = 18;
+      } else if (stage == 18) {
+        var observations = combinations.tick(mc);
+        if (observations == null) return;
+        REPORT.add("previewSelectionStates", observations);
         authority = new PreviewAuthorityProbe(mc);
         stage = 14;
       } else if (stage == 14) {

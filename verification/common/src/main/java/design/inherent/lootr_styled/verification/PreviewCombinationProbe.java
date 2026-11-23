@@ -26,6 +26,33 @@ import net.minecraft.network.chat.Component;
 
 /** Actual unsaved built-in combinations through the packaged default provider and shared host. */
 final class PreviewCombinationProbe {
+  private final boolean selectionStates;
+  private final java.util.Map<String, String> baselineVisuals;
+  private final java.util.Map<String, String> disabledVisuals = new java.util.HashMap<>();
+
+  private record Selection(boolean enabled, String models, String artwork) {}
+
+  private record Subject(String container, boolean looted, boolean open) {}
+
+  private static final java.util.List<Subject> SUBJECTS =
+      java.util.List.of(
+          new Subject("CHEST", false, false), new Subject("CHEST", true, false),
+          new Subject("TRAPPED_CHEST", false, false), new Subject("TRAPPED_CHEST", true, false),
+          new Subject("BARREL", false, false), new Subject("BARREL", false, true),
+          new Subject("BARREL", true, false), new Subject("BARREL", true, true));
+
+  private static final String MISSING_MODELS = "lootr_styled_missing:models";
+  private static final String MISSING_ARTWORK = "lootr_styled_missing:artwork";
+  private static final java.util.List<Selection> STATES =
+      java.util.List.of(
+          new Selection(
+              false, ClientSettings.DEFAULT.toString(), ClientSettings.DEFAULT.toString()),
+          new Selection(false, MISSING_MODELS, MISSING_ARTWORK),
+          new Selection(true, MISSING_MODELS, ClientSettings.DEFAULT.toString()),
+          new Selection(true, ClientSettings.DEFAULT.toString(), MISSING_ARTWORK),
+          new Selection(true, MISSING_MODELS, MISSING_ARTWORK),
+          new Selection(
+              true, ClientSettings.DEFAULT.toString(), ClientSettings.DEFAULT.toString()));
   private final ClientEditingWorkflow workflow;
   private final ClientEditor<ClientSettings> editor;
   private final ClientGraphicHost host;
@@ -43,6 +70,30 @@ final class PreviewCombinationProbe {
   private long draws;
 
   PreviewCombinationProbe() throws Exception {
+    this(null);
+  }
+
+  PreviewCombinationProbe(JsonObject baseline) throws Exception {
+    this.selectionStates = baseline != null;
+    var visuals = new java.util.HashMap<String, String>();
+    if (baseline != null) {
+      if (!baseline.get("complete").getAsBoolean() || baseline.get("failures").getAsInt() != 0)
+        throw new IllegalArgumentException("The visual baseline did not complete");
+      for (var entry : baseline.getAsJsonArray("rows")) {
+        var row = entry.getAsJsonObject();
+        visuals.put(
+            visualKey(
+                row.get("models").getAsString(),
+                row.get("artwork").getAsString(),
+                row.get("container").getAsString(),
+                row.get("looted").getAsBoolean(),
+                row.get("open").getAsBoolean()),
+            row.getAsJsonObject("prepared").get("visualFingerprint").getAsString());
+      }
+      if (visuals.size() != 4 * SUBJECTS.size())
+        throw new IllegalArgumentException("Incomplete visual baseline");
+    }
+    baselineVisuals = java.util.Map.copyOf(visuals);
     settings = ClientRuntime.configuration().root().resolve("settings.json");
     original = Files.readAllBytes(settings);
     workflow = StylePreferences.open(NativeUi.current());
@@ -91,7 +142,8 @@ final class PreviewCombinationProbe {
             .thenApply(
                 result -> {
                   var value = request.input().candidate().value();
-                  if (!value.models().toString().equals(models())
+                  if (value.enabled() != enabled()
+                      || !value.models().toString().equals(models())
                       || !value.artwork().toString().equals(artwork()))
                     throw new IllegalStateException(
                         "Preview did not capture the complete edited selection");
@@ -119,6 +171,48 @@ final class PreviewCombinationProbe {
                       facts.add(f);
                     }
                     data.add("facts", facts);
+                    String visual = visualFingerprint(ready.graphic().scene());
+                    data.addProperty("visualFingerprint", visual);
+                    prepared = data; // Preserve actual render inputs if a comparison refuses.
+                    if (selectionStates) {
+                      if (!enabled()) {
+                        // Disabled styling also disables Fresh adaptation; an enabled inherited
+                        // profile with Fresh AUTO is not its native visual reference.
+                        String key = container() + "|" + looted() + "|" + open();
+                        if (index / SUBJECTS.size() == 0) {
+                          disabledVisuals.put(key, visual);
+                          data.addProperty("visualComparison", "Disabled reference captured");
+                        } else {
+                          data.addProperty("expectedVisualFingerprint", disabledVisuals.get(key));
+                          if (!visual.equals(disabledVisuals.get(key)))
+                            throw new IllegalStateException(
+                                "Inactive retained profile IDs changed the disabled container");
+                          data.addProperty("visualComparison", "Disabled reference matched");
+                        }
+                      } else {
+                        String effectiveModels =
+                            models().equals(MISSING_MODELS)
+                                ? ClientSettings.VANILLA.toString()
+                                : models();
+                        String effectiveArtwork =
+                            artwork().equals(MISSING_ARTWORK)
+                                ? ClientSettings.VANILLA.toString()
+                                : artwork();
+                        String expectedVisual =
+                            baselineVisuals.get(
+                                visualKey(
+                                    effectiveModels,
+                                    effectiveArtwork,
+                                    container(),
+                                    looted(),
+                                    open()));
+                        data.addProperty("expectedVisualFingerprint", expectedVisual);
+                        if (!visual.equals(expectedVisual))
+                          throw new IllegalStateException(
+                              "Prepared geometry/material/pixels differ from the effective inherited or Default baseline");
+                        data.addProperty("visualComparison", "Built-in reference matched");
+                      }
+                    }
                     for (var family : java.util.List.of("models", "artwork")) {
                       var expected = family.equals("models") ? value.models() : value.artwork();
                       var effective =
@@ -130,7 +224,12 @@ final class PreviewCombinationProbe {
                                           .equals("lootr_styled:preview/" + family + "_effective"))
                               .findFirst()
                               .orElseThrow();
-                      if (!effective.value().equals(expected.toString()))
+                      boolean missing = expected.toString().startsWith("lootr_styled_missing:");
+                      String resolved =
+                          !enabled()
+                              ? "None; styling is disabled"
+                              : missing ? ClientSettings.VANILLA.toString() : expected.toString();
+                      if (!effective.value().equals(resolved))
                         throw new IllegalStateException(
                             "Effective profile fact differs from compiled selection");
                       var source =
@@ -141,10 +240,25 @@ final class PreviewCombinationProbe {
                                           .toString()
                                           .equals(
                                               "lootr_styled:preview/" + family + "_profile_source"))
-                              .findFirst()
-                              .orElseThrow();
-                      if (!source.value().equals("Built-in"))
+                              .findFirst();
+                      if (!enabled()
+                          ? source.isPresent()
+                          : source.isEmpty() || !source.orElseThrow().value().equals("Built-in"))
                         throw new IllegalStateException("Built-in profile source was lost");
+                      var status =
+                          ready.graphic().facts().stream()
+                              .filter(
+                                  f ->
+                                      f.id()
+                                          .toString()
+                                          .equals("lootr_styled:preview/" + family + "_resolution"))
+                              .findFirst()
+                              .orElseThrow()
+                              .value();
+                      if ((!enabled() && !status.contains("disabled"))
+                          || (enabled() && missing && !status.contains("unavailable")))
+                        throw new IllegalStateException(
+                            "Disabled or missing selection lost its resolution: " + status);
                     }
                     if (data.get("aoTriangles").getAsInt() != 0)
                       throw new IllegalStateException("Reference lighting still requests world AO");
@@ -159,7 +273,9 @@ final class PreviewCombinationProbe {
                                 .get("container")
                                 .getAsString()
                                 .equals("BARREL")
-                            && value.models().equals(ClientSettings.VANILLA);
+                            && (!enabled()
+                                || value.models().equals(ClientSettings.VANILLA)
+                                || value.models().toString().equals(MISSING_MODELS));
                     var sourceAo =
                         ready.graphic().facts().stream()
                             .filter(
@@ -196,6 +312,16 @@ final class PreviewCombinationProbe {
     }
     if (stage == 0) {
       if (editor.form().fieldControl(FieldPath.ROOT.field("models")).isEmpty()) return null;
+      if (selectionStates) {
+        pending = edit("enabled", Boolean.toString(enabled()));
+        stage = -1;
+        return null;
+      }
+      pending = edit("models", models());
+      stage = 1;
+      return null;
+    }
+    if (stage == -1) {
       pending = edit("models", models());
       stage = 1;
       return null;
@@ -210,9 +336,9 @@ final class PreviewCombinationProbe {
       if (ticks < 4) return null;
       var json = new JsonObject();
       json.addProperty("container", container());
-      json.addProperty("looted", index % 2 == 1);
-      json.addProperty("open", index % 2 == 1);
-      json.addProperty("lid", index % 2 == 1 ? 1 : 0);
+      json.addProperty("looted", looted());
+      json.addProperty("open", open());
+      json.addProperty("lid", looted() ? 1 : 0);
       prepared = null;
       var subject =
           provider
@@ -230,9 +356,12 @@ final class PreviewCombinationProbe {
       var outcome = attempt.completion().toCompletableFuture().join();
       var row = new JsonObject();
       row.addProperty("models", models());
+      row.addProperty("enabled", enabled());
+      if (selectionStates) row.addProperty("selectionCase", index / SUBJECTS.size());
       row.addProperty("artwork", artwork());
       row.addProperty("container", container());
-      row.addProperty("open", index % 2 == 1);
+      row.addProperty("open", open());
+      row.addProperty("looted", looted());
       row.addProperty("state", outcome.state().name());
       row.addProperty("report", outcome.report().toString());
       outcome.cause().ifPresent(cause -> row.addProperty("cause", cause.toString()));
@@ -279,7 +408,7 @@ final class PreviewCombinationProbe {
         throw new IllegalStateException("Combination payload leaked");
       rows.get(rows.size() - 1).getAsJsonObject().addProperty("retired", true);
       lease = null;
-      if (++index < 16) {
+      if (++index < (selectionStates ? STATES.size() * SUBJECTS.size() : 4 * SUBJECTS.size())) {
         stage = 0;
         ticks = 0;
         return null;
@@ -298,19 +427,69 @@ final class PreviewCombinationProbe {
   }
 
   private String models() {
-    return (index / 8 == 0 ? ClientSettings.DEFAULT : ClientSettings.VANILLA).toString();
+    if (selectionStates) return STATES.get(index / SUBJECTS.size()).models();
+    return (index / (SUBJECTS.size() * 2) == 0 ? ClientSettings.DEFAULT : ClientSettings.VANILLA)
+        .toString();
   }
 
   private String artwork() {
-    return (index / 4 % 2 == 0 ? ClientSettings.DEFAULT : ClientSettings.VANILLA).toString();
+    if (selectionStates) return STATES.get(index / SUBJECTS.size()).artwork();
+    return (index / SUBJECTS.size() % 2 == 0 ? ClientSettings.DEFAULT : ClientSettings.VANILLA)
+        .toString();
   }
 
   private String container() {
-    return switch (index % 4) {
-      case 0 -> "CHEST";
-      case 1 -> "TRAPPED_CHEST";
-      default -> "BARREL";
-    };
+    return SUBJECTS.get(index % SUBJECTS.size()).container();
+  }
+
+  private boolean looted() {
+    return SUBJECTS.get(index % SUBJECTS.size()).looted();
+  }
+
+  private boolean open() {
+    return SUBJECTS.get(index % SUBJECTS.size()).open();
+  }
+
+  private boolean enabled() {
+    return !selectionStates || STATES.get(index / SUBJECTS.size()).enabled();
+  }
+
+  private static String visualKey(
+      String models, String artwork, String container, boolean looted, boolean open) {
+    return models + "|" + artwork + "|" + container + "|" + looted + "|" + open;
+  }
+
+  /** Copied render input only: omit profile-resolution facts, which intentionally differ. */
+  private static String visualFingerprint(GraphicScene scene) {
+    try {
+      var digest = java.security.MessageDigest.getInstance("SHA-256");
+      java.util.function.Consumer<String> text =
+          value -> {
+            digest.update(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+          };
+      scene.mesh().vertices().forEach(v -> text.accept(v.toString()));
+      scene.mesh().triangles().forEach(t -> text.accept(t.toString()));
+      var order = java.util.Comparator.comparing(DocumentId::toString);
+      scene.materials().entrySet().stream()
+          .sorted(java.util.Map.Entry.comparingByKey(order))
+          .forEach(e -> text.accept(e.getKey() + "=" + e.getValue()));
+      scene.textures().entrySet().stream()
+          .sorted(java.util.Map.Entry.comparingByKey(order))
+          .forEach(
+              e -> {
+                var pixels = e.getValue();
+                text.accept(e.getKey() + ":" + pixels.width() + "x" + pixels.height());
+                int[] argb = pixels.argb();
+                var bytes =
+                    java.nio.ByteBuffer.allocate(Math.multiplyExact(argb.length, Integer.BYTES));
+                bytes.asIntBuffer().put(argb);
+                digest.update(bytes.array());
+              });
+      return java.util.HexFormat.of().formatHex(digest.digest());
+    } catch (java.security.NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException(impossible);
+    }
   }
 
   private CompletableFuture<?> edit(String name, String value) {
@@ -336,7 +515,10 @@ final class PreviewCombinationProbe {
         Minecraft.getInstance()
             .gameDirectory
             .toPath()
-            .resolve("lootr-styled-combinations-report.json"),
+            .resolve(
+                selectionStates
+                    ? "lootr-styled-selection-states-report.json"
+                    : "lootr-styled-combinations-report.json"),
         new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(result));
     return result;
   }
