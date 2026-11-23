@@ -37,6 +37,8 @@ import net.minecraft.client.gui.screens.Screen;
  */
 final class UiProbe {
   private static final int HOME_ENTRY = -10,
+      STYLING_SECTION = -12,
+      PROFILE_SECTION = -11,
       PROFILE_TOOLS = -9,
       HOME_RETURN = -8,
       ENTER_SETTINGS = -7;
@@ -50,6 +52,8 @@ final class UiProbe {
   private final Path settingsFile;
   private ClientEditor<?> editor;
   private DraftRevision homeRevision;
+  private DraftRevision sectionRevision;
+  private Object sectionActions;
   private CompletableFuture<?> pending;
   private Set<Path> existing;
   private int stage = HOME_ENTRY;
@@ -171,6 +175,43 @@ final class UiProbe {
         }
         NativeBindings.press(appearance.orElseThrow());
         mountTicks = 0;
+        stage = STYLING_SECTION;
+      }
+      case STYLING_SECTION -> {
+        if (++mountTicks < 4 || editor.form().fieldControl(MODELS).isEmpty()) return null;
+        sectionRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        sectionActions = editor.actions();
+        NativeBindings.press(navigation(root, "Styling"));
+        if (!editor
+            .form()
+            .focusTarget(
+                new design.inherent.reform.presentation.FormTarget.Section("group:styling")))
+          throw new IllegalStateException("The actual Styling section could not be focused");
+        mountTicks = 0;
+        stage = PROFILE_SECTION;
+      }
+      case PROFILE_SECTION -> {
+        if (++mountTicks < 4) return null;
+        NativeBindings.press(navigation(root, "Profile selection"));
+        if (!editor
+            .form()
+            .focusTarget(
+                new design.inherent.reform.presentation.FormTarget.Section("group:selection")))
+          throw new IllegalStateException(
+              "The actual Profile selection section could not be focused");
+        if (editor
+            .form()
+            .focusTarget(
+                new design.inherent.reform.presentation.FormTarget.Section("group:absent")))
+          throw new IllegalStateException("A missing layout section was silently substituted");
+        if (workflow.editor(StyleSettingsStore.DEFINITION) != editor
+            || editor.actions() != sectionActions
+            || !sectionRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException(
+              "Group navigation replaced or changed the actual settings owner");
+        result.addProperty("typedGroupFocusPreservesOwnerAndDraft", true);
+        mountTicks = 0;
         stage = -1;
       }
       case -1 -> {
@@ -203,6 +244,26 @@ final class UiProbe {
         Files.writeString(
             mc.gameDirectory.toPath().resolve("lootr-styled-ui-observations.json"),
             new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(result));
+        if (!navigation.equals(body))
+          throw new IllegalStateException(
+              "Actual leaf navigation differs from rendered field order: " + result);
+        var groups =
+            children(root).stream()
+                .filter(
+                    design.inherent.reform.minecraft.client.NativeNavigationButton.class
+                        ::isInstance)
+                .map(design.inherent.reform.minecraft.client.NativeNavigationButton.class::cast)
+                .filter(
+                    control ->
+                        List.of("Styling", "Profile selection")
+                            .contains(control.getMessage().getString()))
+                .sorted(java.util.Comparator.comparingInt(AbstractWidget::getY))
+                .map(control -> control.getMessage().getString())
+                .toList();
+        if (!groups.equals(List.of("Styling", "Profile selection")))
+          throw new IllegalStateException(
+              "Actual group navigation order differs from the authored sections: " + groups);
+        result.add("renderedGroupNavigationOrder", new com.google.gson.Gson().toJsonTree(groups));
         captured = false;
         NativeWorld.screenshot(mc, "reform-navigation", () -> captured = true);
         stage = -3;
