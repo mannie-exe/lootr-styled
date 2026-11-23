@@ -12,6 +12,8 @@ The shared chooser separates search and choices from inspected-value details whe
 
 Profiles uses that same source in its own shared task. Use for Models and Use for Artwork stage independent fields in the retained settings draft. Keep the inspected profile, draft selections, and effective resources distinct. Prepare draft preview uses the complete draft and chosen subject; it leaves the file and installed resources unchanged. Switching subject or leaving the page retires the displayed interest without automatically preparing another preview.
 
+Show preview reveals and focuses the existing viewport without preparing a new scene. Fit the viewport to its visible pane and narrate its identity and state. Keep preparation and camera actions separate from this navigation action. Explicitly discarding the settings owner must retire its task views; reopening must bind the new owner rather than reuse controls from the discarded draft.
+
 Document actions opens a shared view of the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Save and reload resources and profile exports remain separate guarded operations.
 
 Report routine outcomes briefly, such as Saved or Reloaded. Keep errors specific and provide a recovery action. Put paths, resource decisions, and diagnostic detail behind Details rather than opening a report after every successful action. Distinguish a draft reset, a saved setting, a resource reload, and an exported editing copy.

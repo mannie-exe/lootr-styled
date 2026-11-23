@@ -242,6 +242,8 @@ public final class NativeProbe {
     terminal = true;
     try {
       if (error != null) {
+        if (productionShutdown != null)
+          REPORT.add("productionDiscard", productionShutdown.observations());
         if (ui != null && !REPORT.has("nativeWidgets")) {
           REPORT.add("nativeWidgets", ui.observations());
           REPORT.addProperty("nativeWidgetsComplete", false);

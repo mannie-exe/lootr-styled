@@ -61,9 +61,7 @@ final class StyleWorkspace {
               scope.requireCurrent();
               return StylePreferences.profileReferences();
             })
-        .withHelp(
-            Component.literal(
-                "Use a profile for Models or Artwork. Preview shows the current draft."))
+        .withHelp(Component.literal("Preview uses a static pose with reference lighting."))
         .withGraphic(
             new ClientTaskGraphic<>(
                 Component.literal("Draft preview"),

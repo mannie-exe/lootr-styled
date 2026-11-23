@@ -144,6 +144,18 @@ class NativeFixtureTest(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, 'Renderer shutdown'):
                         native_probe.main()
 
+    def test_production_discard_requires_actual_use_retirement_and_fresh_owner(self):
+        value = dict(releaseCompleted=True, released=True, oldOwnerClosed=True,
+                     workflowRetained=True, settingsUnchanged=True, freshOwner=True,
+                     outstandingUses=0, nativeBytes=0, sceneBytes=0,
+                     pendingUsesAtDiscard=1, nativeBytesAtDiscard=64, sceneBytesAtDiscard=64)
+        native_probe.require_production_discard({'rendererShutdown': {'productionDiscard': value}})
+        for key, bad in [('freshOwner', False), ('oldOwnerClosed', False), ('settingsUnchanged', False),
+                         ('nativeBytes', 1), ('sceneBytes', 1), ('outstandingUses', 1),
+                         ('pendingUsesAtDiscard', 0), ('releaseCompleted', False)]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production discard'):
+                native_probe.require_production_discard({'rendererShutdown': {'productionDiscard': {**value, key: bad}}})
+
     def test_preview_shutdown_receipt_is_read_after_the_process_exits(self):
         product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
         released = {'passed': True, 'releaseCompleted': True, 'released': True,

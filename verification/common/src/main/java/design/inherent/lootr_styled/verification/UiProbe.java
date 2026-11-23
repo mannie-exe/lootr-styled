@@ -52,6 +52,11 @@ final class UiProbe {
       PROFILE_VARIANT_PREPARE = -23,
       PROFILE_VARIANT_DRAW = -24,
       PROFILE_VARIANT_RETIRED = -25,
+      PROFILE_PREVIEW_REVEAL = -26,
+      PROFILE_REOPEN = -27,
+      PROFILE_REOPEN_INSPECT = -28,
+      PROFILE_REOPEN_CHOOSE = -29,
+      PROFILE_REOPEN_RESTORE = -30,
       HOME_RETURN = -8,
       ENTER_SETTINGS = -7;
   private static final int HOME_DIRTY = 210, RETURN_DIRTY = 211;
@@ -234,8 +239,42 @@ final class UiProbe {
             || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException(
               "Profiles changed files or prepared unrequested graphics");
-        if (!focusControl(root, productionPreview(root)))
-          throw new IllegalStateException("The production preview is not in the native focus tree");
+        NativeBindings.press(button(root, "Show preview"));
+        mountTicks = 0;
+        stage = PROFILE_PREVIEW_REVEAL;
+      }
+      case PROFILE_PREVIEW_REVEAL -> {
+        if (++mountTicks < 4) return null;
+        var viewport = productionPreview(root);
+        if (!focusedPath(root, viewport))
+          throw new IllegalStateException("Show preview did not focus the native viewport");
+        var panel =
+            children(root).stream()
+                .filter(design.inherent.reform.minecraft.client.ScrollFrame.class::isInstance)
+                .map(design.inherent.reform.minecraft.client.ScrollFrame.class::cast)
+                .filter(value -> value.children().contains(viewport))
+                .findFirst()
+                .orElseThrow();
+        double middle = viewport.getX() + viewport.getWidth() / 2.0;
+        if (!panel.isMouseOver(middle, viewport.getY())
+            || !panel.isMouseOver(middle, viewport.getY() + viewport.getHeight() - 1))
+          throw new IllegalStateException(
+              "Show preview leaves the viewport outside its native pane");
+        String narration = NativeBindings.narration(viewport);
+        if (!narration.contains("Draft preview") || !narration.contains("Prepare a preview"))
+          throw new IllegalStateException("Idle preview narration lost its identity or state");
+        var bounds = new JsonObject();
+        bounds.addProperty("x", viewport.getX());
+        bounds.addProperty("y", viewport.getY());
+        bounds.addProperty("width", viewport.getWidth());
+        bounds.addProperty("height", viewport.getHeight());
+        bounds.addProperty("narration", narration);
+        result.add("productionFittedPreview", bounds);
+        result.addProperty("productionShowPreviewFocusAndFit", true);
+        if (root.width >= 700
+            && profileSubject(root).getWidth()
+                < mc.font.width(profileSubject(root).getMessage()) + 8)
+          throw new IllegalStateException("The subject caption scrolls despite the wide offer");
         captured = false;
         NativeWorld.screenshot(mc, "reform-production-preview-idle", () -> captured = true);
         stage = PROFILE_PREVIEW_BEFORE;
@@ -268,6 +307,8 @@ final class UiProbe {
         result.addProperty("productionProfilePreviewRendered", true);
         result.addProperty("productionPreviewNativeBytes", profileHost.nativeOwnership().bytes());
         result.addProperty("productionPreviewOutputBytes", profileHost.retainedOutput().bytes());
+        if (!NativeBindings.narration(productionPreview(root)).contains("Preview ready"))
+          throw new IllegalStateException("Ready preview narration lost its actual state");
         recordProfileVariant(PROFILE_SUBJECTS.getFirst());
         captured = false;
         NativeWorld.screenshot(mc, "reform-production-preview-drawn", () -> captured = true);
@@ -342,6 +383,74 @@ final class UiProbe {
             || !profileSubject(root).getValue().equals(PROFILE_SUBJECTS.getFirst()))
           throw new IllegalStateException("The production subject cycle is incomplete");
         result.add("productionPreviewSubjects", profileVariants.deepCopy());
+        var discarded = profileOwner;
+        workflow.discard(StyleSettingsStore.DEFINITION.id());
+        if (discarded.isOpen())
+          throw new IllegalStateException("Discard left the previous production editor open");
+        pending =
+            WorkflowReveal.view(
+                    workflow,
+                    StyleSettingsStore.DEFINITION,
+                    design.inherent.reform.presentation.DestinationId.parse(
+                        "lootr_styled:profiles_page"))
+                .thenAccept(
+                    opened -> {
+                      if (opened == discarded || !opened.isOpen())
+                        throw new IllegalStateException("Reopen reused the discarded owner");
+                      profileOwner = opened;
+                      editor = opened;
+                    });
+        mountTicks = 0;
+        stage = PROFILE_REOPEN;
+      }
+      case PROFILE_REOPEN -> {
+        if (!profileCandidate().equals(original)
+            || profileHost.nativeOwnership().bytes() != 0
+            || profileHost.retainedOutput().bytes() != 0
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Reopening prepared graphics or changed settings");
+        var inherited =
+            children(root).stream()
+                .filter(Button.class::isInstance)
+                .map(Button.class::cast)
+                .filter(value -> value.getMessage().getString().equals("Vanilla (Inherited)"))
+                .findFirst();
+        if (inherited.isEmpty()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Reopened production task did not resolve its source");
+          return null;
+        }
+        NativeBindings.press(inherited.orElseThrow());
+        mountTicks = 0;
+        stage = PROFILE_REOPEN_INSPECT;
+      }
+      case PROFILE_REOPEN_INSPECT -> {
+        if (!button(root, "Use for Models").active) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Reopened task kept its retired selection owner");
+          return null;
+        }
+        NativeBindings.press(button(root, "Use for Models"));
+        mountTicks = 0;
+        stage = PROFILE_REOPEN_CHOOSE;
+      }
+      case PROFILE_REOPEN_CHOOSE -> {
+        if (!profileCandidate().models().equals(ClientSettings.VANILLA)) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Reopened task did not stage into the fresh owner");
+          return null;
+        }
+        if (!profileCandidate().artwork().equals(original.artwork())
+            || workflow.editor(StyleSettingsStore.DEFINITION) != profileOwner)
+          throw new IllegalStateException("Reopened task changed the wrong owner or field");
+        pending = edit(MODELS, new DraftEdit.SetRaw(original.models().toString()));
+        stage = PROFILE_REOPEN_RESTORE;
+      }
+      case PROFILE_REOPEN_RESTORE -> {
+        if (!profileCandidate().equals(original)
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Restoring the reopened draft changed settings");
+        result.addProperty("productionDiscardRebindsSettingsOwner", true);
         NativeBindings.press(navigation(root, "Home"));
         mountTicks = 0;
         stage = HOME_RETURN;

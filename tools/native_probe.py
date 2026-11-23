@@ -199,6 +199,18 @@ def require_renderer_shutdown(data, fixture, product, target):
         raise RuntimeError('Renderer shutdown did not pass; inspect the post-shutdown receipt and native report')
 
 
+def require_production_discard(data):
+    value = data.get('rendererShutdown', {}).get('productionDiscard')
+    if (not isinstance(value, dict)
+            or any(value.get(key) is not True for key in ('releaseCompleted', 'released',
+                      'oldOwnerClosed', 'workflowRetained', 'settingsUnchanged', 'freshOwner'))
+            or any(type(value.get(key)) is not int or value[key] != 0
+                   for key in ('outstandingUses', 'nativeBytes', 'sceneBytes'))
+            or any(type(value.get(key)) is not int or value[key] < 1
+                   for key in ('pendingUsesAtDiscard', 'nativeBytesAtDiscard', 'sceneBytesAtDiscard'))):
+        raise RuntimeError('Production discard did not retire its submitted preview and reopen a fresh owner')
+
+
 def require_preview_combinations(data, fixture):
     path = fixture / 'lootr-styled-combinations-report.json'
     result = data.get('previewCombinations')
@@ -320,7 +332,7 @@ def main():
     parser.add_argument('--fetch', action='store_true', help='Fetch missing pinned verification inputs, never product runtime content')
     parser.add_argument('--run', action='store_true', help='Launch a GUI after external desktop coordination')
     parser.add_argument('--preview-host', action='store_true', help='Qualify the actual retained provider/worker host with a test-mounted shared widget')
-    parser.add_argument('--production-shutdown', action='store_true', help='Run settings checks, then stop normally with a live submitted production preview')
+    parser.add_argument('--production-shutdown', action='store_true', help='Check preview discard, recovery, and normal shutdown after settings checks')
     parser.add_argument('--graphics-only', action='store_true', help='Only draw frozen domain meshes in the shared viewport; excludes editor and world checks')
     parser.add_argument('--scene', action='store_true', help='Create and render a disposable native container world')
     parser.add_argument('--gui-scale', type=int, choices=range(5), default=2, help='Native GUI scale for this disposable fixture (0 is Auto)')
@@ -362,6 +374,8 @@ def main():
         require_renderer_shutdown(data, fixture, product, args.target)
     if args.production_shutdown and data['rendererShutdown'].get('productionTask') is not True:
         raise RuntimeError('Shutdown did not observe the registered production preview')
+    if args.production_shutdown:
+        require_production_discard(data)
     if args.preview_host:
         require_preview_combinations(data, fixture)
         require_preview_authority(data)

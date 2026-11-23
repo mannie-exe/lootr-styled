@@ -27,8 +27,12 @@ final class ProductionShutdownProbe {
   private final ClientGraphicHost host;
   private final Path settings;
   private final byte[] original;
-  private final CompletableFuture<?> admission;
+  private CompletableFuture<?> admission;
+  private CompletableFuture<design.inherent.reform.presentation.graphics.RenderLifetime.State>
+      discardRelease;
   private ClientEditor<ClientSettings> editor;
+  private ClientEditor<ClientSettings> retiredEditor;
+  private final JsonObject retirement = new JsonObject();
   private int ticks;
   private boolean requested;
 
@@ -52,6 +56,52 @@ final class ProductionShutdownProbe {
 
   void tick(Minecraft mc) {
     if (++ticks > 400) throw new IllegalStateException("Production shutdown preview timed out");
+    if (discardRelease != null) {
+      if (!discardRelease.isDone()) return;
+      var state = discardRelease.join();
+      retirement.addProperty("releaseCompleted", true);
+      retirement.addProperty("released", state.released());
+      retirement.addProperty("outstandingUses", state.outstandingUses());
+      retirement.addProperty("nativeBytes", host.nativeOwnership().bytes());
+      retirement.addProperty("sceneBytes", host.retainedOutput().bytes());
+      retirement.addProperty("oldOwnerClosed", !retiredEditor.isOpen());
+      retirement.addProperty("workflowRetained", workflow.isOpen());
+      if (state.released()
+          && state.releaseFailure().isEmpty()
+          && (host.nativeOwnership().bytes() != 0 || host.retainedOutput().bytes() != 0)) return;
+      boolean unchanged;
+      try {
+        unchanged = java.util.Arrays.equals(original, Files.readAllBytes(settings));
+      } catch (java.io.IOException failed) {
+        throw new java.io.UncheckedIOException(failed);
+      }
+      retirement.addProperty("settingsUnchanged", unchanged);
+      if (!state.released()
+          || state.outstandingUses() != 0
+          || state.releaseFailure().isPresent()
+          || host.nativeOwnership().bytes() != 0
+          || host.retainedOutput().bytes() != 0
+          || retiredEditor.isOpen()
+          || !workflow.isOpen()
+          || !unchanged)
+        throw new IllegalStateException(
+            "Discard did not retire its submitted production preview: " + retirement);
+      discardRelease = null;
+      admission =
+          WorkflowReveal.view(
+                  workflow,
+                  StyleSettingsStore.DEFINITION,
+                  DestinationId.parse("lootr_styled:profiles_page"))
+              .thenAccept(
+                  value -> {
+                    if (value == retiredEditor || !value.isOpen())
+                      throw new IllegalStateException(
+                          "Production recovery reused its discarded owner");
+                    editor = value;
+                    retirement.addProperty("freshOwner", true);
+                  });
+      return;
+    }
     if (!admission.isDone()) return;
     admission.join();
     if (requested) return;
@@ -88,8 +138,22 @@ final class ProductionShutdownProbe {
               || host.retainedOutput().bytes() == 0)
             throw new IllegalStateException(
                 "Production stop lacks a live submitted native graphic");
+          if (retiredEditor == null) {
+            retirement.addProperty("pendingUsesAtDiscard", state.outstandingUses());
+            retirement.addProperty("nativeBytesAtDiscard", host.nativeOwnership().bytes());
+            retirement.addProperty("sceneBytesAtDiscard", host.retainedOutput().bytes());
+            retiredEditor = editor;
+            discardRelease = graphic.releaseCompletion().toCompletableFuture();
+            workflow.discard(StyleSettingsStore.DEFINITION.id());
+            if (retiredEditor.isOpen())
+              throw new IllegalStateException("Discard left its old owner open");
+            requested = false;
+            ticks = 0;
+            return;
+          }
           var initial = new JsonObject();
           initial.addProperty("productionTask", true);
+          initial.add("productionDiscard", retirement.deepCopy());
           initial.addProperty("workflowOpenAtStop", workflow.isOpen());
           initial.addProperty("editorOpenAtStop", editor.isOpen());
           initial.addProperty("pendingUsesAtStop", state.outstandingUses());
@@ -106,5 +170,9 @@ final class ProductionShutdownProbe {
               editor::isOpen);
         });
     NativeBindings.press(prepare.orElseThrow());
+  }
+
+  JsonObject observations() {
+    return retirement.deepCopy();
   }
 }
