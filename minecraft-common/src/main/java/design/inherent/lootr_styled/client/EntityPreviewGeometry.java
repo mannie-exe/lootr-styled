@@ -32,6 +32,21 @@ final class EntityPreviewGeometry {
     return new GraphicMesh(limits, sink.vertices, sink.triangles);
   }
 
+  /**
+   * Count visible geometry under the exact native attachment; animation expressions are not run.
+   */
+  static boolean hasVisibleGeometry(ModelPart owned, Runnable checkpoint) {
+    boolean[] found = {false};
+    owned.visit(
+        new PoseStack(),
+        (pose, path, index, cube) -> {
+          checkpoint.run();
+          if (draws(owned, path)) found[0] = true;
+        });
+    checkpoint.run();
+    return found[0];
+  }
+
   private static boolean draws(ModelPart root, String path) {
     var part = root;
     if (!part.visible) return false;

@@ -24,10 +24,30 @@ final class NativeChestPreview {
   }
 
   static GraphicMesh bake(ChestPreviewInputs inputs, GraphicLimits limits, Runnable checkpoint) {
+    return prepare(inputs, limits, checkpoint).mesh();
+  }
+
+  static ChestPreviewGeometry prepare(
+      ChestPreviewInputs inputs, GraphicLimits limits, Runnable checkpoint) {
     checkpoint.run();
     var owned = nativeRoot();
     if (inputs.rig().isPresent()) owned = DetachedEmfChest.prepare(inputs, owned, checkpoint);
+    return prepareOwned(inputs, owned, limits, checkpoint);
+  }
+
+  static ChestPreviewGeometry prepareOwned(
+      ChestPreviewInputs inputs, ModelPart owned, GraphicLimits limits, Runnable checkpoint) {
+    boolean lid =
+        owned.visible
+            && EntityPreviewGeometry.hasVisibleGeometry(owned.getChild("lid"), checkpoint);
+    boolean lock =
+        owned.visible
+            && EntityPreviewGeometry.hasVisibleGeometry(owned.getChild("lock"), checkpoint);
     pose(owned, inputs.subject().lid());
-    return EntityPreviewGeometry.capture(owned, MATERIAL, limits, checkpoint);
+    return new ChestPreviewGeometry(
+        EntityPreviewGeometry.capture(owned, MATERIAL, limits, checkpoint),
+        inputs.poseFacts(),
+        lid,
+        lock);
   }
 }

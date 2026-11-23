@@ -53,6 +53,61 @@ class NativeChestPreviewTest {
   }
 
   @Test
+  void poseCapabilitiesDescribeTheOwnedAttachmentsRatherThanTheRequestedProgress()
+      throws Exception {
+    var input = input(false, false, 1);
+    var nativeResult = NativeChestPreview.prepare(input, LIMITS, () -> {});
+    assertTrue(nativeResult.nativeLidHasGeometry());
+    assertTrue(nativeResult.nativeLockHasGeometry());
+    assertTrue(nativeResult.nativeControlHasGeometry());
+    assertEquals(1, nativeResult.pose().lidProgress());
+    assertFalse(nativeResult.pose().evaluatesRigAnimations());
+    assertFalse(nativeResult.pose().usesWorldState());
+
+    // A rig may place its visible lid under the base and leave both native controls empty.
+    var original = NativeChestPreview.nativeRoot();
+    var empty =
+        new net.minecraft.client.model.geom.ModelPart(java.util.List.of(), java.util.Map.of());
+    var reference =
+        new net.minecraft.client.model.geom.ModelPart(
+            java.util.List.of(),
+            java.util.Map.of("bottom", original.getChild("bottom"), "lid", empty, "lock", empty));
+    var staticRig = NativeChestPreview.prepareOwned(input, reference, LIMITS, () -> {});
+    assertFalse(staticRig.mesh().isEmpty());
+    assertFalse(staticRig.nativeControlHasGeometry());
+    assertEquals(1, staticRig.pose().lidProgress());
+    var closed =
+        NativeChestPreview.prepareOwned(input(false, false, 0), reference, LIMITS, () -> {});
+    assertEquals(closed.mesh().vertices(), staticRig.mesh().vertices());
+  }
+
+  @Test
+  void poseCapabilitiesRespectHiddenSubtreesAndSkipDrawWithoutHidingChildren() {
+    var child = NativeChestPreview.nativeRoot().getChild("lid");
+    var parent =
+        new net.minecraft.client.model.geom.ModelPart(
+            java.util.List.of(), java.util.Map.of("child", child));
+    parent.skipDraw = true;
+    assertTrue(EntityPreviewGeometry.hasVisibleGeometry(parent, () -> {}));
+    child.skipDraw = true;
+    assertFalse(EntityPreviewGeometry.hasVisibleGeometry(parent, () -> {}));
+    child.skipDraw = false;
+    child.visible = false;
+    assertFalse(EntityPreviewGeometry.hasVisibleGeometry(parent, () -> {}));
+    child.visible = true;
+    parent.visible = false;
+    assertFalse(EntityPreviewGeometry.hasVisibleGeometry(parent, () -> {}));
+    assertThrows(
+        CancellationException.class,
+        () ->
+            EntityPreviewGeometry.hasVisibleGeometry(
+                child,
+                () -> {
+                  throw new CancellationException();
+                }));
+  }
+
+  @Test
   void openingOnlyChangesDetachedLidAndLockWhileLaterClosedGeometryIsExact() throws Exception {
     var closed = NativeChestPreview.bake(input(false, false, 0), LIMITS, () -> {});
     var open = NativeChestPreview.bake(input(false, false, 1), LIMITS, () -> {});

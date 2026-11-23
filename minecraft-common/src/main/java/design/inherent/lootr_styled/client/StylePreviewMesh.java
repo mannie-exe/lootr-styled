@@ -6,12 +6,16 @@ import design.inherent.lootr_styled.resources.ChestPreviewInputs;
 import design.inherent.lootr_styled.resources.FrozenResources;
 import design.inherent.lootr_styled.resources.TextureImages;
 import design.inherent.reform.definition.DocumentId;
+import design.inherent.reform.minecraft.client.ClientGraphicImages;
 import design.inherent.reform.owner.PolicyRefusal;
+import design.inherent.reform.presentation.graphics.GraphicLedger;
 import design.inherent.reform.presentation.graphics.GraphicLighting;
 import design.inherent.reform.presentation.graphics.GraphicLimits;
 import design.inherent.reform.presentation.graphics.GraphicMaterial;
 import design.inherent.reform.presentation.graphics.GraphicMesh;
+import design.inherent.reform.presentation.graphics.GraphicScene;
 import design.inherent.reform.presentation.graphics.GraphicTexture;
+import design.inherent.reform.serialization.JsonLimits;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -31,6 +35,26 @@ record StylePreviewMesh(
     materials = Map.copyOf(materials);
     textures = Map.copyOf(textures);
     sources = Map.copyOf(sources);
+  }
+
+  /** CPU preparation only; the shared host owns this workflow ledger and later native lifetime. */
+  GraphicScene prepare(GraphicLedger ledger, JsonLimits metadataLimits, Runnable checkpoint) {
+    checkpoint.run();
+    for (var entry : textures.entrySet())
+      if (!entry.getKey().equals(entry.getValue().id()))
+        throw new IllegalArgumentException("The captured texture identity changed");
+    var ordered =
+        textures.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(DocumentId::toString)))
+            .map(Map.Entry::getValue)
+            .toList();
+    var images =
+        ClientGraphicImages.decodeStills(
+            ordered, ledger, metadataLimits, mesh.geometryBytes(), checkpoint);
+    var scene = new GraphicScene(mesh, materials, images);
+    scene.requireBudget(ledger.limits());
+    checkpoint.run();
+    return scene;
   }
 
   static StylePreviewMesh convert(
