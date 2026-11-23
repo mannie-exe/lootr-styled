@@ -16,6 +16,15 @@ from reform import dependency as reform_dependency
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = ('fabric-1_21_1', 'neoforge-1_21_1', 'fabric-26_3', 'neoforge-26_3')
+CAPTURES = (
+    'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
+    'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
+    'scene-closed', 'scene-ordinary-open', 'scene-looted', 'barrel-closed-again', 'barrel-reopened',
+    'barrel-third-person-item', 'barrel-framed-and-dropped-items', 'barrel-inventory-item',
+    'barrel-neighbor-cases',
+    *(f'isolated-preview-{i}' for i in range(4)),
+    *(f'shared-host-{i}' for i in range(4)),
+)
 
 
 def digest(path, kind='sha256'):
@@ -74,6 +83,9 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     fixture.mkdir(parents=True, exist_ok=True)
     marker.write_text('lootr-styled-native-verification-v1\n')
     for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt', '.lootr-styled-probe-pid'):
+        (fixture / previous).unlink(missing_ok=True)
+    for previous in ('lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json',
+                     *(f'{name}.png' for name in CAPTURES)):
         (fixture / previous).unlink(missing_ok=True)
     configuration = fixture / 'config/lootr_styled'
     configuration.mkdir(parents=True, exist_ok=True)

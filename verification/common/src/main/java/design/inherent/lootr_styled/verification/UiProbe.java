@@ -54,6 +54,8 @@ final class UiProbe {
   private Set<Path> existing;
   private int stage = HOME_ENTRY;
   private int mountTicks;
+  private int navigationWait;
+  private boolean requestedNavigationExpansion;
   private boolean captured;
   private int nativeWidth, nativeHeight;
   private final JsonObject result = new JsonObject();
@@ -130,11 +132,44 @@ final class UiProbe {
                     })
                 .toCompletableFuture();
         captured = false;
+        mountTicks = 0;
         stage = -2;
       }
       case -2 -> {
         if (editor.form().fieldControl(MODELS).isEmpty()) return null;
-        NativeBindings.press(navigation(root, "Appearance"));
+        if (mountTicks++ == 0) {
+          var controls = new com.google.gson.JsonArray();
+          for (var child : children(root))
+            if (child instanceof AbstractWidget widget) {
+              var item = new JsonObject();
+              item.addProperty("type", child.getClass().getName());
+              item.addProperty("label", widget.getMessage().getString());
+              item.addProperty("x", widget.getX());
+              item.addProperty("y", widget.getY());
+              item.addProperty("width", widget.getWidth());
+              item.addProperty("height", widget.getHeight());
+              controls.add(item);
+            }
+          Files.writeString(
+              mc.gameDirectory.toPath().resolve("lootr-styled-entry-controls.json"),
+              new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(controls));
+          captured = false;
+          NativeWorld.screenshot(mc, "reform-initial-appearance", () -> captured = true);
+          return null;
+        }
+        if (!captured) return null;
+        var appearance = navigationChoice(root, "Appearance");
+        if (appearance.isEmpty()) {
+          if (!requestedNavigationExpansion) {
+            // Home's Settings card selects the category; expand its native tree branch
+            // explicitly before choosing the existing Appearance destination.
+            NativeBindings.press(navigation(root, "Settings"));
+            requestedNavigationExpansion = true;
+          } else if (++navigationWait > 8)
+            throw new IllegalStateException("Expanding Settings did not reveal Appearance");
+          return null;
+        }
+        NativeBindings.press(appearance.orElseThrow());
         mountTicks = 0;
         stage = -1;
       }
@@ -411,7 +446,7 @@ final class UiProbe {
         if (editor.canSubmit()
             || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Home submitted or discarded invalid input");
-        NativeBindings.press(navigation(root, "Appearance"));
+        NativeBindings.press(button(root, "Settings"));
         mountTicks = 0;
         stage = RETURN_DIRTY;
       }
@@ -730,12 +765,17 @@ final class UiProbe {
 
   private static design.inherent.reform.minecraft.client.NativeNavigationButton navigation(
       Screen screen, String label) {
+    return navigationChoice(screen, label)
+        .orElseThrow(() -> new IllegalStateException("Missing navigation destination: " + label));
+  }
+
+  private static java.util.Optional<design.inherent.reform.minecraft.client.NativeNavigationButton>
+      navigationChoice(Screen screen, String label) {
     return children(screen).stream()
         .filter(design.inherent.reform.minecraft.client.NativeNavigationButton.class::isInstance)
         .map(design.inherent.reform.minecraft.client.NativeNavigationButton.class::cast)
         .filter(control -> control.getMessage().getString().equals(label))
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException("Missing navigation destination: " + label));
+        .findFirst();
   }
 
   private static void viewport(Screen screen, int width, int height) {

@@ -37,11 +37,14 @@ class NativeFixtureTest(unittest.TestCase):
         marker.write_text(str(os.getpid()))
         report = self.fixture / 'lootr-styled-probe-report.json'
         report.write_text('Preserve live report')
+        capture = self.fixture / 'reform-home.png'
+        capture.write_bytes(b'Preserve live capture')
         with self.assertRaisesRegex(ValueError, 'before preparing'):
             native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertEqual('Preserve running client input', self.settings.read_text())
         self.assertEqual(str(os.getpid()), marker.read_text())
         self.assertEqual('Preserve live report', report.read_text())
+        self.assertEqual(b'Preserve live capture', capture.read_bytes())
 
     def test_a_stopped_fixture_cannot_reuse_a_previous_success_receipt(self):
         for name in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt'):
@@ -49,6 +52,17 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse((self.fixture / 'lootr-styled-probe-report.json').exists())
         self.assertFalse((self.fixture / 'lootr-styled-probe-state.txt').exists())
+
+    def test_stopped_preparation_clears_owned_captures_but_keeps_other_files(self):
+        for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png',
+                     'lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json'):
+            (self.fixture / name).write_bytes(b'Previous capture')
+        (self.fixture / 'operator-reference.png').write_bytes(b'Keep reference')
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png',
+                     'lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json'):
+            self.assertFalse((self.fixture / name).exists(), name)
+        self.assertEqual(b'Keep reference', (self.fixture / 'operator-reference.png').read_bytes())
 
     def test_graphics_scope_is_explicit_and_cleared_by_ordinary_preparation(self):
         marker = self.fixture / '.lootr-styled-graphic-probe'

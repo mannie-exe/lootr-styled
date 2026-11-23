@@ -37,7 +37,9 @@ The recorded `0.2.0-ux-dev.1` settings review passed 582 Java tests and 27 tooli
 
 Earlier re:form 0.3.0-dev.10 runs cover four-target initial loading and saved-file reopening, GUI scales 1 and 4, and minimum Compat coexistence. Four further public-library clients used the preceding product, including Compat dev.6 through its stable-version admission. Those reports retain their actual artifact identities; they are not current four-target rendering or full-pack qualification.
 
-Native observations confirm an unresolved re:form 0.3 navigation mismatch: the sidebar follows Enabled, Models, Artwork, Fresh Objects while the rendered groups follow Enabled, Fresh Objects, Models, Artwork. Functional workflow passes do not qualify that ordering. Shared chooser separation, manual-ID containment, and action-button presentation remain library design work; the settings copy changes do not fix them. These checks do not establish physical IME, spoken audio, other-OS graphics, or a new hosted or full-pack result.
+The retained re:form 0.3 observations show a navigation mismatch: the sidebar follows Enabled, Models, Artwork, Fresh Objects while the rendered groups follow Enabled, Fresh Objects, Models, Artwork. Those functional workflow passes do not qualify that ordering.
+
+The current 0.4 engineering shell uses a stable workspace identity and lazy Home page with Settings and Profiles destinations. Its packaged NeoForge 1.21.1 check confirms that Home and profile tools leave the appearance editor unopened and settings unchanged. An invalid draft survives a Home round trip in the same editor and revision. Profile search/selection, Defaults/Undo, native ID repair, save followed by matching resource publication, and active-artwork export pass. In that scene, leaf navigation agrees with the rendered field order. This bounded shell check does not qualify the final profile/preview layout, complete chooser/task presentation, all four updated native targets, physical IME, spoken audio, other-OS graphics, or a new hosted/full-pack result.
 
 ## Barrel geometry and artwork
 
