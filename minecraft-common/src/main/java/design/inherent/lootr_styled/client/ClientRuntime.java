@@ -96,6 +96,10 @@ public final class ClientRuntime {
     return settings;
   }
 
+  static EmfSupport emfSupport() {
+    return EmfSupport.inspect(emfVersion.get());
+  }
+
   static synchronized ExecutorService workers() {
     if (workers == null || workers.isShutdown())
       throw new IllegalStateException("Lootr: Styled resource lifetime is closed");
