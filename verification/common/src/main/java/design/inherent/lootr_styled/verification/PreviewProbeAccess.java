@@ -160,6 +160,154 @@ final class PreviewProbeAccess {
         design.inherent.reform.presentation.graphics.GraphicMaterial.Wrap.CLAMP);
   }
 
+  record HostProvider(
+      design.inherent.reform.minecraft.client.ClientGraphicProvider<
+              design.inherent.lootr_styled.profile.ClientSettings, Object>
+          provider,
+      java.util.Set<String> policyThreads,
+      java.util.concurrent.atomic.AtomicInteger materialCalls,
+      java.util.concurrent.atomic.AtomicInteger clientCalls,
+      java.util.concurrent.atomic.AtomicInteger verifiedImages) {}
+
+  @SuppressWarnings("unchecked") // Observer checks the actual bounded subject codec before use.
+  static HostProvider hostProvider(GraphicLimits limits) throws Exception {
+    var threads = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var clientCalls = new java.util.concurrent.atomic.AtomicInteger();
+    var client = Thread.currentThread();
+    java.util.function.Function<
+            DocumentId, design.inherent.reform.presentation.graphics.GraphicMaterial>
+        policy =
+            id -> {
+              threads.add(Thread.currentThread().getName());
+              calls.incrementAndGet();
+              if (Thread.currentThread() == client) clientCalls.incrementAndGet();
+              return testMaterial(id);
+            };
+    java.util.function.BiFunction<
+            design.inherent.lootr_styled.resources.BarrelPreviewMesh.Face,
+            DocumentId,
+            design.inherent.reform.presentation.graphics.GraphicMaterial>
+        barrel = (face, id) -> policy.apply(id);
+    var constructor =
+        type("StyleGraphicProvider")
+            .getDeclaredConstructor(
+                GraphicLimits.class,
+                java.util.function.Function.class,
+                java.util.function.BiFunction.class);
+    constructor.setAccessible(true);
+    var provider =
+        (design.inherent.reform.minecraft.client.ClientGraphicProvider<
+                design.inherent.lootr_styled.profile.ClientSettings, Object>)
+            constructor.newInstance(limits, policy, barrel);
+    var verifiedImages = new java.util.concurrent.atomic.AtomicInteger();
+    var lower = lower(activePack());
+    var originals =
+        new java.util.HashMap<
+            design.inherent.lootr_styled.ResourceId, java.awt.image.BufferedImage>();
+    for (var target : design.inherent.lootr_styled.client.ClientRuntime.targets().artwork())
+      try (var stream = lower.find(target).orElseThrow().opener().open()) {
+        originals.put(target, java.util.Objects.requireNonNull(javax.imageio.ImageIO.read(stream)));
+      }
+    var observed =
+        new design.inherent.reform.minecraft.client.ClientGraphicProvider<
+            design.inherent.lootr_styled.profile.ClientSettings, Object>() {
+          public DocumentId id() {
+            return provider.id();
+          }
+
+          public design.inherent.reform.value.ValueType<Object> subjectType() {
+            return provider.subjectType();
+          }
+
+          public GraphicLimits limits() {
+            return provider.limits();
+          }
+
+          public design.inherent.reform.reference.ReferenceStamp resourceStamp() {
+            return provider.resourceStamp();
+          }
+
+          public java.util.concurrent.CompletionStage<
+                  design.inherent.reform.presentation.graphics.GraphicScenePreparation>
+              prepare(
+                  design.inherent.reform.presentation.graphics.GraphicRequest<
+                          design.inherent.lootr_styled.profile.ClientSettings, Object>
+                      request,
+                  design.inherent.reform.minecraft.client.ClientGraphicWork work) {
+            return provider
+                .prepare(request, work)
+                .thenApply(
+                    result -> {
+                      if (!(result
+                          instanceof
+                          design.inherent.reform.presentation.graphics.GraphicScenePreparation.Ready
+                              ready)) return result;
+                      if (!request
+                          .input()
+                          .candidate()
+                          .value()
+                          .artwork()
+                          .equals(design.inherent.lootr_styled.profile.ClientSettings.VANILLA))
+                        throw new IllegalStateException(
+                            "Host failed to capture the unsaved artwork identity");
+                      var subject =
+                          subjectType()
+                              .codec()
+                              .encodeStart(
+                                  com.mojang.serialization.JsonOps.INSTANCE, request.subject())
+                              .getOrThrow()
+                              .getAsJsonObject();
+                      var chest =
+                          design.inherent.lootr_styled.client.ClientRuntime.targets()
+                              .chestArtwork(
+                                  subject.get("container").getAsString().equals("TRAPPED_CHEST"),
+                                  subject.get("looted").getAsBoolean());
+                      for (var entry : ready.graphic().scene().textures().entrySet()) {
+                        var id = entry.getKey();
+                        var target =
+                            id.toString().equals("lootr_styled:preview/chest")
+                                ? chest
+                                : originals.keySet().stream()
+                                    .filter(
+                                        t ->
+                                            id.toString()
+                                                .equals(
+                                                    "lootr_styled:preview/"
+                                                        + design.inherent.lootr_styled.resources
+                                                            .TextureImages.hash(
+                                                            t.toString()
+                                                                .getBytes(
+                                                                    java.nio.charset
+                                                                        .StandardCharsets.UTF_8))))
+                                    .findFirst()
+                                    .orElseThrow();
+                        var expected = originals.get(target);
+                        var pixels = entry.getValue();
+                        if (expected.getWidth() != pixels.width()
+                            || expected.getHeight() != pixels.height()
+                            || !java.util.Arrays.equals(
+                                expected.getRGB(
+                                    0,
+                                    0,
+                                    expected.getWidth(),
+                                    expected.getHeight(),
+                                    null,
+                                    0,
+                                    expected.getWidth()),
+                                pixels.argb()))
+                          throw new IllegalStateException(
+                              "Actual provider scene ignored the unsaved inherited artwork: "
+                                  + target);
+                        verifiedImages.incrementAndGet();
+                      }
+                      return result;
+                    });
+          }
+        };
+    return new HostProvider(observed, threads, calls, clientCalls, verifiedImages);
+  }
+
   static void pose(ModelPart root, float lid) {
     invoke(
         type("NativeChestPreview"),

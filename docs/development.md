@@ -23,6 +23,8 @@ The independent [native consumer](../verification/settings.gradle) loads package
 
 Use `--graphics-only` for a separate low-level chest/barrel mesh draw through re:form’s viewport. It checks static geometry, still textures, native use/release, and unchanged fixture settings. It excludes editor interaction and integrated-world checks; combine neither its result nor its flag with `--scene`. Ordinary preparation clears this selection so a later settings check cannot silently run the narrower scope.
 
+Use `--preview-host` to exercise the retained settings owner, actual domain provider, worker preparation, and shared GPU host. The fixture stages an unsaved artwork selection, verifies the resulting images, mounts the shared widget for drawing, and checks native/scene retirement. Its observer mounting is separate from the final production layout. Choose one of `--preview-host`, `--graphics-only`, or `--scene`; ordinary preparation clears both special preview selections.
+
 Ordinary fixtures select Default models and artwork. The mode selects the optional rig inputs and adaptation state; it does not substitute native artwork. Use the saved profile selection explicitly when qualifying Vanilla (Inherited) or a custom-artwork control.
 
 ### Prism pack fixtures

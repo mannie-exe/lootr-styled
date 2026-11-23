@@ -43,9 +43,9 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False):
-    if graphics_only and scene:
-        raise ValueError('Select either isolated graphics or an integrated scene, not both')
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False):
+    if sum((graphics_only, preview_host, scene)) > 1:
+        raise ValueError('Choose one check: --graphics-only, --preview-host, or --scene')
     if expected_private_sprites is not None and (local_profile is None or not 0 <= expected_private_sprites <= 128):
         raise ValueError('An explicit private-sprite count requires a local profile and range 0..128')
     library = reform_dependency(target, reform_repository)
@@ -117,6 +117,11 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     options = {'resourcePacks': json.dumps(packs), 'incompatibleResourcePacks': '[]', 'onboardAccessibility': 'false', 'renderDistance': '4', 'simulationDistance': '5', 'maxFps': '30', 'guiScale': str(gui_scale), 'fullscreen': 'false', 'pauseOnLostFocus': 'false'}
     (fixture / 'options.txt').write_text(''.join(f'{key}:{value}\n' for key, value in options.items()))
     (fixture / 'lootr-styled-probe-mode.txt').write_text(mode + '\n')
+    host_marker = fixture / '.lootr-styled-host-probe'
+    if preview_host:
+        host_marker.write_text('Actual retained provider/worker host; test-mounted widget, not final production layout\n')
+    else:
+        host_marker.unlink(missing_ok=True)
     graphics_marker = fixture / '.lootr-styled-graphic-probe'
     if graphics_only:
         graphics_marker.write_text('Isolated domain draw only; excludes editor and integrated scene qualification\n')
@@ -143,6 +148,7 @@ def main():
     parser.add_argument('--mode', choices=('native', 'fresh', 'off'), default='native')
     parser.add_argument('--fetch', action='store_true', help='Fetch missing pinned verification inputs, never product runtime content')
     parser.add_argument('--run', action='store_true', help='Launch a GUI after external desktop coordination')
+    parser.add_argument('--preview-host', action='store_true', help='Qualify the actual retained provider/worker host with a test-mounted shared widget')
     parser.add_argument('--graphics-only', action='store_true', help='Only draw frozen domain meshes in the shared viewport; excludes editor and world checks')
     parser.add_argument('--scene', action='store_true', help='Create and render a disposable native container world')
     parser.add_argument('--gui-scale', type=int, choices=range(5), default=2, help='Native GUI scale for this disposable fixture (0 is Auto)')
@@ -150,7 +156,7 @@ def main():
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host)
     if not args.run:
         print(json.dumps({'prepared': str(fixture.relative_to(ROOT)), 'artifact': product.name, 'sha256': digest(product)}))
         return
@@ -177,9 +183,10 @@ def main():
     data = json.loads(report.read_text()) if report.is_file() else None
     if (result != 0 or data is None or data.get('passed') is not True
             or data.get('artifactSha256') != digest(product)
-            or ('isolatedGraphic' in data) != args.graphics_only):
+            or ('isolatedGraphic' in data) != args.graphics_only
+            or ('sharedGraphicHost' in data) != args.preview_host):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
-    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
+    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 
 if __name__ == '__main__':

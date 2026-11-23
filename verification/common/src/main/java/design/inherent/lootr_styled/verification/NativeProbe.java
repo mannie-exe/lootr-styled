@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 public final class NativeProbe {
   private static UiProbe ui;
   private static IsolatedGraphicProbe graphics;
+  private static SharedGraphicHostProbe sharedHost;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
@@ -101,7 +102,10 @@ public final class NativeProbe {
       } else if (stage == 1 && reloaded) {
         snapshots.add(NativeBindings.capture(mc, mode));
         REPORT.add("snapshots", snapshots);
-        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-graphic-probe"))) {
+        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-host-probe"))) {
+          sharedHost = new SharedGraphicHostProbe();
+          stage = 12;
+        } else if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-graphic-probe"))) {
           graphics = new IsolatedGraphicProbe();
           stage = 11;
         } else {
@@ -123,6 +127,12 @@ public final class NativeProbe {
         var observations = graphics.tick(mc);
         if (observations == null) return;
         REPORT.add("isolatedGraphic", observations);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
+      } else if (stage == 12) {
+        var observations = sharedHost.tick(mc);
+        if (observations == null) return;
+        REPORT.add("sharedGraphicHost", observations);
         REPORT.addProperty("passed", true);
         finish(mc, null);
       } else if (stage == 2) {

@@ -56,10 +56,20 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertTrue(marker.is_file())
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
+        host = self.fixture / '.lootr-styled-host-probe'
+        native_probe.prepare('neoforge-1_21_1', 'native', preview_host=True)
+        self.assertTrue(host.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(host.exists())
 
     def test_conflicting_graphics_and_world_scopes_preserve_existing_evidence(self):
-        with self.assertRaisesRegex(ValueError, 'either isolated graphics'):
+        with self.assertRaisesRegex(ValueError, 'Choose one check'):
             native_probe.prepare('neoforge-1_21_1', 'native', scene=True, graphics_only=True)
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+
+    def test_preview_host_cannot_be_selected_with_another_graphics_scope(self):
+        with self.assertRaisesRegex(ValueError, 'Choose one check'):
+            native_probe.prepare('neoforge-1_21_1', 'native', preview_host=True, graphics_only=True)
         self.assertEqual('Preserve running client input', self.settings.read_text())
 
     def test_graphics_only_success_cannot_substitute_for_an_ordinary_ui_check(self):
