@@ -58,8 +58,6 @@ final class UiProbe {
   private Set<Path> existing;
   private int stage = HOME_ENTRY;
   private int mountTicks;
-  private int navigationWait;
-  private boolean requestedNavigationExpansion;
   private boolean captured;
   private int nativeWidth, nativeHeight;
   private final JsonObject result = new JsonObject();
@@ -156,18 +154,11 @@ final class UiProbe {
           return null;
         }
         if (!captured) return null;
-        var appearance = navigationChoice(root, "Appearance");
-        if (appearance.isEmpty()) {
-          if (!requestedNavigationExpansion) {
-            // Home's Settings card selects the category; expand its native tree branch
-            // explicitly before choosing the existing Appearance destination.
-            NativeBindings.press(navigation(root, "Settings"));
-            requestedNavigationExpansion = true;
-          } else if (++navigationWait > 8)
-            throw new IllegalStateException("Expanding Settings did not reveal Appearance");
-          return null;
-        }
-        NativeBindings.press(appearance.orElseThrow());
+        // The identified document reveal already selected Appearance and expanded its
+        // ancestors. Pressing that selected branch again would collapse its sections.
+        navigation(root, "Appearance");
+        navigation(root, "Styling");
+        navigation(root, "Profile selection");
         mountTicks = 0;
         stage = STYLING_SECTION;
       }
