@@ -10,6 +10,8 @@ One compiler prepares a complete immutable resource generation from config/resou
 
 Optional foreign classes must not resolve when their adapter is absent or disabled. Client rendering must not load on a dedicated server. Native and foreign subclass renderers need explicit scope admission; inheritance alone is not authority to modify their output.
 
+The settings workspace declares a stable identity and Home page through re:form. Home links to settings and profile tools without opening an appearance editor. Category destinations have their own presentation identities; they do not create settings owners or change serialized fields. Opening Appearance retains the existing document and save path.
+
 Settings persistence, retained editing, conflicts, references, commands and operation screens use public re:form services. One staged file owner reads and writes the existing format 1 `settings.json`; profile discovery, compilation and export remain domain operations. Profile initialization never writes settings. Ordinary control rendering and search use immutable cached metadata, without filesystem or resource analysis.
 
 Resource reload captures that same settings store on a bounded worker. Native publication binds the consumed file revision to the new generated-pack identity. Save and reload resources retains the actual persistence receipt, then separately waits for native reload and verifies the active generation and current source. A failed or cancelled reload cannot erase a confirmed save. A native future completing without the matching new generation is insufficient to report application. Closing an editor or client retires its operation authority; it does not imply rollback of a completed write or native reload.

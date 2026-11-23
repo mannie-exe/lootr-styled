@@ -36,6 +36,11 @@ import net.minecraft.client.gui.screens.Screen;
  * Real packaged public forms, retained drafts, persistence, native application and artwork export.
  */
 final class UiProbe {
+  private static final int HOME_ENTRY = -10,
+      PROFILE_TOOLS = -9,
+      HOME_RETURN = -8,
+      ENTER_SETTINGS = -7;
+  private static final int HOME_DIRTY = 210, RETURN_DIRTY = 211;
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
   private static final FieldPath ARTWORK = FieldPath.ROOT.field("artwork");
   private final Screen parent;
@@ -44,9 +49,10 @@ final class UiProbe {
   private final ClientSettings original;
   private final Path settingsFile;
   private ClientEditor<?> editor;
+  private DraftRevision homeRevision;
   private CompletableFuture<?> pending;
   private Set<Path> existing;
-  private int stage = -2;
+  private int stage = HOME_ENTRY;
   private int mountTicks;
   private boolean captured;
   private int nativeWidth, nativeHeight;
@@ -66,16 +72,6 @@ final class UiProbe {
     original = ClientSettings.parse(originalBytes);
     workflow = StylePreferences.open(parent);
     NativeUi.open(workflow.screen());
-    workflow.show(StyleSettingsStore.DEFINITION.id());
-    pending =
-        workflow
-            .openEditor(StyleSettingsStore.DEFINITION.id())
-            .thenCompose(
-                opened -> {
-                  editor = opened;
-                  return DocumentActions.result(editor.actions().ensureLoaded(EntryPoint.GUI));
-                })
-            .toCompletableFuture();
   }
 
   JsonObject tick(Minecraft mc) throws Exception {
@@ -87,18 +83,58 @@ final class UiProbe {
     }
     Screen root = workflow.screen();
     switch (stage) {
+      case HOME_ENTRY -> {
+        if (++mountTicks < 4) return null;
+        if (workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::opened))
+          throw new IllegalStateException("Home eagerly opened an appearance editor");
+        NativeBindings.press(button(root, "Profiles"));
+        mountTicks = 0;
+        stage = PROFILE_TOOLS;
+      }
+      case PROFILE_TOOLS -> {
+        if (++mountTicks < 4) return null;
+        if (workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::opened))
+          throw new IllegalStateException("Profile tools opened an appearance editor");
+        if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Profile tools changed settings without an action");
+        result.addProperty("profileToolsLazy", true);
+        NativeBindings.press(navigation(root, "Home"));
+        mountTicks = 0;
+        stage = HOME_RETURN;
+      }
+      case HOME_RETURN -> {
+        if (++mountTicks < 4) return null;
+        if (workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::opened))
+          throw new IllegalStateException("Home eagerly opened an appearance editor");
+        if (!root.getTitle().getString().equals("Lootr: Styled"))
+          throw new IllegalStateException("The workspace lost its stable identity");
+        button(root, "Settings");
+        button(root, "Profiles");
+        if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Home changed settings");
+        result.addProperty("lazyHome", true);
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-home", () -> captured = true);
+        stage = ENTER_SETTINGS;
+      }
+      case ENTER_SETTINGS -> {
+        if (!captured) return null;
+        NativeBindings.press(button(root, "Settings"));
+        pending =
+            workflow
+                .openEditor(StyleSettingsStore.DEFINITION.id())
+                .thenCompose(
+                    opened -> {
+                      editor = opened;
+                      return DocumentActions.result(editor.actions().ensureLoaded(EntryPoint.GUI));
+                    })
+                .toCompletableFuture();
+        captured = false;
+        stage = -2;
+      }
       case -2 -> {
         if (editor.form().fieldControl(MODELS).isEmpty()) return null;
-        var appearance =
-            children(root).stream()
-                .filter(
-                    design.inherent.reform.minecraft.client.NativeNavigationButton.class
-                        ::isInstance)
-                .map(design.inherent.reform.minecraft.client.NativeNavigationButton.class::cast)
-                .filter(control -> control.getMessage().getString().equals("Appearance"))
-                .findFirst()
-                .orElseThrow();
-        NativeBindings.press(appearance);
+        NativeBindings.press(navigation(root, "Appearance"));
         mountTicks = 0;
         stage = -1;
       }
@@ -362,6 +398,29 @@ final class UiProbe {
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Rejected draft partially saved valid siblings");
         result.addProperty("invalidDraftAndSiblingPreserved", true);
+        homeRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        NativeBindings.press(navigation(root, "Home"));
+        mountTicks = 0;
+        stage = HOME_DIRTY;
+      }
+      case HOME_DIRTY -> {
+        if (++mountTicks < 4) return null;
+        if (workflow.editor(StyleSettingsStore.DEFINITION) != editor
+            || !homeRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow())))
+          throw new IllegalStateException("Home replaced the retained invalid draft");
+        if (editor.canSubmit()
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Home submitted or discarded invalid input");
+        NativeBindings.press(navigation(root, "Appearance"));
+        mountTicks = 0;
+        stage = RETURN_DIRTY;
+      }
+      case RETURN_DIRTY -> {
+        if (++mountTicks < 4 || editor.form().fieldControl(MODELS).isEmpty()) return null;
+        if (workflow.editor(StyleSettingsStore.DEFINITION) != editor
+            || !homeRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow())))
+          throw new IllegalStateException("Returning to Appearance replaced the draft");
+        result.addProperty("homeRetainsInvalidDraft", true);
         pending = invalidPreviewCapture();
         stage = 202;
       }
@@ -667,6 +726,16 @@ final class UiProbe {
                         : button.getMessage().getString().equals("View operation") ? 2 : 1))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException("Missing shared action: " + label));
+  }
+
+  private static design.inherent.reform.minecraft.client.NativeNavigationButton navigation(
+      Screen screen, String label) {
+    return children(screen).stream()
+        .filter(design.inherent.reform.minecraft.client.NativeNavigationButton.class::isInstance)
+        .map(design.inherent.reform.minecraft.client.NativeNavigationButton.class::cast)
+        .filter(control -> control.getMessage().getString().equals(label))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("Missing navigation destination: " + label));
   }
 
   private static void viewport(Screen screen, int width, int height) {

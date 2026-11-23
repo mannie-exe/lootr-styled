@@ -108,14 +108,14 @@ final class StyleWorkflow implements AutoCloseable {
         new ClientWorkflowLayout(
             List.of(
                 new ClientWorkflowLayout.Group(
-                    Component.literal("Settings"),
+                    List.of(StyleWorkspace.settings()),
                     List.of(placement),
                     List.of(
                         saveAction,
                         operations.action(StyleOperations.Action.RELOAD),
                         operations.action(StyleOperations.Action.RETRY))),
                 new ClientWorkflowLayout.Group(
-                    Component.literal("Profiles"),
+                    List.of(StyleWorkspace.profiles()),
                     List.of(),
                     List.of(
                         operations.action(StyleOperations.Action.EXPORT_ARTWORK),
@@ -124,8 +124,7 @@ final class StyleWorkflow implements AutoCloseable {
                         operations.action(StyleOperations.Action.DETAILS)))),
             List.of());
     workflow =
-        ClientEditingWorkflow.open(
-            parent, Component.literal("Lootr: Styled"), List.of(form), layout);
+        ClientEditingWorkflow.open(parent, List.of(form), layout, StyleWorkspace.presentation());
   }
 
   private static void requireSubmission(ClientEditor<?> editor) {
