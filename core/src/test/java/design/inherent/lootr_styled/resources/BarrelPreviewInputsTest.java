@@ -122,6 +122,14 @@ class BarrelPreviewInputsTest {
             assertTrue(json.getAsJsonObject("textures").has("surface"));
           }
           assertEquals(open, captured.barrel().open());
+          assertEquals(
+              ClientSettings.DEFAULT, captured.selections().orElseThrow().models().requested());
+          assertEquals(
+              ClientSettings.DEFAULT,
+              captured.selections().orElseThrow().models().effective().orElseThrow());
+          assertEquals(
+              PresentationCompiler.ProfileResolution.State.SELECTED,
+              captured.selections().orElseThrow().artwork().state());
           assertEquals(looted ? "opened_barrel" : "barrel", captured.barrel().material());
           assertTrue(
               captured.resources().ids().stream().anyMatch(id -> id.path().endsWith(".png")));

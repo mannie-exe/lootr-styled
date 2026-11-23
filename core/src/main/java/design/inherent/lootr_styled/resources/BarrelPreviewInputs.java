@@ -17,18 +17,21 @@ public final class BarrelPreviewInputs {
   private final FrozenResources resources;
   private final Map<ResourceId, TextureImages.Size> imageSizes;
   private final List<String> diagnostics;
+  private final java.util.Optional<PresentationCompiler.Selections> selections;
 
   private BarrelPreviewInputs(
       Subject subject,
       ContainerTargets.Barrel barrel,
       FrozenResources resources,
       Map<ResourceId, TextureImages.Size> imageSizes,
-      List<String> diagnostics) {
+      List<String> diagnostics,
+      java.util.Optional<PresentationCompiler.Selections> selections) {
     this.subject = java.util.Objects.requireNonNull(subject);
     this.barrel = java.util.Objects.requireNonNull(barrel);
     this.resources = java.util.Objects.requireNonNull(resources);
     this.imageSizes = Map.copyOf(imageSizes);
     this.diagnostics = List.copyOf(diagnostics);
+    this.selections = java.util.Objects.requireNonNull(selections);
   }
 
   public Subject subject() {
@@ -49,6 +52,10 @@ public final class BarrelPreviewInputs {
 
   public List<String> diagnostics() {
     return diagnostics;
+  }
+
+  public java.util.Optional<PresentationCompiler.Selections> selections() {
+    return selections;
   }
 
   public record Subject(ClientSettings settings, boolean looted, boolean open) {
@@ -134,6 +141,7 @@ public final class BarrelPreviewInputs {
         barrel,
         new FrozenResources(captured, FrozenResources.DEFAULT_LIMITS),
         sizes,
-        compiled.status());
+        compiled.status(),
+        compiled.selections());
   }
 }

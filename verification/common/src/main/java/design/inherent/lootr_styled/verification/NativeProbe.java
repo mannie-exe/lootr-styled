@@ -65,6 +65,7 @@ public final class NativeProbe {
       if (!java.util.Set.of("native", "fresh", "off").contains(mode))
         throw new IllegalStateException("Unknown fixture mode");
       if (stage == 0) {
+        REPORT.add("publishedProfiles", PreviewProbeAccess.publishedProfiles());
         String client =
             ClientRuntime.class.getProtectionDomain().getCodeSource().getLocation().toString();
         String core =

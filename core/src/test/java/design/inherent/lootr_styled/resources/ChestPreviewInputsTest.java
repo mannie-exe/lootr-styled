@@ -54,6 +54,11 @@ class ChestPreviewInputsTest {
           assertEquals(targets.chests().get(trapped ? 1 : 0), captured.chest());
           assertTrue(captured.rig().isEmpty());
           assertEquals(0.75f, captured.subject().lid());
+          assertEquals(
+              ClientSettings.DEFAULT, captured.selections().orElseThrow().artwork().requested());
+          assertEquals(
+              ClientSettings.DEFAULT,
+              captured.selections().orElseThrow().artwork().effective().orElseThrow());
           var id = captured.texture();
           try (var image = captured.resources().open(id).orElseThrow()) {
             assertArrayEquals(

@@ -119,6 +119,33 @@ final class PreviewCombinationProbe {
                       facts.add(f);
                     }
                     data.add("facts", facts);
+                    for (var family : java.util.List.of("models", "artwork")) {
+                      var expected = family.equals("models") ? value.models() : value.artwork();
+                      var effective =
+                          ready.graphic().facts().stream()
+                              .filter(
+                                  f ->
+                                      f.id()
+                                          .toString()
+                                          .equals("lootr_styled:preview/" + family + "_effective"))
+                              .findFirst()
+                              .orElseThrow();
+                      if (!effective.value().equals(expected.toString()))
+                        throw new IllegalStateException(
+                            "Effective profile fact differs from compiled selection");
+                      var source =
+                          ready.graphic().facts().stream()
+                              .filter(
+                                  f ->
+                                      f.id()
+                                          .toString()
+                                          .equals(
+                                              "lootr_styled:preview/" + family + "_profile_source"))
+                              .findFirst()
+                              .orElseThrow();
+                      if (!source.value().equals("Built-in"))
+                        throw new IllegalStateException("Built-in profile source was lost");
+                    }
                     if (data.get("aoTriangles").getAsInt() != 0)
                       throw new IllegalStateException("Reference lighting still requests world AO");
                     boolean nativeAo =

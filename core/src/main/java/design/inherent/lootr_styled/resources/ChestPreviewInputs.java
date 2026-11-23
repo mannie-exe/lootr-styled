@@ -17,6 +17,7 @@ public final class ChestPreviewInputs {
   private final Optional<ResourceId> rig;
   private final FrozenResources resources;
   private final List<String> diagnostics;
+  private final Optional<PresentationCompiler.Selections> selections;
 
   private ChestPreviewInputs(
       Subject subject,
@@ -24,13 +25,15 @@ public final class ChestPreviewInputs {
       ResourceId texture,
       Optional<ResourceId> rig,
       FrozenResources resources,
-      List<String> diagnostics) {
+      List<String> diagnostics,
+      Optional<PresentationCompiler.Selections> selections) {
     this.subject = subject;
     this.chest = chest;
     this.texture = texture;
     this.rig = rig;
     this.resources = resources;
     this.diagnostics = List.copyOf(diagnostics);
+    this.selections = java.util.Objects.requireNonNull(selections);
   }
 
   /** Lid progress is an explicit static pose, not an animation clock or a live block entity. */
@@ -64,6 +67,10 @@ public final class ChestPreviewInputs {
 
   public List<String> diagnostics() {
     return diagnostics;
+  }
+
+  public Optional<PresentationCompiler.Selections> selections() {
+    return selections;
   }
 
   /** Facts for the shared provider's capability/pose disclosure, never a live-render claim. */
@@ -149,6 +156,7 @@ public final class ChestPreviewInputs {
         texture,
         rig,
         new FrozenResources(captured, FrozenResources.DEFAULT_LIMITS),
-        compiled.status());
+        compiled.status(),
+        compiled.selections());
   }
 }

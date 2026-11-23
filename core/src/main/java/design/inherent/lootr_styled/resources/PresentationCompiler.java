@@ -66,11 +66,20 @@ public final class PresentationCompiler {
             .toList();
     if (!settings.enabled()) {
       status.add("Disabled");
-      return new Result(FrozenResources.EMPTY, status, choices);
+      return new Result(
+          FrozenResources.EMPTY,
+          status,
+          choices,
+          java.util.Optional.of(
+              new Selections(
+                  ProfileResolution.disabled(settings.models()),
+                  ProfileResolution.disabled(settings.artwork()))));
     }
     var images = new TextureImages();
     var models = selected(catalogue, settings.models(), "Models", status);
     var artwork = selected(catalogue, settings.artwork(), "Artwork", status);
+    var modelResolution = ProfileResolution.resolved(settings.models(), models);
+    var artworkResolution = ProfileResolution.resolved(settings.artwork(), artwork);
     Map<ResourceId, byte[]> artworkOutput = Map.of();
     try {
       artworkOutput = artwork(targets, artwork, budget, images, status);
@@ -79,6 +88,9 @@ public final class PresentationCompiler {
     } catch (IllegalArgumentException ex) {
       status.add("Artwork profile " + artwork.profile().id() + " refused: " + ex.getMessage());
       status.add("Artwork: effective " + ClientSettings.VANILLA + " after profile refusal");
+      artworkResolution =
+          artworkResolution.refused(
+              catalogue.find(ClientSettings.VANILLA).orElseThrow(), ex.getMessage());
     }
     var defaultArtwork =
         artwork.profile().id().equals(ClientSettings.DEFAULT)
@@ -102,6 +114,7 @@ public final class PresentationCompiler {
       status.add("Model profile " + models.profile().id() + " refused: " + ex.getMessage());
       status.add("Models: effective " + ClientSettings.VANILLA + " after profile refusal");
       models = catalogue.find(ClientSettings.VANILLA).orElseThrow();
+      modelResolution = modelResolution.refused(models, ex.getMessage());
       output =
           models(
               targets,
@@ -126,7 +139,11 @@ public final class PresentationCompiler {
             ordinaryChestIsolated));
     BarrelWrapper.adapt(targets, nativeInputs, output, status);
     status.add("Fresh Objects requested: " + settings.fresh());
-    return new Result(new FrozenResources(output, FrozenResources.DEFAULT_LIMITS), status, choices);
+    return new Result(
+        new FrozenResources(output, FrozenResources.DEFAULT_LIMITS),
+        status,
+        choices,
+        java.util.Optional.of(new Selections(modelResolution, artworkResolution)));
   }
 
   private static ProfileCatalogue.Entry selected(
@@ -363,10 +380,93 @@ public final class PresentationCompiler {
     }
   }
 
-  public record Result(FrozenResources resources, List<String> status, List<Choice> choices) {
+  /** Profile-level resolution only; individual slots can still inherit or retain pack overrides. */
+  public record ProfileResolution(
+      ResourceId requested,
+      java.util.Optional<ResourceId> effective,
+      java.util.Optional<String> source,
+      State state,
+      java.util.Optional<String> detail) {
+    public enum State {
+      SELECTED,
+      MISSING,
+      REFUSED,
+      DISABLED
+    }
+
+    public ProfileResolution {
+      java.util.Objects.requireNonNull(requested);
+      java.util.Objects.requireNonNull(effective);
+      java.util.Objects.requireNonNull(source);
+      java.util.Objects.requireNonNull(state);
+      java.util.Objects.requireNonNull(detail);
+      if (state == State.DISABLED
+          ? effective.isPresent() || source.isPresent()
+          : effective.isEmpty() || source.isEmpty())
+        throw new IllegalArgumentException("Profile resolution needs its actual application state");
+      if (state == State.SELECTED && !effective.orElseThrow().equals(requested))
+        throw new IllegalArgumentException("A selected profile must retain its requested identity");
+      if ((state == State.MISSING || state == State.REFUSED)
+          && !effective.orElseThrow().equals(ClientSettings.VANILLA))
+        throw new IllegalArgumentException(
+            "A refused or missing profile uses the inherited fallback");
+      source = source.map(PresentationCompiler::safe);
+      detail = detail.map(PresentationCompiler::safe);
+    }
+
+    private static ProfileResolution disabled(ResourceId requested) {
+      return new ProfileResolution(
+          requested,
+          java.util.Optional.empty(),
+          java.util.Optional.empty(),
+          State.DISABLED,
+          java.util.Optional.of("Styling is disabled"));
+    }
+
+    private static ProfileResolution resolved(ResourceId requested, ProfileCatalogue.Entry entry) {
+      boolean found = requested.equals(entry.profile().id());
+      return new ProfileResolution(
+          requested,
+          java.util.Optional.of(entry.profile().id()),
+          java.util.Optional.of(entry.description()),
+          found ? State.SELECTED : State.MISSING,
+          found
+              ? java.util.Optional.empty()
+              : java.util.Optional.of("Requested profile is unavailable"));
+    }
+
+    private ProfileResolution refused(ProfileCatalogue.Entry fallback, String reason) {
+      return new ProfileResolution(
+          requested,
+          java.util.Optional.of(fallback.profile().id()),
+          java.util.Optional.of(fallback.description()),
+          State.REFUSED,
+          java.util.Optional.ofNullable(reason));
+    }
+  }
+
+  public record Selections(ProfileResolution models, ProfileResolution artwork) {
+    public Selections {
+      java.util.Objects.requireNonNull(models);
+      java.util.Objects.requireNonNull(artwork);
+    }
+  }
+
+  public record Result(
+      FrozenResources resources,
+      List<String> status,
+      List<Choice> choices,
+      java.util.Optional<Selections> selections) {
+    /** Older producers do not establish effective selections from their diagnostic text. */
+    public Result(FrozenResources resources, List<String> status, List<Choice> choices) {
+      this(resources, status, choices, java.util.Optional.empty());
+    }
+
     public Result {
+      java.util.Objects.requireNonNull(resources);
       status = status.stream().limit(256).map(PresentationCompiler::safe).toList();
       choices = List.copyOf(choices);
+      java.util.Objects.requireNonNull(selections);
     }
   }
 

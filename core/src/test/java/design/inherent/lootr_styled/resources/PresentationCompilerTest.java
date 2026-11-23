@@ -154,6 +154,12 @@ class PresentationCompilerTest {
     }
     memory.put(target, equalDefault, ResourceAccess.Origin.OTHER);
     var explicit = compile(memory, settings("lootr_styled:default", "lootr_styled:default"));
+    assertEquals(
+        ClientSettings.DEFAULT,
+        explicit.selections().orElseThrow().artwork().effective().orElseThrow());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.SELECTED,
+        explicit.selections().orElseThrow().artwork().state());
     assertFalse(explicit.resources().ids().contains(target));
     for (var barrel : TARGETS.barrels()) {
       assertEquals(
@@ -272,6 +278,16 @@ class PresentationCompilerTest {
         new ClientSettings(
             false, ClientSettings.DEFAULT, ClientSettings.VANILLA, ClientSettings.Fresh.ON);
     var result = compile(memory, settings);
+    var resolutions = result.selections().orElseThrow();
+    assertEquals(settings.models(), resolutions.models().requested());
+    assertEquals(settings.artwork(), resolutions.artwork().requested());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.DISABLED, resolutions.models().state());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.DISABLED, resolutions.artwork().state());
+    assertTrue(resolutions.models().effective().isEmpty());
+    assertTrue(resolutions.artwork().effective().isEmpty());
+    assertTrue(resolutions.models().source().isEmpty());
     assertTrue(result.resources().ids().isEmpty());
     assertTrue(
         result.choices().stream()
@@ -406,6 +422,43 @@ class PresentationCompilerTest {
   }
 
   @Test
+  void olderProducerDiagnosticsCannotInventStructuredResolution() {
+    var legacy =
+        new PresentationCompiler.Result(
+            FrozenResources.EMPTY,
+            java.util.List.of("Models: effective lootr_styled:default"),
+            java.util.List.of());
+    assertTrue(legacy.selections().isEmpty());
+  }
+
+  @Test
+  void missingArtworkAndDisabledSelectionsDoNotInventAnotherEffectiveProfile() {
+    var memory = inputs();
+    var request = settings("lootr_styled:default", "missing:artwork");
+    var selected = compile(memory, request).selections().orElseThrow();
+    assertEquals(ClientSettings.DEFAULT, selected.models().effective().orElseThrow());
+    assertEquals(PresentationCompiler.ProfileResolution.State.SELECTED, selected.models().state());
+    assertEquals(request.artwork(), selected.artwork().requested());
+    assertEquals(ClientSettings.VANILLA, selected.artwork().effective().orElseThrow());
+    assertEquals(PresentationCompiler.ProfileResolution.State.MISSING, selected.artwork().state());
+    var disabled =
+        compile(
+                memory,
+                new ClientSettings(
+                    false,
+                    ResourceId.parse("missing:models"),
+                    request.artwork(),
+                    ClientSettings.Fresh.AUTO))
+            .selections()
+            .orElseThrow();
+    assertEquals(ResourceId.parse("missing:models"), disabled.models().requested());
+    assertEquals(request.artwork(), disabled.artwork().requested());
+    assertTrue(disabled.models().effective().isEmpty());
+    assertTrue(disabled.artwork().effective().isEmpty());
+    assertEquals(PresentationCompiler.ProfileResolution.State.DISABLED, disabled.artwork().state());
+  }
+
+  @Test
   void missingSelectionRetainsRequestedIdentityAndDoesNotFallBackToStyledDefault() {
     var memory = inputs();
     memory.put(
@@ -415,6 +468,15 @@ class PresentationCompilerTest {
     var request = settings("missing:kept", "lootr_styled:vanilla");
     var result = compile(memory, request);
     assertEquals("missing:kept", request.models().toString());
+    var resolutions = result.selections().orElseThrow();
+    assertEquals(request.models(), resolutions.models().requested());
+    assertEquals(ClientSettings.VANILLA, resolutions.models().effective().orElseThrow());
+    assertEquals("Built-in", resolutions.models().source().orElseThrow());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.MISSING, resolutions.models().state());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.SELECTED, resolutions.artwork().state());
+    assertTrue(resolutions.models().detail().isPresent());
     assertTrue(
         result.status().stream()
             .anyMatch(s -> s.contains("requested missing:kept, effective lootr_styled:vanilla")));
@@ -480,6 +542,15 @@ class PresentationCompilerTest {
         "example:art",
         "{\"format\":1,\"artwork\":{\"lootr:textures/chest.png\":\"example:textures/valid.png\",\"lootr:textures/chest_opened.png\":\"example:textures/bad.png\"}}");
     var result = compile(memory, settings("lootr_styled:default", "example:art"));
+    var resolutions = result.selections().orElseThrow();
+    assertEquals(ResourceId.parse("example:art"), resolutions.artwork().requested());
+    assertEquals(ClientSettings.VANILLA, resolutions.artwork().effective().orElseThrow());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.REFUSED, resolutions.artwork().state());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.SELECTED, resolutions.models().state());
+    assertEquals(ClientSettings.DEFAULT, resolutions.models().effective().orElseThrow());
+    assertTrue(resolutions.artwork().detail().isPresent());
     assertEquals(4, result.resources().ids().size());
     assertTrue(
         result.status().stream()
@@ -494,6 +565,13 @@ class PresentationCompilerTest {
         "example:bad",
         "{\"format\":1,\"models\":{\"lootr:models/block/unknown.json\":\"example:models/unused.json\"}}");
     var result = compile(memory, settings("example:bad", "lootr_styled:vanilla"));
+    var resolutions = result.selections().orElseThrow();
+    assertEquals(ResourceId.parse("example:bad"), resolutions.models().requested());
+    assertEquals(ClientSettings.VANILLA, resolutions.models().effective().orElseThrow());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.REFUSED, resolutions.models().state());
+    assertEquals(
+        PresentationCompiler.ProfileResolution.State.SELECTED, resolutions.artwork().state());
     assertEquals(4, result.resources().ids().size());
     assertTrue(
         result.status().stream()

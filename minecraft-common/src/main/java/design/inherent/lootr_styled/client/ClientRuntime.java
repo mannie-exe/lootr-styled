@@ -32,7 +32,17 @@ public final class ClientRuntime {
       Optional<String> settingsRevision,
       boolean qualified,
       List<String> status,
-      List<PresentationCompiler.Choice> choices) {
+      List<PresentationCompiler.Choice> choices,
+      Optional<PresentationCompiler.Selections> selections) {
+    public Preparation(
+        FrozenResources resources,
+        Optional<String> settingsRevision,
+        boolean qualified,
+        List<String> status,
+        List<PresentationCompiler.Choice> choices) {
+      this(resources, settingsRevision, qualified, status, choices, Optional.empty());
+    }
+
     public static final Preparation EMPTY =
         new Preparation(
             FrozenResources.EMPTY, Optional.empty(), false, List.of("Not available"), List.of());
@@ -40,6 +50,7 @@ public final class ClientRuntime {
     public Preparation {
       status = List.copyOf(status);
       choices = List.copyOf(choices);
+      java.util.Objects.requireNonNull(selections);
     }
   }
 
@@ -166,7 +177,8 @@ public final class ClientRuntime {
       notes.addAll(result.status());
       LOGGER.info("Lootr: Styled loaded {} resources", result.resources().ids().size());
       LOGGER.debug("Lootr: Styled details: {}", notes);
-      return new Preparation(result.resources(), revision, true, notes, result.choices());
+      return new Preparation(
+          result.resources(), revision, true, notes, result.choices(), result.selections());
     } catch (IOException | IllegalArgumentException refused) {
       var reason = "Native fallback: " + refused.getMessage();
       LOGGER.warn("Lootr: Styled uses native resources: {}", reason, refused);

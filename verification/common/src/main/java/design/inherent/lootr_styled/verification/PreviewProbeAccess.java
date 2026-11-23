@@ -26,6 +26,44 @@ final class PreviewProbeAccess {
     return (UUID) invoke(pack.getClass(), "id", new Class<?>[0], pack);
   }
 
+  static com.google.gson.JsonObject publishedProfiles() throws Exception {
+    var pack = activePack();
+    var prepared =
+        ((Optional<?>) invoke(pack.getClass(), "preparation", new Class<?>[0], pack))
+            .map(design.inherent.lootr_styled.client.ClientRuntime.Preparation.class::cast)
+            .orElseThrow();
+    var result = new com.google.gson.JsonObject();
+    result.addProperty("qualified", prepared.qualified());
+    if (!prepared.qualified()) {
+      if (prepared.selections().isPresent())
+        throw new IllegalStateException("Unqualified publication invented effective profiles");
+      return result;
+    }
+    var selected = prepared.selections().orElseThrow();
+    var saved =
+        design.inherent.lootr_styled.profile.ClientSettings.parse(
+            java.nio.file.Files.readAllBytes(
+                design.inherent.lootr_styled.client.ClientRuntime.configuration()
+                    .root()
+                    .resolve("settings.json")));
+    if (!selected.models().requested().equals(saved.models())
+        || !selected.artwork().requested().equals(saved.artwork()))
+      throw new IllegalStateException(
+          "Published profile metadata differs from its saved candidate");
+    for (var item :
+        java.util.Map.of("models", selected.models(), "artwork", selected.artwork()).entrySet()) {
+      var value = item.getValue();
+      var row = new com.google.gson.JsonObject();
+      row.addProperty("requested", value.requested().toString());
+      value.effective().ifPresent(id -> row.addProperty("effective", id.toString()));
+      value.source().ifPresent(text -> row.addProperty("source", text));
+      value.detail().ifPresent(text -> row.addProperty("detail", text));
+      row.addProperty("state", value.state().name());
+      result.add(item.getKey(), row);
+    }
+    return result;
+  }
+
   static ResourceAccess lower(Object pack) {
     return (ResourceAccess) invoke(pack.getClass(), "lowerSources", new Class<?>[0], pack);
   }

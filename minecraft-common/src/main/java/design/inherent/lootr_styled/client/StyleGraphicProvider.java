@@ -136,6 +136,7 @@ final class StyleGraphicProvider
                               StylePreviewMesh.convert(
                                   baked, request.limits(), barrelMaterial, checkpoint);
                           diagnostics = input.diagnostics();
+                          input.selections().ifPresent(value -> selectionFacts(facts, value));
                           facts.add(
                               fact(
                                   "pose",
@@ -163,6 +164,7 @@ final class StyleGraphicProvider
                               StylePreviewMesh.chest(
                                   input, baked.mesh(), request.limits(), chestMaterial, checkpoint);
                           diagnostics = input.diagnostics();
+                          input.selections().ifPresent(value -> selectionFacts(facts, value));
                           facts.add(
                               fact(
                                   "pose",
@@ -207,12 +209,7 @@ final class StyleGraphicProvider
                               "reference_lighting",
                               "Reference lighting",
                               "Model shading and emission; world ambient occlusion is not simulated"));
-                      if (diagnostics.size() + facts.size() > 64)
-                        throw new PolicyRefusal(
-                            "preview.budget",
-                            "The preview resource diagnostics exceed their output allowance");
-                      for (int i = 0; i < diagnostics.size(); i++)
-                        facts.add(fact("resource/" + i, "Resource", diagnostics.get(i)));
+                      resourceFacts(facts, diagnostics);
                       checkpoint.run();
                       return (GraphicScenePreparation)
                           new GraphicScenePreparation.Ready(
@@ -260,7 +257,80 @@ final class StyleGraphicProvider
       EmfSupport emf,
       boolean ordinaryChestIsolated) {}
 
+  private static void selectionFacts(
+      List<GraphicSceneData.Fact> facts,
+      design.inherent.lootr_styled.resources.PresentationCompiler.Selections selections) {
+    selectionFacts(facts, "models", "model", selections.models());
+    selectionFacts(facts, "artwork", "artwork", selections.artwork());
+    facts.add(
+        fact(
+            "profile_scope",
+            "Profile resolution",
+            "Individual resource slots may inherit or keep explicit pack overrides"));
+  }
+
+  private static void selectionFacts(
+      List<GraphicSceneData.Fact> facts,
+      String id,
+      String title,
+      design.inherent.lootr_styled.resources.PresentationCompiler.ProfileResolution resolution) {
+    facts.add(
+        fact(
+            id + "_effective",
+            "Effective " + title + " profile",
+            resolution.effective().map(Object::toString).orElse("None; styling is disabled")));
+    facts.add(
+        fact(
+            id + "_resolution",
+            title.equals("model") ? "Model profile status" : "Artwork profile status",
+            switch (resolution.state()) {
+              case SELECTED -> "Requested profile selected";
+              case MISSING -> "Requested profile unavailable; using inherited resources";
+              case REFUSED -> "Requested profile refused; using inherited resources";
+              case DISABLED -> "Styling is disabled; the requested profile is retained";
+            }));
+    resolution
+        .source()
+        .filter(value -> !value.isBlank())
+        .ifPresent(
+            value ->
+                facts.add(
+                    fact(
+                        id + "_profile_source",
+                        title.equals("model") ? "Model profile source" : "Artwork profile source",
+                        value)));
+    resolution
+        .detail()
+        .filter(value -> !value.isBlank())
+        .ifPresent(value -> facts.add(fact(id + "_reason", "Profile detail", value)));
+  }
+
   private static GraphicSceneData.Fact fact(String id, String title, String value) {
     return new GraphicSceneData.Fact(DocumentId.parse("lootr_styled:preview/" + id), title, value);
+  }
+
+  static void resourceFacts(List<GraphicSceneData.Fact> facts, List<String> diagnostics) {
+    if (diagnostics.size() > 256)
+      throw new PolicyRefusal(
+          "preview.budget", "Resource diagnostics exceed the compiler envelope");
+    var batches = new ArrayList<String>();
+    var text = new StringBuilder();
+    for (var diagnostic : diagnostics) {
+      if (diagnostic.length() > 4096)
+        throw new PolicyRefusal(
+            "preview.budget", "A resource diagnostic exceeds its output allowance");
+      if (!text.isEmpty() && text.length() + 1L + diagnostic.length() > 4096) {
+        batches.add(text.toString());
+        text.setLength(0);
+      }
+      if (!text.isEmpty()) text.append('\n');
+      text.append(diagnostic);
+    }
+    if (!text.isEmpty()) batches.add(text.toString());
+    if (batches.size() + facts.size() > 64)
+      throw new PolicyRefusal(
+          "preview.budget", "The preview resource diagnostics exceed their output allowance");
+    for (int i = 0; i < batches.size(); i++)
+      facts.add(fact("resource/" + i, "Resource details", batches.get(i)));
   }
 }
