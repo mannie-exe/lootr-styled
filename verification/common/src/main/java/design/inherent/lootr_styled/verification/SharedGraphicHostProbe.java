@@ -39,6 +39,9 @@ final class SharedGraphicHostProbe {
   private long drawsAtMount;
   private boolean invalidDraftRefused, changedDraftRevoked;
   private final JsonArray refusalCodes = new JsonArray();
+  private final PreviewWorkerGate gate = new PreviewWorkerGate();
+  private ProviderLifetimeProbe lifetime;
+  private JsonObject lifetimeResult;
   private volatile boolean screenshot;
 
   SharedGraphicHostProbe() throws Exception {
@@ -54,7 +57,7 @@ final class SharedGraphicHostProbe {
     var limits =
         new GraphicLimits(
             16 * 1024 * 1024, 32 * 1024 * 1024, 16 * 1024 * 1024, 256, 128 * 1024 * 1024);
-    provider = PreviewProbeAccess.hostProvider(limits);
+    provider = PreviewProbeAccess.hostProvider(limits, gate);
     host = workflow.graphics(limits, 1);
     view = host.open(editor, provider.provider());
   }
@@ -306,7 +309,16 @@ final class SharedGraphicHostProbe {
       stage = 11;
       return null;
     }
-    if (stage == 11) return finish();
+    if (stage == 11) {
+      if (lifetime == null) {
+        view.close();
+        lifetime =
+            new ProviderLifetimeProbe(
+                workflow, editor, host, provider, gate, lastSubject(), parent);
+      }
+      lifetimeResult = lifetime.tick(mc);
+      return lifetimeResult == null ? null : finish();
+    }
     throw new IllegalStateException("Unexpected shared host probe stage");
   }
 
@@ -356,17 +368,18 @@ final class SharedGraphicHostProbe {
     result.add("refusalCodes", refusalCodes);
     result.addProperty("repairedDraftPrepared", true);
     result.addProperty("changedDraftRevoked", changedDraftRevoked);
+    result.add("lifetime", lifetimeResult);
     result.addProperty("settingsUnchanged", true);
     result.addProperty("unsavedArtworkCaptured", true);
     result.addProperty("nativeBytesAfterClose", host.nativeOwnership().bytes());
     result.addProperty("sceneBytesAfterClose", host.retainedOutput().bytes());
     result.addProperty(
         "scope",
-        "Actual provider READ capture/worker CPU prep/shared GPU host and test-mounted widget; not final production layout, automatic material policy, exhaustive freshness/cancel/shutdown qualification");
+        "Actual provider READ/worker/shared native host, actor invalidation and bounded cancel/reload/close controls; not final production layout or exhaustive source/native-input/shutdown/cost qualification");
     return result;
   }
 
-  private static void mount(Screen screen, AbstractWidget widget, boolean add) throws Exception {
+  static void mount(Screen screen, AbstractWidget widget, boolean add) {
     // Observer-only mounting preserves the real workflow screen/actor. Production embedding
     // must use the library's forthcoming shell slots; no private renderer is installed here.
     var method =
@@ -377,7 +390,11 @@ final class SharedGraphicHostProbe {
                         && m.getParameterCount() == 1)
             .findFirst()
             .orElseThrow();
-    method.setAccessible(true);
-    method.invoke(screen, widget);
+    try {
+      method.setAccessible(true);
+      method.invoke(screen, widget);
+    } catch (ReflectiveOperationException failed) {
+      throw new IllegalStateException("The verification viewport could not be mounted", failed);
+    }
   }
 }

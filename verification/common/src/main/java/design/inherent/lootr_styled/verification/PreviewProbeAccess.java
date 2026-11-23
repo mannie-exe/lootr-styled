@@ -169,8 +169,13 @@ final class PreviewProbeAccess {
       java.util.concurrent.atomic.AtomicInteger clientCalls,
       java.util.concurrent.atomic.AtomicInteger verifiedImages) {}
 
-  @SuppressWarnings("unchecked") // Observer checks the actual bounded subject codec before use.
   static HostProvider hostProvider(GraphicLimits limits) throws Exception {
+    return hostProvider(limits, () -> {});
+  }
+
+  @SuppressWarnings("unchecked") // Observer checks the actual bounded subject codec before use.
+  static HostProvider hostProvider(GraphicLimits limits, Runnable materialCheckpoint)
+      throws Exception {
     var threads = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var clientCalls = new java.util.concurrent.atomic.AtomicInteger();
@@ -182,6 +187,7 @@ final class PreviewProbeAccess {
               threads.add(Thread.currentThread().getName());
               calls.incrementAndGet();
               if (Thread.currentThread() == client) clientCalls.incrementAndGet();
+              materialCheckpoint.run();
               return testMaterial(id);
             };
     java.util.function.BiFunction<
