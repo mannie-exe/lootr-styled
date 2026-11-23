@@ -53,6 +53,7 @@ final class UiProbe {
   private ClientEditor<?> editor;
   private DraftRevision homeRevision;
   private DraftRevision sectionRevision;
+  private DraftRevision manualRevision;
   private Object sectionActions;
   private CompletableFuture<?> pending;
   private Set<Path> existing;
@@ -320,6 +321,7 @@ final class UiProbe {
                 .findFirst()
                 .orElseThrow();
         filter.setValue("Vanilla");
+        checkChooserReflow(browser, filter);
         searchAt = System.nanoTime();
         NativeBindings.press(button(browser, "Search"));
         mountTicks = 0;
@@ -558,6 +560,26 @@ final class UiProbe {
         }
         assertModel("missing:kept");
         result.addProperty("nativeManualIdRepair", true);
+        manualRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        var hide = manualIdButton(root, "Hide ID");
+        if (!focusControl(root, hide) || !NativeBindings.activateFocused(root))
+          throw new IllegalStateException("Keyboard activation did not collapse the manual ID");
+        mountTicks = 0;
+        stage = 110;
+      }
+      case 110 -> {
+        if (editor.form().fieldControl(MODELS).orElseThrow()
+            instanceof net.minecraft.client.gui.components.EditBox) {
+          if (++mountTicks > 120)
+            throw new IllegalStateException("Manual ID did not collapse to the titled control");
+          return null;
+        }
+        if (!focusedPath(root, manualIdButton(root, "Edit ID"))
+            || !manualRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
+            || !editor.canSubmit()
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Manual ID collapse lost focus or changed the draft");
+        result.addProperty("manualIdCollapseKeepsDraftAndFocus", true);
         stage = 3;
       }
       case 3 -> {
@@ -782,6 +804,82 @@ final class UiProbe {
     Files.writeString(
         Minecraft.getInstance().gameDirectory.toPath().resolve("lootr-styled-ui-observations.json"),
         new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(result));
+  }
+
+  private void checkChooserReflow(
+      Screen browser, net.minecraft.client.gui.components.EditBox filter) {
+    var key =
+        children(browser).stream()
+            .filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
+            .map(net.minecraft.client.gui.components.EditBox.class::cast)
+            .filter(box -> box.getMessage().getString().equals("Reference ID"))
+            .findFirst()
+            .orElseThrow();
+    String inspected = key.getValue();
+    filter.setCursorPosition(3);
+    if (!focusControl(browser, filter))
+      throw new IllegalStateException("The chooser query is not in the native focus tree");
+    var arrangements = new com.google.gson.JsonArray();
+    int[] widths = {1100, 320, 1100};
+    int[] heights = {540, 240, 540};
+    for (int i = 0; i < widths.length; i++) {
+      NativeBindings.resize(browser, Minecraft.getInstance(), widths[i], heights[i]);
+      long panes =
+          browser.children().stream()
+              .filter(child -> child.getClass().getSimpleName().equals("FormPanel"))
+              .count();
+      long expected = i == 1 ? 1 : 2;
+      if (panes != expected
+          || !children(browser).contains(filter)
+          || !children(browser).contains(key)
+          || !filter.getValue().equals("Vanilla")
+          || !key.getValue().equals(inspected)
+          || filter.getCursorPosition() != 3
+          || !focusedPath(browser, filter))
+        throw new IllegalStateException(
+            "Chooser reflow lost its native query, inspected ID, focus, or caret at "
+                + widths[i]
+                + "; panes="
+                + panes);
+      var row = new JsonObject();
+      row.addProperty("width", widths[i]);
+      row.addProperty("height", heights[i]);
+      row.addProperty("panes", panes);
+      row.addProperty("query", filter.getValue());
+      row.addProperty("inspectedId", key.getValue());
+      row.addProperty("caret", filter.getCursorPosition());
+      arrangements.add(row);
+    }
+    NativeBindings.resize(browser, Minecraft.getInstance(), nativeWidth, nativeHeight);
+    result.add("chooserAdjacentFocusedAdjacent", arrangements);
+  }
+
+  private static boolean focusControl(ContainerEventHandler parent, GuiEventListener target) {
+    for (var child : parent.children()) {
+      if (child == target
+          || child instanceof ContainerEventHandler nested && focusControl(nested, target)) {
+        parent.setFocused(child);
+        child.setFocused(true);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean focusedPath(ContainerEventHandler parent, GuiEventListener target) {
+    var current = parent.getFocused();
+    return current == target && current.isFocused()
+        || current instanceof ContainerEventHandler nested && focusedPath(nested, target);
+  }
+
+  private static Button manualIdButton(Screen screen, String label) {
+    return children(screen).stream()
+        .filter(Button.class::isInstance)
+        .map(Button.class::cast)
+        .filter(control -> control.getMessage().getString().equals(label))
+        .filter(control -> NativeBindings.narration(control).startsWith("Models:"))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("Models lost its " + label + " action"));
   }
 
   private static List<GuiEventListener> children(Screen screen) {

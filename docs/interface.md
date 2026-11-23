@@ -8,6 +8,8 @@ Use re:form's shared layout declarations for the Appearance page. Styling groups
 
 Navigation should follow the rendered groups and their responsive stacking order. re:form owns chooser structure, manual-ID containment, and action presentation; Lootr: Styled supplies grouping, profile metadata, wording, and effects. Record a missing shared API rather than adding a private renderer or changing serialization order. [Verification](verification.md#development-settings-interface) records tested navigation behavior and remaining layout limits.
 
+The shared chooser separates search and choices from inspected-value details when both panes fit. Narrow layouts keep the complete task in one pane. Reflow must retain the query, inspected ID, caret, and focus. Inspecting a profile does not change Models or Artwork; Use selection stages the chosen field. Manual ID editing stays inside a labelled group, and collapsing it retains the draft and returns focus to the live disclosure control.
+
 Document actions opens a shared view of the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Save and reload resources and profile exports remain separate guarded operations.
 
 Report routine outcomes briefly, such as Saved or Reloaded. Keep errors specific and provide a recovery action. Put paths, resource decisions, and diagnostic detail behind Details rather than opening a report after every successful action. Distinguish a draft reset, a saved setting, a resource reload, and an exported editing copy.
