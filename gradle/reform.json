@@ -1,11 +1,11 @@
 {
-  "version": "0.4.0-dev.16",
+  "version": "0.4.0-dev.19",
   "api": "design.inherent.reform.minecraft",
   "artifacts": {
-    "neoforge-1_21_1": "34adf05037ab7544db46e66c693703265c96442c0be2572ca67d3c9e32ccfde9",
-    "fabric-1_21_1": "fffd86e42bec757392e4d264de7056fb004a54406ab809d9f63df3bb7fabfc8d",
-    "neoforge-26_3": "d191da6a432f10f6a9006d9670795e435500651cd6e190055f9b74052ffc0243",
-    "fabric-26_3": "00975afcc061875e918aee5217a2566bc7ec635b6db074d88f96ce45e2c199d0"
+    "neoforge-1_21_1": "d5b6342468e15a1061a4a53bb2871fd8efc8880c269ac8b7d0d163f1d605a68e",
+    "fabric-1_21_1": "9db1543bc8e2d81222a4b6ce5edaf7f8dee1f4ade3c727a4b7423af4d5412630",
+    "neoforge-26_3": "ceaf44e924e7fca8d86e408af76ae7b518a2689529b53654b0fe71611cf96a00",
+    "fabric-26_3": "92d7483cd0f2670f018e3369b1ccd880e9286955108ebb99d034418f2a7a6a46"
   },
   "apiMinimum": "0.4.0",
   "apiMaximumExclusive": "0.5.0"

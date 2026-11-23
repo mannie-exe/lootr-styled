@@ -21,6 +21,7 @@ public final class NativeProbe {
   private static PreviewCombinationProbe combinations;
   private static PreviewAuthorityProbe authority;
   private static PreviewCleanupFailureProbe cleanupFailure;
+  private static int cleanupFailureStep;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
@@ -156,7 +157,19 @@ public final class NativeProbe {
       } else if (stage == 15) {
         var observations = cleanupFailure.tick(mc);
         if (observations == null) return;
-        REPORT.add("previewCleanupFailure", observations);
+        String name =
+            switch (cleanupFailureStep) {
+              case 0 -> "previewCleanupFailure";
+              case 1 -> "previewCleanupSynchronous";
+              default -> "previewCleanupReplacement";
+            };
+        REPORT.add(name, observations);
+        if (++cleanupFailureStep < PreviewCleanupFailureProbe.Mode.values().length) {
+          cleanupFailure =
+              new PreviewCleanupFailureProbe(
+                  PreviewCleanupFailureProbe.Mode.values()[cleanupFailureStep]);
+          return;
+        }
         rendererShutdown = new RendererShutdownProbe();
         stage = 16;
       } else if (stage == 16) {

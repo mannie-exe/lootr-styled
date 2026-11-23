@@ -130,6 +130,7 @@ class NativeFixtureTest(unittest.TestCase):
                   'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
                   'rendererShutdown': receipt, 'previewCombinations': self._combinations(),
                   'previewAuthority': self._authority(), 'previewCleanupFailure': self._cleanup_failure()}
+        report.update(self._cleanup_modes())
 
         def publish_after_wait(**_):
             (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
@@ -195,6 +196,36 @@ class NativeFixtureTest(unittest.TestCase):
                 native_probe.require_preview_cleanup_failure({'previewCleanupFailure': {**good, key: value}})
         with self.assertRaisesRegex(RuntimeError, 'Deferred preview cleanup'):
             native_probe.require_preview_cleanup_failure({})
+
+    def _cleanup_modes(self):
+        return {'previewCleanupSynchronous': {**self._cleanup_failure(), 'pendingUsesAtClose': 0,
+                                             'completedDuringClose': True, 'viewState': 'CLOSED'},
+                'previewCleanupReplacement': {**self._cleanup_failure(), 'viewState': 'READY',
+                                             'nativeBytes': 1024, 'finalNativeBytes': 0,
+                                             'finalSceneBytes': 1024, 'finalHostFailureCount': 1,
+                                             'newerReady': True, 'newerCauseAbsent': True,
+                                             'newerDisplayed': True, 'replacementReleased': True}}
+
+    def test_cleanup_modes_keep_exact_once_and_the_actual_newer_outcome(self):
+        good = self._cleanup_modes()
+        native_probe.require_preview_cleanup_modes(good)
+        for section, key, value in [('previewCleanupSynchronous', 'pendingUsesAtClose', 1),
+                                    ('previewCleanupSynchronous', 'completedDuringClose', False),
+                                    ('previewCleanupSynchronous', 'hostFailureCount', 2),
+                                    ('previewCleanupSynchronous', 'viewState', 'FAILED'),
+                                    ('previewCleanupReplacement', 'newerCauseAbsent', False),
+                                    ('previewCleanupReplacement', 'newerDisplayed', False),
+                                    ('previewCleanupReplacement', 'replacementReleased', False),
+                                    ('previewCleanupReplacement', 'finalNativeBytes', 1024),
+                                    ('previewCleanupReplacement', 'finalHostFailureCount', 2),
+                                    ('previewCleanupReplacement', 'nativeBytes', 0),
+                                    ('previewCleanupReplacement', 'viewState', 'FAILED')]:
+            bad = copy.deepcopy(good)
+            bad[section][key] = value
+            with self.subTest(section=section, key=key), self.assertRaises(RuntimeError):
+                native_probe.require_preview_cleanup_modes(bad)
+        with self.assertRaises(RuntimeError):
+            native_probe.require_preview_cleanup_modes({})
 
     def test_authority_witness_needs_revocation_and_real_outstanding_use_without_owner_resurrection(self):
         good = self._authority()

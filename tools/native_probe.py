@@ -223,18 +223,40 @@ def require_preview_authority(data):
 
 
 def require_preview_cleanup_failure(data):
-    result = data.get('previewCleanupFailure')
+    _require_preview_cleanup_result(data.get('previewCleanupFailure'), 1)
+
+
+def _require_preview_cleanup_result(result, pending_uses, replacement=False):
     if (not isinstance(result, dict) or result.get('actualInjectedCause') is not True
             or result.get('releaseAttempted') is not True
             or result.get('releaseCompleted') is not False or result.get('released') is not False
             or result.get('injected') != 1 or result.get('outstandingUses') != 0
-            or type(result.get('pendingUsesAtClose')) is not int or result['pendingUsesAtClose'] < 1
-            or result.get('nativeBytes') != 0
+            or type(result.get('pendingUsesAtClose')) is not int or result['pendingUsesAtClose'] != pending_uses
+            or (not replacement and result.get('nativeBytes') != 0)
+            or (replacement and (type(result.get('nativeBytes')) is not int or result['nativeBytes'] <= 0))
             or type(result.get('sceneBytes')) is not int or result['sceneBytes'] <= 0
             or result.get('hostFailureCount') != 1 or result.get('hostHasCause') is not True
             or 'preview.release_failed' not in result.get('viewCodes', [])
             or result.get('settingsUnchanged') is not True):
         raise RuntimeError('Deferred preview cleanup failure was not reported truthfully')
+
+
+def require_preview_cleanup_modes(data):
+    for name, pending in (('previewCleanupSynchronous', 0), ('previewCleanupReplacement', 1)):
+        result = data.get(name)
+        if not isinstance(result, dict) or result.get('pendingUsesAtClose') != pending:
+            raise RuntimeError('Preview cleanup mode is missing its actual native-use boundary')
+        # The same truthful failure/cause/accounting checks apply to both close paths.
+        _require_preview_cleanup_result(result, pending, name == 'previewCleanupReplacement')
+        if name == 'previewCleanupSynchronous':
+            if result.get('completedDuringClose') is not True or result.get('viewState') != 'CLOSED':
+                raise RuntimeError('Synchronous preview cleanup did not settle exactly once while closed')
+        elif (result.get('viewState') != 'READY' or result.get('finalNativeBytes') != 0
+              or result.get('finalHostFailureCount') != 1
+              or type(result.get('finalSceneBytes')) is not int or result['finalSceneBytes'] <= 0
+              or any(result.get(key) is not True for key in
+                     ('newerReady', 'newerCauseAbsent', 'newerDisplayed', 'replacementReleased'))):
+            raise RuntimeError('Old preview cleanup failure replaced the newer outcome')
 
 
 def main():
@@ -286,6 +308,7 @@ def main():
         require_preview_combinations(data, fixture)
         require_preview_authority(data)
         require_preview_cleanup_failure(data)
+        require_preview_cleanup_modes(data)
     print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 
