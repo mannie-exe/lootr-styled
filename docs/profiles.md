@@ -16,6 +16,8 @@ Artwork permissions are independent of schema validity. Permission-pending local
 
 The source adapter supplies identity; metadata cannot rename itself. Namespaced IDs use `namespace:path`. Mapping keys and values name complete asset resources, including category and extension, rather than ambiguous model aliases. For example, this 1.21.1 profile declares a model override without an artwork override:
 
+Catalogue details report declared model and artwork entry counts, including zero. Counts describe the descriptor; they do not prove that its assets are valid or applied. If a producer provides no counts, details omit them rather than reporting zero. Browsing uses this cached metadata without compiling the profile. Models and Artwork remain independent selections.
+
 ```json
 {
   "format": 1,
