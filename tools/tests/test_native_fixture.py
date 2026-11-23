@@ -134,6 +134,7 @@ class NativeFixtureTest(unittest.TestCase):
                   'rendererShutdown': receipt, 'previewCombinations': self._combinations(),
                   'previewAuthority': self._authority(), 'previewCleanupFailure': self._cleanup_failure()}
         report.update(self._cleanup_modes())
+        report['previewReviewRequired'] = self._review()
 
         def publish_after_wait(**_):
             (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
@@ -208,6 +209,20 @@ class NativeFixtureTest(unittest.TestCase):
                                              'finalSceneBytes': 1024, 'finalHostFailureCount': 1,
                                              'newerReady': True, 'newerCauseAbsent': True,
                                              'newerDisplayed': True, 'replacementReleased': True}}
+
+    def _review(self):
+        return {**dict.fromkeys(('writeActuallyAllowed', 'reviewBlocksSubmission', 'dirtyPreviewDraw',
+                                'reviewGuardAndDraftPreserved', 'testAndRuntimeSettingsUnchanged'), True),
+                'preparations': 1}
+
+    def test_preview_read_does_not_satisfy_a_required_save_review(self):
+        good = self._review()
+        native_probe.require_preview_review({'previewReviewRequired': good})
+        for key, value in [(k, False) for k in good if k != 'preparations'] + [('preparations', 2)]:
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                native_probe.require_preview_review({'previewReviewRequired': {**good, key: value}})
+        with self.assertRaises(RuntimeError):
+            native_probe.require_preview_review({})
 
     def test_cleanup_modes_keep_exact_once_and_the_actual_newer_outcome(self):
         good = self._cleanup_modes()

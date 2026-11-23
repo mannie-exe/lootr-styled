@@ -262,6 +262,15 @@ def require_preview_cleanup_modes(data):
             raise RuntimeError('Old preview cleanup failure replaced the newer outcome')
 
 
+def require_preview_review(data):
+    result = data.get('previewReviewRequired')
+    facts = ('writeActuallyAllowed', 'reviewBlocksSubmission', 'dirtyPreviewDraw',
+             'reviewGuardAndDraftPreserved', 'testAndRuntimeSettingsUnchanged')
+    if (not isinstance(result, dict) or any(result.get(key) is not True for key in facts)
+            or result.get('preparations') != 1):
+        raise RuntimeError('Required-review preview changed its guard, draft, or source')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=TARGETS, required=True)
@@ -312,6 +321,7 @@ def main():
         require_preview_authority(data)
         require_preview_cleanup_failure(data)
         require_preview_cleanup_modes(data)
+        require_preview_review(data)
     print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 

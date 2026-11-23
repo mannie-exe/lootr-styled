@@ -25,6 +25,11 @@ import net.minecraft.network.chat.Component;
 
 /** Actual Styled preparation with a separately owned test file and controllable native gateway. */
 final class PreviewAuthorityProbe {
+  private final boolean reviewRequired;
+  private final ClientSettings expected;
+  private final AtomicInteger reviews = new AtomicInteger();
+  private design.inherent.reform.edit.DraftRevision reviewRevision;
+  private boolean reviewEdited;
   private final AtomicBoolean mayRead = new AtomicBoolean(true);
   private final AtomicBoolean accepting = new AtomicBoolean(true);
   private final AtomicInteger rejected = new AtomicInteger();
@@ -58,10 +63,23 @@ final class PreviewAuthorityProbe {
   }
 
   PreviewAuthorityProbe(Minecraft mc) throws Exception {
+    this(mc, false);
+  }
+
+  PreviewAuthorityProbe(Minecraft mc, boolean reviewRequired) throws Exception {
+    this.reviewRequired = reviewRequired;
+    expected =
+        reviewRequired
+            ? new ClientSettings(
+                true, ClientSettings.DEFAULT, ClientSettings.VANILLA, ClientSettings.Fresh.AUTO)
+            : ClientSettings.DEFAULTS;
     parent = NativeUi.current();
     runtimeFile = ClientRuntime.configuration().root().resolve("settings.json");
     runtimeOriginal = Files.readAllBytes(runtimeFile);
-    var config = mc.gameDirectory.toPath().resolve("permission-owner/config");
+    var config =
+        mc.gameDirectory
+            .toPath()
+            .resolve(reviewRequired ? "review-owner/config" : "permission-owner/config");
     file = config.resolve("lootr_styled/settings.json");
     Files.createDirectories(file.getParent());
     // Explicit fixture initialization, before preview admission; never the production owner file.
@@ -84,7 +102,7 @@ final class PreviewAuthorityProbe {
                 throw new IllegalStateException("Actual client thread required");
             },
             OwnerContext.Limits.STANDARD);
-    access = context.access(mayRead::get, () -> false);
+    access = context.access(mayRead::get, () -> reviewRequired);
     var limits =
         new GraphicLimits(
             16 * 1024 * 1024, 32 * 1024 * 1024, 16 * 1024 * 1024, 256, 128 * 1024 * 1024);
@@ -132,7 +150,7 @@ final class PreviewAuthorityProbe {
             Component.literal("Read-only preview control"),
             () ->
                 new ClientForm.Availability(
-                    true, false, Component.literal("Test-owned read-only file")),
+                    true, reviewRequired, Component.literal("Test-owned preview file")),
             previous ->
                 ClientEditors.open(
                     context,
@@ -152,9 +170,35 @@ final class PreviewAuthorityProbe {
                                 Component.literal("Save reviewed"),
                                 Component.literal("Save and close")))),
             Optional.empty());
-    workflow =
-        ClientEditingWorkflow.open(
-            parent, Component.literal("Preview authority control"), List.of(form));
+    if (reviewRequired) {
+      var route = StyleSettingsStore.DEFINITION.id();
+      var layout =
+          new ClientWorkflowLayout(
+              List.of(
+                  new ClientWorkflowLayout.Group(
+                      Component.literal("Review owner"),
+                      List.of(
+                          new ClientWorkflowLayout.Placement(
+                              route, route, Component.literal("Appearance"), Optional.empty())),
+                      List.of())),
+              List.of(
+                  new ClientWorkflowLayout.ReviewScope(
+                      DocumentId.parse("lootr_styled:verification/review"),
+                      Component.literal("Review before saving"),
+                      Set.of(route),
+                      Set.of(),
+                      true,
+                      ignored -> {
+                        reviews.incrementAndGet();
+                        return design.inherent.reform.operation.DocumentBatch.Check.VALID;
+                      })));
+      workflow =
+          ClientEditingWorkflow.open(
+              parent, Component.literal("Preview review control"), List.of(form), layout);
+    } else
+      workflow =
+          ClientEditingWorkflow.open(
+              parent, Component.literal("Preview authority control"), List.of(form));
     NativeUi.open(workflow.screen());
     workflow.show(StyleSettingsStore.DEFINITION.id());
     editor = workflow.editor(StyleSettingsStore.DEFINITION);
@@ -201,7 +245,7 @@ final class PreviewAuthorityProbe {
                           if (!(value instanceof GraphicScenePreparation.Ready))
                             throw new IllegalStateException(
                                 "The actual domain provider was not ready");
-                          if (!request.input().candidate().value().equals(ClientSettings.DEFAULTS))
+                          if (!request.input().candidate().value().equals(expected))
                             throw new IllegalStateException(
                                 "Read-only capture lost part of its saved candidate");
                           prepared.incrementAndGet();
@@ -225,13 +269,42 @@ final class PreviewAuthorityProbe {
           .form()
           .fieldControl(design.inherent.reform.definition.FieldPath.ROOT.field("models"))
           .isEmpty()) return null;
-      try {
+      if (reviewRequired && !reviewEdited) {
+        reviewEdited = true;
+        var snapshot = editor.view().snapshot().orElseThrow();
+        pending =
+            DocumentActions.result(
+                    editor
+                        .actions()
+                        .edit(
+                            EntryPoint.GUI,
+                            new design.inherent.reform.edit.DraftEdit(
+                                snapshot.target(
+                                    design.inherent.reform.definition.FieldPath.ROOT.field(
+                                        "artwork")),
+                                new design.inherent.reform.edit.DraftEdit.SetRaw(
+                                    ClientSettings.VANILLA.toString()))))
+                .toCompletableFuture();
+        return null;
+      }
+      if (reviewRequired) {
         access.require(OwnerContext.Right.WRITE);
-        throw new IllegalStateException("Test owner unexpectedly grants WRITE");
-      } catch (PolicyRefusal denied) {
-        result.addProperty(
-            "actualWriteDenied",
-            denied.report().issues().stream().anyMatch(i -> i.code().equals("owner.permission")));
+        if (!editor.view().dirty() || editor.canSubmit())
+          throw new IllegalStateException(
+              "Required-review owner did not retain its dirty submission guard");
+        result.addProperty("writeActuallyAllowed", true);
+        result.addProperty("reviewBlocksSubmission", true);
+        reviewRevision =
+            design.inherent.reform.edit.DraftRevision.of(editor.view().snapshot().orElseThrow());
+      } else {
+        try {
+          access.require(OwnerContext.Right.WRITE);
+          throw new IllegalStateException("Test owner unexpectedly grants WRITE");
+        } catch (PolicyRefusal denied) {
+          result.addProperty(
+              "actualWriteDenied",
+              denied.report().issues().stream().anyMatch(i -> i.code().equals("owner.permission")));
+        }
       }
       subject =
           provider
@@ -270,6 +343,12 @@ final class PreviewAuthorityProbe {
     if (stage == 2) {
       remount();
       if (ticks < 8 || GraphicDrawAudit.state().rendered() <= draws) return null;
+      if (reviewRequired) {
+        result.addProperty("dirtyPreviewDraw", true);
+        view.close();
+        stage = 10;
+        return null;
+      }
       result.addProperty("readOnlyDomainDraw", true);
       atRevocation = prepared.get();
       mayRead.set(false);
@@ -384,6 +463,30 @@ final class PreviewAuthorityProbe {
       result.addProperty(
           "scope",
           "Separate test-owned file/access/executor with the actual Styled provider; not production local-file permission policy");
+      return result;
+    }
+    if (stage == 10) {
+      if (!released()) return null;
+      if (editor.canSubmit()
+          || !editor.view().dirty()
+          || reviews.get() != 0
+          || !reviewRevision.equals(
+              design.inherent.reform.edit.DraftRevision.of(editor.view().snapshot().orElseThrow()))
+          || !Arrays.equals(original, Files.readAllBytes(file))
+          || !Arrays.equals(runtimeOriginal, Files.readAllBytes(runtimeFile)))
+        throw new IllegalStateException(
+            "Read preview changed the actual required review, draft, or source");
+      result.addProperty("reviewGuardAndDraftPreserved", true);
+      result.addProperty("testAndRuntimeSettingsUnchanged", true);
+      result.addProperty("preparations", prepared.get());
+      if (prepared.get() != 1)
+        throw new IllegalStateException("Review preview prepared without an explicit request");
+      SharedGraphicHostProbe.mount(workflow.screen(), widget, false);
+      host.close();
+      workflow.close();
+      references.close();
+      context.close();
+      NativeUi.open(parent);
       return result;
     }
     return null;

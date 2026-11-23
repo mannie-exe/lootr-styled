@@ -31,6 +31,8 @@ The host fixture also stages every built-in Models/Artwork combination without s
 
 A separate owner in that fixture uses its own settings file, read-only access, and a controllable editor executor with the same domain definition and provider. It checks read-only drawing, read revocation before publication and after preparation, and retirement after a submitted draw while the old executor rejects work. The observer waits for automatic native release before closing the remaining fixture objects. Both its file and the runtime settings must remain unchanged. This does not introduce permissions or another writer into the production local-file binding.
 
+Its required-review variant grants WRITE but requires the workflow's save review. It stages a complete unsaved candidate, draws it through the actual provider, and checks that the submission guard, draft revision, and files remain unchanged. Previewing must not invoke the save-review validator or satisfy a save review; a submission guard is not READ authority.
+
 The host fixture also injects a post-cleanup failure for an exact native lease, after its real GPU deletion method returns. Separate cases check deferred release after view closure, immediate release without an outstanding draw, and release of an old interest during replacement. They require truthful failed-release state, retained output accounting, exactly one host diagnostic, a closed view remaining closed, and a newer result retaining its own outcome. The healthy replacement must still retire. This fault hook is verification-only and stays unarmed for unrelated graphics. It does not simulate uncertain or partial GPU deletion, and the fixture never calls a fabricated native teardown to clear a failure.
 
 ### Prism pack fixtures

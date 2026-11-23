@@ -152,6 +152,12 @@ public final class NativeProbe {
         var observations = authority.tick(mc);
         if (observations == null) return;
         REPORT.add("previewAuthority", observations);
+        authority = new PreviewAuthorityProbe(mc, true);
+        stage = 17;
+      } else if (stage == 17) {
+        var observations = authority.tick(mc);
+        if (observations == null) return;
+        REPORT.add("previewReviewRequired", observations);
         cleanupFailure = new PreviewCleanupFailureProbe();
         stage = 15;
       } else if (stage == 15) {
