@@ -12,7 +12,7 @@ import javax.imageio.stream.MemoryCacheImageInputStream;
 
 /** Inspect dimensions before decoding; decoded pixels have a separate aggregate budget. */
 public final class TextureImages {
-  private static final int MAX_PIXELS = 16 * 1024 * 1024;
+  public static final int MAX_PIXELS = 16 * 1024 * 1024;
   private final Map<String, Size> admitted = new HashMap<>();
   private int pixels;
 
@@ -66,7 +66,11 @@ public final class TextureImages {
     if (!json.get("animation").isJsonObject())
       throw new IllegalArgumentException("Invalid animation metadata");
     var animation = json.getAsJsonObject("animation");
-    int frameWidth = integer(animation, "width", image.width());
+    int frameWidth =
+        integer(
+            animation,
+            "width",
+            animation.has("height") ? image.width() : Math.min(image.width(), image.height()));
     int frameHeight =
         integer(
             animation,

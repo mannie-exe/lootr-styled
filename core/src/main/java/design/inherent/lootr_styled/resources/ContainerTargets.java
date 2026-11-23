@@ -73,6 +73,11 @@ public enum ContainerTargets {
     return Map.copyOf(result);
   }
 
+  public ResourceId chestArtwork(boolean trapped, boolean looted) {
+    return ResourceId.parse(
+        "lootr:" + chestDirectory + chestNames.get((trapped ? 2 : 0) + (looted ? 1 : 0)) + ".png");
+  }
+
   public List<Chest> chests() {
     String prefix = this == LEGACY ? "lootr_lootr_" : "lootr_";
     return List.of(

@@ -6,11 +6,13 @@ import design.inherent.lootr_styled.client.ClientRuntime;
 import design.inherent.lootr_styled.client.NativeUi;
 import design.inherent.lootr_styled.client.StyleApplication;
 import design.inherent.lootr_styled.client.StylePreferences;
+import design.inherent.lootr_styled.client.StylePreviewCapture;
 import design.inherent.lootr_styled.client.StyleSettingsStore;
 import design.inherent.lootr_styled.profile.ClientSettings;
 import design.inherent.lootr_styled.profile.ProfileCodec;
 import design.inherent.reform.definition.FieldPath;
 import design.inherent.reform.edit.DraftEdit;
+import design.inherent.reform.edit.DraftRevision;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
 import design.inherent.reform.minecraft.client.OperationScreen;
@@ -261,6 +263,43 @@ final class UiProbe {
           throw new IllegalStateException("Valid missing identity cannot be submitted");
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Unsaved selection changed settings");
+        var capture =
+            StylePreviewCapture.capture(
+                editor, EntryPoint.GUI, DraftRevision.of(editor.view().snapshot().orElseThrow()));
+        pending =
+            capture
+                .completion()
+                .thenAccept(
+                    input -> {
+                      if (!input.settings().models().toString().equals("missing:kept"))
+                        throw new IllegalStateException(
+                            "Preview capture lost the complete dirty model selection");
+                      if (!StylePreviewCapture.resourceCurrent(input.resourceGeneration()))
+                        throw new IllegalStateException(
+                            "Preview capture returned retired resources");
+                      try {
+                        if (!java.util.Arrays.equals(
+                            originalBytes, Files.readAllBytes(settingsFile)))
+                          throw new IllegalStateException(
+                              "Read-only preview capture wrote settings");
+                      } catch (java.io.IOException error) {
+                        throw new java.util.concurrent.CompletionException(error);
+                      }
+                      result.addProperty("actualReadPreviewCapture", true);
+                      try {
+                        result.add("isolatedChestPreparation", IsolatedChestProbe.inspect(input));
+                      } catch (Exception failure) {
+                        throw new java.util.concurrent.CompletionException(failure);
+                      }
+                      result.addProperty(
+                          "previewResourceGeneration", input.resourceGeneration().toString());
+                      result.addProperty(
+                          "previewNativeInputEpoch", input.input().stamp().nativeInputEpoch());
+                    })
+                .toCompletableFuture();
+        stage = 201;
+      }
+      case 201 -> {
         NativeBindings.press(button(root, "Document actions…"));
         mountTicks = 0;
         stage = 102;
@@ -323,6 +362,10 @@ final class UiProbe {
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Rejected draft partially saved valid siblings");
         result.addProperty("invalidDraftAndSiblingPreserved", true);
+        pending = invalidPreviewCapture();
+        stage = 202;
+      }
+      case 202 -> {
         var manual =
             children(root).stream()
                 .filter(Button.class::isInstance)
@@ -510,6 +553,61 @@ final class UiProbe {
     return DocumentActions.result(
             editor.actions().edit(EntryPoint.GUI, new DraftEdit(snapshot.target(path), action)))
         .toCompletableFuture();
+  }
+
+  private CompletableFuture<Void> invalidPreviewCapture() {
+    var snapshot = editor.view().snapshot().orElseThrow();
+    var allowed =
+        editor.view().validation().issues().stream()
+            .map(design.inherent.reform.validation.Issue::code)
+            .collect(java.util.stream.Collectors.toSet());
+    java.util.function.Consumer<Throwable> inspect =
+        failed -> {
+          while (failed instanceof java.util.concurrent.CompletionException
+              && failed.getCause() != null) failed = failed.getCause();
+          if (!(failed instanceof design.inherent.reform.owner.PolicyRefusal refusal))
+            throw new IllegalStateException(
+                "Preview failed for a reason other than input refusal", failed);
+          boolean inputIssue =
+              refusal.report().issues().stream()
+                  .anyMatch(
+                      issue ->
+                          allowed.contains(issue.code())
+                              || issue.path().equals(MODELS)
+                              || issue.code().equals("preview.input_invalid")
+                              || issue.code().equals("preview.input_unaccepted"));
+          if (!inputIssue)
+            throw new IllegalStateException(
+                "Preview refusal did not identify invalid input", failed);
+          var after = editor.view().snapshot().orElseThrow();
+          if (snapshot.version() != after.version() || snapshot.generation() != after.generation())
+            throw new IllegalStateException("Rejected preview capture changed the draft");
+          try {
+            if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+              throw new IllegalStateException("Rejected preview capture saved a valid sibling");
+          } catch (java.io.IOException error) {
+            throw new java.util.concurrent.CompletionException(error);
+          }
+          result.addProperty("invalidPreviewRefusedWithoutPartialSave", true);
+          result.addProperty(
+              "invalidPreviewRefusalCode", refusal.report().issues().getFirst().code());
+        };
+    try {
+      var capture = StylePreviewCapture.capture(editor, EntryPoint.GUI, DraftRevision.of(snapshot));
+      return capture
+          .completion()
+          .handle(
+              (input, failed) -> {
+                if (failed == null)
+                  throw new IllegalStateException("Invalid draft produced a preview input");
+                inspect.accept(failed);
+                return (Void) null;
+              })
+          .toCompletableFuture();
+    } catch (design.inherent.reform.owner.PolicyRefusal refused) {
+      inspect.accept(refused);
+      return CompletableFuture.completedFuture(null);
+    }
   }
 
   private void assertModel(String id) {

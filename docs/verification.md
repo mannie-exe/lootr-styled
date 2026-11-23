@@ -31,7 +31,7 @@ The pinned EMF 3.3.12/ETF 7.2.7/Fresh Objects 2.1.2 inputs and their hashes are 
 
 ## Development settings interface
 
-Development builds use the public re:form 0.3.0 inputs in [the pin manifest](../gradle/reform.json). Anonymous release downloads and a fresh Gradle-home resolver verify all four inputs without a staged repository or local fallback. The library's owned classes match the qualified dev.10 implementation.
+The retained `0.2.0-ux-dev.1` settings review used public re:form 0.3.0. The current engineering dependency is recorded separately in [the pin manifest](../gradle/reform.json). Anonymous release downloads and a fresh Gradle-home resolver verify all four inputs without a staged repository or local fallback. The library's owned classes match the qualified dev.10 implementation.
 
 The recorded `0.2.0-ux-dev.1` settings review passed 582 Java tests and 27 tooling checks. It preserves the compiled settings definition, public codec, assets, paths, defaults, and profile formats. Its actual macOS NeoForge 1.21.1 clients pass at GUI scales 2 and 4 and exit normally. Checks cover source browsing, Defaults and Undo over the same draft, invalid-ID retention and native repair, refusal of partial submission, save followed by the matching published resource generation, export of twelve PNGs and four barrel bindings, and restoration of settings bytes. Logical 320×240 and 900×540 reflows retain related-row expansion and narrow stacking.
 

@@ -18,6 +18,27 @@ class LocalFilesTest {
   @TempDir Path temp;
 
   @Test
+  void repeatedProfileEnumerationSharesTheSnapshotAndStillRefusesDirectoryChanges()
+      throws Exception {
+    Files.createDirectory(temp.resolve("first"));
+    try (var local = LocalFiles.open(temp)) {
+      assertEquals(java.util.List.of("first"), local.profiles());
+      assertEquals(java.util.List.of("first"), local.profiles());
+      Files.createDirectory(temp.resolve("second"));
+      assertThrows(IOException.class, local::profiles);
+    }
+  }
+
+  @Test
+  void cachedProfileNamesDoNotOutliveTheirReadScope() throws Exception {
+    var local = LocalFiles.open(temp);
+    local.profiles();
+    local.close();
+    assertThrows(IOException.class, local::profiles);
+    assertThrows(IOException.class, local::validateCurrent);
+  }
+
+  @Test
   void profileSeedingPreservesSettingsAndInvalidDrafts() throws Exception {
     var files = new ProfileDirectory(temp);
     files.seed();

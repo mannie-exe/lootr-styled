@@ -26,6 +26,7 @@ public final class GeneratedPack implements PackResources {
           PackSource.DEFAULT,
           Optional.empty());
   private final ResourceGeneration generation;
+  private final design.inherent.lootr_styled.resources.ResourceAccess lowerSources;
   private final java.util.UUID id = java.util.UUID.randomUUID();
   private final java.util.concurrent.atomic.AtomicBoolean closed =
       new java.util.concurrent.atomic.AtomicBoolean();
@@ -33,8 +34,23 @@ public final class GeneratedPack implements PackResources {
 
   private GeneratedPack(List<PackResources> lower) {
     var sources = new MultiPackResourceManager(PackType.CLIENT_RESOURCES, lower);
-    prepared = ClientRuntime.prepareAsync(new NativeSources(sources), () -> !closed.get());
+    var nativeSources = new NativeSources(sources);
+    lowerSources = new NativeSources(sources, true).guarded(this::requireCurrent);
+    prepared = ClientRuntime.prepareAsync(nativeSources, () -> !closed.get());
     generation = new ResourceGeneration(() -> prepared.join().resources());
+  }
+
+  /**
+   * Borrow only lower resources for isolated preparation; generated output is never its own input.
+   */
+  design.inherent.lootr_styled.resources.ResourceAccess lowerSources() {
+    requireCurrent();
+    return lowerSources;
+  }
+
+  private void requireCurrent() {
+    if (closed.get())
+      throw new java.util.concurrent.CancellationException("Retired resource generation");
   }
 
   public java.util.UUID id() {

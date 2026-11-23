@@ -113,34 +113,7 @@ public final class ClientRuntime {
           if (!current.getAsBoolean())
             throw new java.util.concurrent.CancellationException("Retired resource generation");
         };
-    var scoped =
-        new ResourceAccess() {
-          private Source guarded(Source source) {
-            return new Source(
-                source.origin(),
-                source.description(),
-                () -> {
-                  checkpoint.run();
-                  return source.opener().open();
-                });
-          }
-
-          @Override
-          public Optional<Source> find(design.inherent.lootr_styled.ResourceId id) {
-            checkpoint.run();
-            return access.find(id).map(this::guarded);
-          }
-
-          @Override
-          public java.util.Map<design.inherent.lootr_styled.ResourceId, Source> list(
-              String directory) {
-            checkpoint.run();
-            var result =
-                new java.util.LinkedHashMap<design.inherent.lootr_styled.ResourceId, Source>();
-            access.list(directory).forEach((id, source) -> result.put(id, guarded(source)));
-            return java.util.Map.copyOf(result);
-          }
-        };
+    var scoped = access.guarded(checkpoint);
     return CompletableFuture.supplyAsync(
         () -> {
           checkpoint.run();

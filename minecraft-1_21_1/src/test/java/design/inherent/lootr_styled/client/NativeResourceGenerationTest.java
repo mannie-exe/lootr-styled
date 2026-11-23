@@ -89,6 +89,43 @@ class NativeResourceGenerationTest {
   }
 
   @Test
+  void isolatedPreparationBorrowsOnlyLowerSourcesAndRetiresWithoutClosingThem() throws Exception {
+    var lower = inputs();
+    try (var manager = manager(lower)) {
+      var target = TARGETS.barrels().getFirst().target();
+      var loaded = manager.getResource(ResourceLocation.parse(target.toString())).orElseThrow();
+      assertEquals("lootr_styled/generated", loaded.sourcePackId());
+      byte[] saved = Files.readAllBytes(config.resolve("lootr_styled/settings.json"));
+      var generated =
+          manager
+              .listPacks()
+              .filter(GeneratedPack.class::isInstance)
+              .map(GeneratedPack.class::cast)
+              .findFirst()
+              .orElseThrow();
+      var sources = generated.lowerSources();
+      var found = sources.find(target).orElseThrow();
+      var listed = sources.list("models/block").get(target);
+      assertNotNull(listed);
+      assertEquals(
+          design.inherent.lootr_styled.resources.ResourceAccess.Origin.LOOTR, found.origin());
+      try (var stream = found.opener().open()) {
+        assertEquals("{}", new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+      }
+      generated.close();
+      assertThrows(java.util.concurrent.CancellationException.class, generated::lowerSources);
+      assertThrows(java.util.concurrent.CancellationException.class, () -> sources.find(target));
+      assertThrows(
+          java.util.concurrent.CancellationException.class, () -> sources.list("models/block"));
+      assertThrows(java.util.concurrent.CancellationException.class, () -> found.opener().open());
+      assertThrows(java.util.concurrent.CancellationException.class, () -> listed.opener().open());
+      assertArrayEquals(saved, Files.readAllBytes(config.resolve("lootr_styled/settings.json")));
+      for (var pack : lower) assertEquals(0, ((TestPack) pack).closes);
+    }
+    for (var pack : lower) assertEquals(1, ((TestPack) pack).closes);
+  }
+
+  @Test
   void defaultArtworkUsesPackagedImagesAndVanillaSelectionRetainsNativeSources() throws Exception {
     try (var manager = manager(inputs())) {
       for (var entry : TARGETS.defaultArtwork().entrySet()) {

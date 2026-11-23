@@ -28,6 +28,9 @@ public final class LocalFiles implements AutoCloseable {
   private final DirectoryStream<Path> stream;
   private final SecureDirectoryStream<Path> secure;
   private final Map<Path, byte[]> reads = new HashMap<>();
+  private List<String> profileNames;
+  private Stamp listingIdentity;
+  private boolean closed;
 
   private LocalFiles(
       Path rootPath,
@@ -57,6 +60,11 @@ public final class LocalFiles implements AutoCloseable {
 
   public List<String> profiles() throws IOException {
     validateRoot();
+    if (profileNames != null) {
+      validateListing();
+      return profileNames;
+    }
+    listingIdentity = rootStamp();
     var result = new ArrayList<String>();
     int count = 0;
     for (var path : stream) {
@@ -68,7 +76,9 @@ public final class LocalFiles implements AutoCloseable {
       if (attrs.isDirectory() || attrs.isSymbolicLink()) result.add(name);
       if (result.size() > 64) throw new IOException("Local profile catalogue exceeds 64 profiles");
     }
-    return result.stream().sorted().toList();
+    validateListing();
+    profileNames = result.stream().sorted().toList();
+    return profileNames;
   }
 
   public Optional<byte[]> read(Path relative, int maxBytes) throws IOException {
@@ -172,11 +182,22 @@ public final class LocalFiles implements AutoCloseable {
   }
 
   private void validateRoot() throws IOException {
+    if (closed) throw new IOException("Local profile snapshot is closed");
     var current =
         Files.readAttributes(rootPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     if (!current.isDirectory()
         || !java.util.Objects.equals(current.fileKey(), rootIdentity.fileKey()))
       throw new IOException("Local profile root changed");
+  }
+
+  private Stamp rootStamp() throws IOException {
+    return stamp(
+        Files.readAttributes(rootPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS));
+  }
+
+  private void validateListing() throws IOException {
+    if (!listingIdentity.equals(rootStamp()))
+      throw new IOException("Local profile catalogue changed during preparation");
   }
 
   private static void regular(BasicFileAttributes attrs, int maxBytes) throws IOException {
@@ -185,12 +206,15 @@ public final class LocalFiles implements AutoCloseable {
   }
 
   public void validateCurrent() throws IOException {
+    validateRoot();
+    if (profileNames != null) validateListing();
     for (var entry : reads.entrySet()) {
       var bytes = read(entry.getKey(), 2 * 1024 * 1024, false);
       if (bytes.isEmpty()
           || !java.util.Arrays.equals(entry.getValue(), digest(bytes.orElseThrow())))
         throw new IOException("Local profile changed during preparation");
     }
+    if (profileNames != null) validateListing();
   }
 
   private static Stamp stamp(BasicFileAttributes value) {
@@ -217,6 +241,7 @@ public final class LocalFiles implements AutoCloseable {
 
   @Override
   public void close() throws IOException {
+    closed = true;
     stream.close();
   }
 

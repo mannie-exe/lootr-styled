@@ -5,6 +5,12 @@ def versionDirectory = minecraftTarget == '26.3' ? 'minecraft-26_3' : 'minecraft
 def loaderKind = project.name.startsWith('fabric') ? 'fabric' : 'neoforge'
 ext.minecraftTarget = minecraftTarget
 ext.platform = loaderKind
+if (minecraftTarget == '26.3') {
+    // The game's JOML1.10.9 Matrix4fc is classmajor46 with Java8 type annotations. Java25
+    // reports this during VertexConsumer implementation; source-level SuppressWarnings cannot
+    // suppress external class completion. Keep Werror/all other lint, and never rewrite its JAR.
+    tasks.withType(JavaCompile).configureEach { options.compilerArgs.add('-Xlint:-classfile') }
+}
 base { archivesName = "lootr-styled-${minecraftTarget}-${loaderKind}" }
 sourceSets.main.java.srcDir rootProject.file("${versionDirectory}/src/main/java")
 sourceSets.main.java.srcDir rootProject.file("minecraft-common/src/main/java")
