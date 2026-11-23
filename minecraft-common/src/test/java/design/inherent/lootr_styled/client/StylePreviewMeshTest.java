@@ -93,6 +93,79 @@ class StylePreviewMeshTest {
   }
 
   @Test
+  void chestBundleRetainsTheNativeMaterialAndCapturedArtworkBinding() throws Exception {
+    var input = NativeChestPreviewTest.input(true, true, 0);
+    var mesh = NativeChestPreview.bake(input, LIMITS, () -> {});
+    var bundle =
+        StylePreviewMesh.chest(input, mesh, LIMITS, StylePreviewMeshTest::material, () -> {});
+    assertSame(mesh, bundle.mesh());
+    assertEquals(java.util.Set.of(NativeChestPreview.MATERIAL), bundle.materials().keySet());
+    assertEquals(java.util.Map.of(NativeChestPreview.MATERIAL, input.texture()), bundle.sources());
+    try (var stream = input.resources().open(input.texture()).orElseThrow()) {
+      assertArrayEquals(
+          stream.readAllBytes(), bundle.textures().get(NativeChestPreview.MATERIAL).png());
+    }
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            StylePreviewMesh.chest(
+                input,
+                mesh,
+                LIMITS,
+                ignored -> material(DocumentId.parse("example:foreign")),
+                () -> {}));
+  }
+
+  @Test
+  void emptyChestProducesNoTextureBindingsOrMaterialPreparation() throws Exception {
+    var input = NativeChestPreviewTest.input(false, false, 0);
+    var mesh =
+        new design.inherent.reform.presentation.graphics.GraphicMesh(
+            LIMITS, java.util.List.of(), java.util.List.of());
+    var bundle =
+        StylePreviewMesh.chest(
+            input,
+            mesh,
+            LIMITS,
+            ignored -> {
+              throw new AssertionError("An invisible chest must not prepare a material");
+            },
+            () -> {});
+    assertTrue(bundle.mesh().isEmpty());
+    assertTrue(bundle.materials().isEmpty());
+    assertTrue(bundle.textures().isEmpty());
+    assertTrue(bundle.sources().isEmpty());
+  }
+
+  @Test
+  void textureResourceLimitRefusesBeforeMaterialPreparation() throws Exception {
+    var source =
+        NativeBarrelPreview.bake(NativeBarrelPreviewTest.inputs(false, false, false), () -> {});
+    var calls = new AtomicInteger();
+    var limit =
+        new GraphicLimits(
+            LIMITS.inputBytes(),
+            LIMITS.outputBytes(),
+            LIMITS.decodedPixels(),
+            1,
+            LIMITS.nativeBytes());
+    var failure =
+        assertThrows(
+            PolicyRefusal.class,
+            () ->
+                StylePreviewMesh.convert(
+                    source,
+                    limit,
+                    id -> {
+                      calls.incrementAndGet();
+                      return material(id);
+                    },
+                    () -> {}));
+    assertEquals("preview.budget", failure.report().issues().getFirst().code());
+    assertEquals(0, calls.get());
+  }
+
+  @Test
   void smallOutputBudgetRefusesBeforeMaterialPreparation() throws Exception {
     var source =
         NativeBarrelPreview.bake(NativeBarrelPreviewTest.inputs(false, false, true), () -> {});

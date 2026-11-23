@@ -17,8 +17,7 @@ class NativeChestPreviewTest {
       new GraphicLimits(
           16 * 1024 * 1024, 16 * 1024 * 1024, 16 * 1024 * 1024, 256, 128 * 1024 * 1024);
 
-  private static ChestPreviewInputs input(boolean trapped, boolean looted, float lid)
-      throws Exception {
+  static ChestPreviewInputs input(boolean trapped, boolean looted, float lid) throws Exception {
     return ChestPreviewInputs.capture(
         NativeUi.targets(),
         new ChestPreviewInputs.Subject(ClientSettings.DEFAULTS, trapped, looted, lid),

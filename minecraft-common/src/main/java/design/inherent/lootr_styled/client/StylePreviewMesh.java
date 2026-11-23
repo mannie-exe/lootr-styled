@@ -2,6 +2,8 @@ package design.inherent.lootr_styled.client;
 
 import design.inherent.lootr_styled.ResourceId;
 import design.inherent.lootr_styled.resources.BarrelPreviewMesh;
+import design.inherent.lootr_styled.resources.ChestPreviewInputs;
+import design.inherent.lootr_styled.resources.FrozenResources;
 import design.inherent.lootr_styled.resources.TextureImages;
 import design.inherent.reform.definition.DocumentId;
 import design.inherent.reform.owner.PolicyRefusal;
@@ -45,6 +47,10 @@ record StylePreviewMesh(
     if (geometryBytes > limits.outputBytes())
       throw new PolicyRefusal(
           "preview.budget", "The barrel mesh exceeds the preview output budget");
+    if (source.faces().stream().map(BarrelPreviewMesh.Face::texture).distinct().count()
+        > limits.resources())
+      throw new PolicyRefusal(
+          "preview.budget", "The barrel exceeds the preview texture-count budget");
     var vertices = new ArrayList<GraphicMesh.Vertex>();
     var triangles = new ArrayList<GraphicMesh.Triangle>();
     var materials = new HashMap<DocumentId, GraphicMaterial>();
@@ -61,23 +67,12 @@ record StylePreviewMesh(
               "lootr_styled:preview/"
                   + TextureImages.hash(face.texture().toString().getBytes(StandardCharsets.UTF_8)));
       if (!textures.containsKey(id)) {
-        byte[] png;
-        try (var stream = source.inputs().resources().open(face.texture()).orElseThrow()) {
-          png = stream.readAllBytes();
-        }
-        var companion =
-            new ResourceId(face.texture().namespace(), face.texture().path() + ".mcmeta");
-        Optional<byte[]> metadata = Optional.empty();
-        if (source.inputs().resources().contains(companion))
-          try (var stream = source.inputs().resources().open(companion).orElseThrow()) {
-            metadata = Optional.of(stream.readAllBytes());
-          }
         var material = java.util.Objects.requireNonNull(materialPolicy.apply(id));
         if (!material.texture().equals(id))
           throw new IllegalArgumentException(
               "Preview material changed its captured texture binding");
         materials.put(id, material);
-        textures.put(id, new GraphicTexture(limits, id, png, metadata));
+        textures.put(id, texture(source.inputs().resources(), face.texture(), id, limits));
         sources.put(id, face.texture());
       }
       var normal = GraphicLighting.Direction.valueOf(face.direction().toUpperCase(Locale.ROOT));
@@ -119,5 +114,47 @@ record StylePreviewMesh(
     checkpoint.run();
     var mesh = new GraphicMesh(limits, vertices, triangles);
     return new StylePreviewMesh(mesh, materials, textures, sources);
+  }
+
+  static StylePreviewMesh chest(
+      ChestPreviewInputs source,
+      GraphicMesh mesh,
+      GraphicLimits limits,
+      Function<DocumentId, GraphicMaterial> materialPolicy,
+      Runnable checkpoint)
+      throws IOException {
+    checkpoint.run();
+    if (source.resources().byteSize() > limits.inputBytes()
+        || mesh.geometryBytes() > limits.outputBytes())
+      throw new PolicyRefusal(
+          "preview.budget", "The chest exceeds its preview input or output budget");
+    if (mesh.isEmpty()) return new StylePreviewMesh(mesh, Map.of(), Map.of(), Map.of());
+    if (!mesh.materials().equals(java.util.Set.of(NativeChestPreview.MATERIAL)))
+      throw new IllegalArgumentException("The chest mesh has unknown material bindings");
+    var id = NativeChestPreview.MATERIAL;
+    var material = java.util.Objects.requireNonNull(materialPolicy.apply(id));
+    if (!material.texture().equals(id))
+      throw new IllegalArgumentException(
+          "Preview material changed its captured chest texture binding");
+    var image = texture(source.resources(), source.texture(), id, limits);
+    checkpoint.run();
+    return new StylePreviewMesh(
+        mesh, Map.of(id, material), Map.of(id, image), Map.of(id, source.texture()));
+  }
+
+  private static GraphicTexture texture(
+      FrozenResources resources, ResourceId source, DocumentId id, GraphicLimits limits)
+      throws IOException {
+    byte[] png;
+    try (var stream = resources.open(source).orElseThrow()) {
+      png = stream.readAllBytes();
+    }
+    var companion = new ResourceId(source.namespace(), source.path() + ".mcmeta");
+    Optional<byte[]> metadata = Optional.empty();
+    if (resources.contains(companion))
+      try (var stream = resources.open(companion).orElseThrow()) {
+        metadata = Optional.of(stream.readAllBytes());
+      }
+    return new GraphicTexture(limits, id, png, metadata);
   }
 }
