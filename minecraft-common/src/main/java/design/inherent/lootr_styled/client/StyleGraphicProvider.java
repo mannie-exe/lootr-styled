@@ -47,6 +47,13 @@ final class StyleGraphicProvider
   private final Function<DocumentId, GraphicMaterial> chestMaterial;
   private final BiFunction<BarrelPreviewMesh.Face, DocumentId, GraphicMaterial> barrelMaterial;
 
+  StyleGraphicProvider(GraphicLimits limits) {
+    this(
+        limits,
+        texture -> StyleStillMaterials.material(texture, GraphicMaterial.Alpha.OPAQUE),
+        (face, texture) -> StyleStillMaterials.material(texture, GraphicMaterial.Alpha.OPAQUE));
+  }
+
   /** Material functions must be frozen domain policy, with no live renderer or resource handles. */
   StyleGraphicProvider(
       GraphicLimits limits,
@@ -111,6 +118,20 @@ final class StyleGraphicProvider
                                   source.ordinaryChestIsolated(),
                                   checkpoint);
                           var baked = NativeBarrelPreview.bake(input, work.ledger(), checkpoint);
+                          facts.add(
+                              fact(
+                                  "native_layers",
+                                  "Native model layers",
+                                  baked.faces().stream()
+                                      .map(
+                                          face ->
+                                              face.nativeLayer()
+                                                  .map(Enum::name)
+                                                  .orElse("Unreported"))
+                                      .distinct()
+                                      .sorted()
+                                      .collect(java.util.stream.Collectors.joining(", "))
+                                      .transform(value -> value.isEmpty() ? "No faces" : value)));
                           mesh =
                               StylePreviewMesh.convert(
                                   baked, request.limits(), barrelMaterial, checkpoint);
@@ -157,6 +178,11 @@ final class StyleGraphicProvider
                         local.validateCurrent();
                       }
                       facts.add(fact("world", "World effects", "Not simulated"));
+                      facts.add(
+                          fact(
+                              "still_policy",
+                              "Still rendering",
+                              "First declared frame; nearest filtering, back-face culling, no world shaders"));
                       facts.add(fact("models", "Requested models", settings.models().toString()));
                       facts.add(
                           fact("artwork", "Requested artwork", settings.artwork().toString()));
@@ -166,7 +192,11 @@ final class StyleGraphicProvider
                             "The preview resource diagnostics exceed their output allowance");
                       for (int i = 0; i < diagnostics.size(); i++)
                         facts.add(fact("resource/" + i, "Resource", diagnostics.get(i)));
-                      var scene = mesh.prepare(work.ledger(), METADATA, checkpoint);
+                      var scene =
+                          StyleStillMaterials.classify(
+                              mesh.prepare(work.ledger(), METADATA, checkpoint),
+                              request.limits(),
+                              checkpoint);
                       checkpoint.run();
                       return (GraphicScenePreparation)
                           new GraphicScenePreparation.Ready(

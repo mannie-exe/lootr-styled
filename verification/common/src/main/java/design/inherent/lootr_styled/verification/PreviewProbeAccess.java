@@ -301,11 +301,53 @@ final class PreviewProbeAccess {
                                   + target);
                         verifiedImages.incrementAndGet();
                       }
+                      verifyStillMaterials(ready.graphic().scene());
                       return result;
                     });
           }
         };
     return new HostProvider(observed, threads, calls, clientCalls, verifiedImages);
+  }
+
+  private static void verifyStillMaterials(
+      design.inherent.reform.presentation.graphics.GraphicScene scene) {
+    for (var triangle : scene.mesh().triangles()) {
+      var material = scene.materials().get(triangle.material());
+      var pixels = scene.textures().get(material.texture());
+      var vertices = scene.mesh().vertices();
+      var a = vertices.get(triangle.a());
+      var b = vertices.get(triangle.b());
+      var c = vertices.get(triangle.c());
+      double u0 = Math.min(a.u(), Math.min(b.u(), c.u())),
+          u1 = Math.max(a.u(), Math.max(b.u(), c.u()));
+      double v0 = Math.min(a.v(), Math.min(b.v(), c.v())),
+          v1 = Math.max(a.v(), Math.max(b.v(), c.v()));
+      int left = (int) Math.max(0, Math.min(pixels.width() - 1, Math.floor(u0 * pixels.width())));
+      int top = (int) Math.max(0, Math.min(pixels.height() - 1, Math.floor(v0 * pixels.height())));
+      int right =
+          (int) Math.max(left + 1, Math.min(pixels.width(), Math.ceil(u1 * pixels.width())));
+      int bottom =
+          (int) Math.max(top + 1, Math.min(pixels.height(), Math.ceil(v1 * pixels.height())));
+      boolean clear = false, partial = false;
+      for (int y = top; y < bottom; y++)
+        for (int x = left; x < right; x++) {
+          int alpha = pixels.pixel(x, y) >>> 24;
+          clear |= alpha == 0;
+          partial |= alpha > 0 && alpha < 255;
+        }
+      var expected =
+          partial
+              ? design.inherent.reform.presentation.graphics.GraphicMaterial.Alpha.TRANSLUCENT
+              : clear
+                  ? design.inherent.reform.presentation.graphics.GraphicMaterial.Alpha.CUTOUT
+                  : design.inherent.reform.presentation.graphics.GraphicMaterial.Alpha.OPAQUE;
+      if (material.alpha() != expected)
+        throw new IllegalStateException(
+            "The actual provider did not classify its displayed still: "
+                + material
+                + " expected "
+                + expected);
+    }
   }
 
   static void pose(ModelPart root, float lid) {
