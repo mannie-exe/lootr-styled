@@ -58,10 +58,15 @@ class StylePreviewSceneTest {
 
   @Test
   void actualDefaultFramesUseNativeDecodeWithoutChangingFrozenInputOrPublishing() throws Exception {
+    var ledger = new GraphicLedger(LIMITS);
     var baked =
-        NativeBarrelPreview.bake(NativeBarrelPreviewTest.inputs(false, true, true), () -> {});
+        NativeBarrelPreview.bake(
+            NativeBarrelPreviewTest.inputs(false, true, true), ledger, () -> {});
     var source = StylePreviewMesh.convert(baked, LIMITS, StylePreviewSceneTest::material, () -> {});
-    var frames = source.prepare(new GraphicLedger(LIMITS), METADATA, () -> {});
+    var frames = source.prepare(ledger, METADATA, () -> {});
+    assertEquals(0, ledger.state().bytes());
+    assertEquals(0, ledger.state().resources());
+    assertEquals(512L * 512 * Integer.BYTES, ledger.state().peakBytes());
     assertEquals(source.textures().keySet(), frames.textures().keySet());
     for (var entry : frames.textures().entrySet()) {
       var texture = source.textures().get(entry.getKey());

@@ -6,6 +6,7 @@ import design.inherent.lootr_styled.resources.BarrelPreviewInputs;
 import design.inherent.lootr_styled.resources.BarrelPreviewMesh;
 import design.inherent.lootr_styled.resources.JsonDocuments;
 import design.inherent.lootr_styled.resources.TextureImages;
+import design.inherent.reform.presentation.graphics.GraphicLedger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -46,12 +47,15 @@ final class NativeBarrelPreview {
 
   private static final class Images implements AutoCloseable {
     private final BarrelPreviewInputs inputs;
+    private final GraphicLedger ledger;
+    private final Map<String, GraphicLedger.Allocation> allocations = new HashMap<>();
     private final Map<String, SpriteContents> owned = new HashMap<>();
     private final Map<ResourceId, Sprite> sprites = new HashMap<>();
     private long decodedPixels;
 
-    Images(BarrelPreviewInputs inputs) {
+    Images(BarrelPreviewInputs inputs, GraphicLedger ledger) {
       this.inputs = inputs;
+      this.ledger = ledger;
     }
 
     Sprite sprite(ResourceId id) throws IOException {
@@ -84,19 +88,27 @@ final class NativeBarrelPreview {
       var contents = owned.get(key);
       if (contents == null) {
         long area = (long) size.width() * size.height();
-        if (area > TextureImages.MAX_PIXELS - decodedPixels)
-          throw new design.inherent.lootr_styled.resources.ResourceInputs.LimitExceeded(
-              "Isolated native texture pixel budget exceeded");
-        NativeImage image = NativeImage.read(new java.io.ByteArrayInputStream(bytes));
+        if (area
+            > Math.min(TextureImages.MAX_PIXELS, ledger.limits().decodedPixels()) - decodedPixels)
+          throw new design.inherent.reform.owner.PolicyRefusal(
+              "preview.budget", "The barrel textures exceed the preview decoded-pixel allowance");
+        var allocation = ledger.reserve(area * Integer.BYTES, 1);
+        NativeImage image = null;
+        boolean transferred = false;
         try {
+          image = NativeImage.read(new java.io.ByteArrayInputStream(bytes));
           if (image.getWidth() != size.width() || image.getHeight() != size.height())
             throw new IllegalArgumentException("Native preview image dimensions changed");
           contents = new SpriteContents(Identifier.parse(id.toString()), frame, image);
           owned.put(key, contents);
+          allocations.put(key, allocation);
           decodedPixels += area;
-        } catch (RuntimeException failure) {
-          image.close();
-          throw failure;
+          transferred = true;
+        } finally {
+          if (!transferred) {
+            if (image != null) image.close();
+            allocation.close();
+          }
         }
       }
       var sprite = new Sprite(contents);
@@ -107,9 +119,10 @@ final class NativeBarrelPreview {
     @Override
     public void close() {
       RuntimeException failed = null;
-      for (var contents : owned.values()) {
+      for (var entry : owned.entrySet()) {
         try {
-          contents.close();
+          entry.getValue().close();
+          allocations.get(entry.getKey()).close();
         } catch (RuntimeException error) {
           if (failed == null) failed = error;
           else failed.addSuppressed(error);
@@ -117,14 +130,18 @@ final class NativeBarrelPreview {
       }
       sprites.clear();
       owned.clear();
+      allocations.clear();
       if (failed != null) throw failed;
     }
   }
 
   @SuppressWarnings("deprecation")
-  static BarrelPreviewMesh bake(BarrelPreviewInputs inputs, Runnable checkpoint)
-      throws IOException {
+  static BarrelPreviewMesh bake(
+      BarrelPreviewInputs inputs, GraphicLedger ledger, Runnable checkpoint) throws IOException {
     checkpoint.run();
+    if (inputs.resources().byteSize() > ledger.limits().inputBytes())
+      throw new design.inherent.reform.owner.PolicyRefusal(
+          "preview.budget", "The captured barrel exceeds the preview input allowance");
     byte[] bytes;
     try (var stream = inputs.resources().open(inputs.barrel().target()).orElseThrow()) {
       bytes = stream.readAllBytes();
@@ -145,7 +162,7 @@ final class NativeBarrelPreview {
             return material;
           }
         };
-    try (var images = new Images(inputs)) {
+    try (var images = new Images(inputs, ledger)) {
       for (var element : geometry.elements())
         for (var entry : element.faces().entrySet()) {
           checkpoint.run();

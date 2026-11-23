@@ -7,6 +7,7 @@ import design.inherent.lootr_styled.profile.ClientSettings;
 import design.inherent.lootr_styled.resources.BarrelCompiler;
 import design.inherent.lootr_styled.resources.BarrelPreviewInputs;
 import design.inherent.lootr_styled.resources.JsonDocuments;
+import design.inherent.reform.presentation.graphics.GraphicLedger;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,10 @@ import org.junit.jupiter.api.Test;
 
 /** CPU native baking from owned asset bytes; no graphical, GPU, or live application claim. */
 class NativeBarrelPreviewTest {
+  private static final design.inherent.reform.presentation.graphics.GraphicLimits LIMITS =
+      new design.inherent.reform.presentation.graphics.GraphicLimits(
+          16 * 1024 * 1024, 16 * 1024 * 1024, 16 * 1024 * 1024, 256, 128 * 1024 * 1024);
+
   private static byte[] resource(ResourceId id) throws Exception {
     try (var stream =
         NativeBarrelPreviewTest.class.getResourceAsStream(
@@ -106,7 +111,7 @@ class NativeBarrelPreviewTest {
       for (boolean open : List.of(false, true))
         for (boolean packed : List.of(false, true)) {
           var input = inputs(looted, open, packed);
-          var mesh = NativeBarrelPreview.bake(input, () -> {});
+          var mesh = NativeBarrelPreview.bake(input, new GraphicLedger(LIMITS), () -> {});
           assertEquals(open ? 98 : 76, mesh.faces().size());
           assertFalse(mesh.ambientOcclusion());
           for (var face : mesh.faces()) {
@@ -130,9 +135,46 @@ class NativeBarrelPreviewTest {
   }
 
   @Test
+  void nativeBakeSharesTheWorkflowLedgerAndReleasesImagesAfterSuccessOrCancellation()
+      throws Exception {
+    var input = inputs(false, true, true);
+    var ledger = new GraphicLedger(LIMITS);
+    long imageBytes = 512L * 512 * Integer.BYTES;
+    // An outstanding prior viewport can prevent entering the native image allocation.
+    var prior = ledger.reserve(LIMITS.nativeBytes() - imageBytes + 1, 1);
+    var before = ledger.state();
+    var refused =
+        assertThrows(
+            design.inherent.reform.owner.PolicyRefusal.class,
+            () -> NativeBarrelPreview.bake(input, ledger, () -> {}));
+    assertEquals("preview.budget", refused.report().issues().getFirst().code());
+    assertEquals(before, ledger.state());
+    prior.close();
+    assertEquals(98, NativeBarrelPreview.bake(input, ledger, () -> {}).faces().size());
+    assertEquals(0, ledger.state().bytes());
+    assertEquals(0, ledger.state().resources());
+
+    var cancelledLedger = new GraphicLedger(LIMITS);
+    assertThrows(
+        CancellationException.class,
+        () ->
+            NativeBarrelPreview.bake(
+                input,
+                cancelledLedger,
+                () -> {
+                  if (cancelledLedger.state().bytes() > 0)
+                    throw new CancellationException("Superseded");
+                }));
+    assertEquals(imageBytes, cancelledLedger.state().peakBytes());
+    assertEquals(0, cancelledLedger.state().bytes());
+    assertEquals(0, cancelledLedger.state().resources());
+    assertEquals(98, NativeBarrelPreview.bake(input, cancelledLedger, () -> {}).faces().size());
+  }
+
+  @Test
   void anIntentionallyEmptyNativeModelRemainsEmpty() throws Exception {
     var input = inputs(false, false, true, true);
-    var mesh = NativeBarrelPreview.bake(input, () -> {});
+    var mesh = NativeBarrelPreview.bake(input, new GraphicLedger(LIMITS), () -> {});
     assertTrue(mesh.faces().isEmpty());
     assertSame(input, mesh.inputs());
   }
@@ -151,11 +193,13 @@ class NativeBarrelPreviewTest {
         () ->
             NativeBarrelPreview.bake(
                 input,
+                new GraphicLedger(LIMITS),
                 () -> {
                   if (checkpoints.incrementAndGet() == 4)
                     throw new CancellationException("replaced");
                 }));
-    assertEquals(98, NativeBarrelPreview.bake(input, () -> {}).faces().size());
+    assertEquals(
+        98, NativeBarrelPreview.bake(input, new GraphicLedger(LIMITS), () -> {}).faces().size());
     for (var entry : before.entrySet())
       try (var stream = input.resources().open(entry.getKey()).orElseThrow()) {
         assertArrayEquals(entry.getValue(), stream.readAllBytes());

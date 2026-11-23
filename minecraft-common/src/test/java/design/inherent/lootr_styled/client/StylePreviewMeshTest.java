@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import design.inherent.lootr_styled.resources.BarrelPreviewMesh;
 import design.inherent.reform.definition.DocumentId;
 import design.inherent.reform.owner.PolicyRefusal;
+import design.inherent.reform.presentation.graphics.GraphicLedger;
 import design.inherent.reform.presentation.graphics.GraphicLimits;
 import design.inherent.reform.presentation.graphics.GraphicMaterial;
 import java.util.ArrayList;
@@ -30,7 +31,8 @@ class StylePreviewMeshTest {
   @Test
   void sharedMeshRetainsCopiedNativeCoordinatesWindingTextureSourcesAndLighting() throws Exception {
     var nativeMesh =
-        NativeBarrelPreview.bake(NativeBarrelPreviewTest.inputs(false, true, true), () -> {});
+        NativeBarrelPreview.bake(
+            NativeBarrelPreviewTest.inputs(false, true, true), new GraphicLedger(LIMITS), () -> {});
     var shared =
         StylePreviewMesh.convert(nativeMesh, LIMITS, StylePreviewMeshTest::material, () -> {});
     assertEquals(nativeMesh.faces().size() * 4, shared.mesh().vertices().size());
@@ -72,7 +74,9 @@ class StylePreviewMeshTest {
   void anInvisibleNativeModelStaysReadyWithoutMaterialPreparation() throws Exception {
     var nativeMesh =
         NativeBarrelPreview.bake(
-            NativeBarrelPreviewTest.inputs(false, false, true, true), () -> {});
+            NativeBarrelPreviewTest.inputs(false, false, true, true),
+            new GraphicLedger(LIMITS),
+            () -> {});
     var shared =
         StylePreviewMesh.convert(
             nativeMesh,
@@ -140,7 +144,10 @@ class StylePreviewMeshTest {
   @Test
   void textureResourceLimitRefusesBeforeMaterialPreparation() throws Exception {
     var source =
-        NativeBarrelPreview.bake(NativeBarrelPreviewTest.inputs(false, false, false), () -> {});
+        NativeBarrelPreview.bake(
+            NativeBarrelPreviewTest.inputs(false, false, false),
+            new GraphicLedger(LIMITS),
+            () -> {});
     var calls = new AtomicInteger();
     var limit =
         new GraphicLimits(
@@ -168,7 +175,10 @@ class StylePreviewMeshTest {
   @Test
   void smallOutputBudgetRefusesBeforeMaterialPreparation() throws Exception {
     var source =
-        NativeBarrelPreview.bake(NativeBarrelPreviewTest.inputs(false, false, true), () -> {});
+        NativeBarrelPreview.bake(
+            NativeBarrelPreviewTest.inputs(false, false, true),
+            new GraphicLedger(LIMITS),
+            () -> {});
     var calls = new AtomicInteger();
     var limits =
         new GraphicLimits(
@@ -196,7 +206,10 @@ class StylePreviewMeshTest {
   @Test
   void unresolvedTintAndForeignMaterialBindingsCannotBePresentedAsReady() throws Exception {
     var source =
-        NativeBarrelPreview.bake(NativeBarrelPreviewTest.inputs(false, false, true), () -> {});
+        NativeBarrelPreview.bake(
+            NativeBarrelPreviewTest.inputs(false, false, true),
+            new GraphicLedger(LIMITS),
+            () -> {});
     var faces = new ArrayList<>(source.faces());
     var face = faces.getFirst();
     faces.set(
