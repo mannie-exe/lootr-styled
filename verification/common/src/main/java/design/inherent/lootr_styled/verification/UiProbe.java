@@ -44,7 +44,7 @@ final class UiProbe {
   private ClientEditor<?> editor;
   private CompletableFuture<?> pending;
   private Set<Path> existing;
-  private int stage;
+  private int stage = -2;
   private int mountTicks;
   private boolean captured;
   private int nativeWidth, nativeHeight;
@@ -85,6 +85,60 @@ final class UiProbe {
     }
     Screen root = workflow.screen();
     switch (stage) {
+      case -2 -> {
+        if (editor.form().fieldControl(MODELS).isEmpty()) return null;
+        var appearance =
+            children(root).stream()
+                .filter(
+                    design.inherent.reform.minecraft.client.NativeNavigationButton.class
+                        ::isInstance)
+                .map(design.inherent.reform.minecraft.client.NativeNavigationButton.class::cast)
+                .filter(control -> control.getMessage().getString().equals("Appearance"))
+                .findFirst()
+                .orElseThrow();
+        NativeBindings.press(appearance);
+        mountTicks = 0;
+        stage = -1;
+      }
+      case -1 -> {
+        if (++mountTicks < 4) return null;
+        var names = List.of("Enabled", "Fresh Objects", "Models", "Artwork");
+        var navigation = new com.google.gson.JsonArray();
+        children(root).stream()
+            .filter(
+                design.inherent.reform.minecraft.client.NativeNavigationButton.class::isInstance)
+            .map(design.inherent.reform.minecraft.client.NativeNavigationButton.class::cast)
+            .filter(control -> names.contains(control.getMessage().getString()))
+            .sorted(
+                java.util.Comparator.comparingInt(AbstractWidget::getY)
+                    .thenComparingInt(AbstractWidget::getX))
+            .forEach(control -> navigation.add(control.getMessage().getString()));
+        result.add("renderedNavigationOrder", navigation);
+        var body = new com.google.gson.JsonArray();
+        var rootPath = FieldPath.ROOT;
+        var paths =
+            List.of(rootPath.field("enabled"), rootPath.field("freshObjects"), MODELS, ARTWORK);
+        paths.stream()
+            .sorted(
+                java.util.Comparator.comparingInt(
+                        (FieldPath path) -> editor.form().fieldControl(path).orElseThrow().getY())
+                    .thenComparingInt(
+                        path -> editor.form().fieldControl(path).orElseThrow().getX()))
+            .forEach(path -> body.add(names.get(paths.indexOf(path))));
+        result.add("renderedBodyOrder", body);
+        result.addProperty("navigationMatchesBody", navigation.equals(body));
+        Files.writeString(
+            mc.gameDirectory.toPath().resolve("lootr-styled-ui-observations.json"),
+            new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(result));
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-navigation", () -> captured = true);
+        stage = -3;
+      }
+      case -3 -> {
+        if (!captured) return null;
+        mountTicks = 0;
+        stage = 0;
+      }
       case 0 -> {
         if (editor.form().fieldControl(MODELS).isEmpty()
             || editor.form().fieldControl(ARTWORK).isEmpty()) {
@@ -127,6 +181,8 @@ final class UiProbe {
       }
       case 90 -> {
         var browser = NativeUi.current();
+        if (++mountTicks < 4) return null;
+        NativeWorld.screenshot(mc, "reform-profile-browser", () -> {});
         if (!browser.getClass().getSimpleName().equals("ReferenceScreen"))
           throw new IllegalStateException("Profile title did not open the shared source browser");
         var filter =
@@ -290,6 +346,15 @@ final class UiProbe {
         var raw = (net.minecraft.client.gui.components.EditBox) input.get();
         if (!raw.getValue().equals("bad id"))
           throw new IllegalStateException("Manual input lost the invalid retained value");
+        mountTicks = 0;
+        stage = 109;
+      }
+      case 109 -> {
+        if (++mountTicks < 4) return null;
+        NativeWorld.screenshot(mc, "reform-manual-id", () -> {});
+        var raw =
+            (net.minecraft.client.gui.components.EditBox)
+                editor.form().fieldControl(MODELS).orElseThrow();
         raw.setValue("missing:kept");
         mountTicks = 0;
         stage = 108;

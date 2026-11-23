@@ -179,7 +179,7 @@ public final class StylePreferences {
             presentation(), Map.of(StyleSettingsStore.PROFILES, profiles))
         .withDefaults(
             Component.literal("Defaults"),
-            Component.literal("Load appearance defaults into this draft. Save to keep them."))
+            Component.literal("Load default appearance settings into this draft."))
         .withReferenceTitles(StyleSettingsStore.PROFILES, profileTitles)
         .withInformation(
             definition ->
@@ -210,13 +210,25 @@ public final class StylePreferences {
         new FormCatalog(
             List.of(
                 new FormCatalog.Section(
-                    enabled, "lootr_styled.settings.enabled", "Enabled", help(enabled)),
+                    enabled,
+                    "lootr_styled.settings.enabled",
+                    "Enabled",
+                    "Turning this off keeps your selections."),
                 new FormCatalog.Section(
-                    models, "lootr_styled.settings.models", "Models", help(models)),
+                    models,
+                    "lootr_styled.settings.models",
+                    "Models",
+                    "Container shapes, separate from artwork."),
                 new FormCatalog.Section(
-                    artwork, "lootr_styled.settings.artwork", "Artwork", help(artwork)),
+                    artwork,
+                    "lootr_styled.settings.artwork",
+                    "Artwork",
+                    "Textures, separate from models."),
                 new FormCatalog.Section(
-                    fresh, "lootr_styled.settings.fresh", "Fresh Objects", help(fresh))));
+                    fresh,
+                    "lootr_styled.settings.fresh",
+                    "Fresh Objects",
+                    "Auto uses compatible Fresh Objects models.")));
     var layout =
         new FormLayout(
             List.of(new FormLayout.Row("profiles", List.of(models, artwork))),

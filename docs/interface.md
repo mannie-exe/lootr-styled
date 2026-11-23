@@ -1,10 +1,10 @@
 # Interface writing
 
-Use short, familiar labels that describe the action: Save, Defaults, Reload resources, Folder, and Export artwork. Defaults loads the declared appearance defaults; Revert restores the editor's observed starting values. Explain an action's effect in its tooltip when the label needs context. Use sentence case and readable state names such as Auto, On, and Off. Save and reload resources names both effects; Save alone must not imply live application.
+Use short, familiar labels that describe the action: Save, Defaults, Reload resources, Open profiles folder, and Export artwork. Defaults loads the declared appearance defaults; Revert restores the editor's observed starting values. Explain an action's effect in its tooltip when the label needs context. Use sentence case and readable state names such as Auto, On, and Off. Save and reload resources names both effects; Save alone must not imply live application.
 
 Show a profile's optional `title` in selectors. Keep its ID unchanged in settings and available in tooltips; use the ID as the label only when no title is available. Built-in titles are Default and Vanilla (Inherited). Custom profiles follow the same rule.
 
-Use re:form's shared layout declarations for the Appearance page. Styling groups the enable switch and Fresh Objects adaptation; Profile selection groups Models and Artwork. Those selectors may share a row when their measured content fits and stack in order when it does not. Their values and validation remain independent. Keep field purpose beside the controls and complete source/application details in contextual information.
+Use re:form's shared layout declarations for the Appearance page. Styling groups the enable switch and Fresh Objects adaptation; Profile selection groups Models and Artwork. Those selectors may share a row when their measured content fits and stack in order when it does not. Their values and validation remain independent. Keep field help to its purpose. Put fallback rules, source precedence, application details, and adapter diagnostics in contextual information.
 
 Document actions opens the shared auxiliary over the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Domain Save and reload resources and profile exports remain separate guarded operations.
 

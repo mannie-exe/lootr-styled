@@ -24,8 +24,8 @@ final class StyleOperations {
     RETRY("Retry reload"),
     EXPORT_ARTWORK("Export artwork"),
     EXPORT_MODEL("Export barrel model"),
-    FOLDER("Folder"),
-    DETAILS("Resource details");
+    FOLDER("Open profiles folder"),
+    DETAILS("Inspect resources");
     final String title;
 
     Action(String title) {
@@ -191,10 +191,9 @@ final class StyleOperations {
 
   private static String context(Action action) {
     return switch (action) {
-      case RELOAD -> "Read saved settings and current profiles. Unsaved edits stay in the draft.";
+      case RELOAD -> "Reload saved settings and profiles. Unsaved edits stay in the draft.";
       case RETRY -> "Retry the previously saved revision without writing settings again.";
-      case EXPORT_ARTWORK ->
-          "Copy the active textures and barrel bindings. Unsaved edits are not applied.";
+      case EXPORT_ARTWORK -> "Copy the applied textures and barrel bindings.";
       case EXPORT_MODEL -> "Copy the Default barrel geometry without artwork.";
       case DETAILS -> "Inspect current resource decisions and application status.";
       case FOLDER -> "Open the local profile directory.";

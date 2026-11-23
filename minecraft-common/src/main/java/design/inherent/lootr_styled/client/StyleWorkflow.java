@@ -92,7 +92,7 @@ final class StyleWorkflow implements AutoCloseable {
         new ClientWorkflowLayout.Action<>(
             save.id(),
             Component.literal("Save and reload resources"),
-            Component.literal("Save this draft, then wait for its resources to finish reloading."),
+            Component.literal("Save this draft and reload resources."),
             this::blocked,
             () ->
                 scope.submit(save, OperationDescriptor.EntryPoint.GUI, StyleOperations.Signal.RUN),
