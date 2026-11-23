@@ -14,7 +14,7 @@ Install Lootr and [re:form 0.2.0](https://github.com/mannie-exe/reform/releases/
 
 Version 0.1.0 provides client-side model and artwork profiles with re:form settings. [Verification](docs/verification.md) records tested behavior and limits. Default includes the selected chest and barrel artwork. Layered trim, emission, and recoloring remain design work.
 
-Development builds use re:form's 0.3 API for grouped, responsive settings and shared document actions. Their exact library candidate needs the explicit staged repository described in [development](docs/development.md); these builds are separate from the public release above.
+Development builds use public re:form 0.3.0 for grouped, responsive settings and shared document actions. See [development](docs/development.md) for build instructions; these builds are separate from the public release above.
 
 ## Further reading and participation
 

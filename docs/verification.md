@@ -27,11 +27,13 @@ The pinned EMF 3.3.12/ETF 7.2.7/Fresh Objects 2.1.2 inputs and their hashes are 
 
 ## Compositional settings candidate
 
-The current engineering candidate uses the exact four-target re:form inputs in [the pin manifest](../gradle/reform.json). Its local four-target build passes the same 582 Java tests and 27 tooling checks. Eight actual macOS client executions cover initial loading and a second JVM reopening the same saved format 1 file without fixture preparation or a settings rewrite. All exit normally.
+The compositional-layout engineering candidate was qualified against re:form 0.3.0-dev.10. Its local four-target build passes the same 582 Java tests and 27 tooling checks. Eight actual macOS client executions cover initial loading and a second JVM reopening the same saved format 1 file without fixture preparation or a settings rewrite. All exit normally.
 
 Those checks cover grouped title-first selectors, related-row expansion and narrow stacking, source browsing, Defaults and Undo over the same draft, collapsed invalid-ID rebuilds, native manual-ID repair, and refusal to save a valid sibling beside invalid input. Save and reload resources confirms persistence and the matching published resource generation; export copies twelve PNGs and four barrel bindings. Settings bytes are restored after each workflow. Separate Fabric 1.21.1 clients pass at GUI scales 1 and 4, alongside scale 2 on all four targets and logical 320×240 and 900×540 reflows. Captures and native control bounds retain their actual scale and viewport; this is not physical IME or spoken-audio verification.
 
 A separate minimum NeoForge 1.21.1 client passes with Compat 0.43.0-layout-dev.6, Lootr: Styled 0.2.0-reform-dev.2, and one re:form 0.3.0-dev.10 library. Actual startup admission, the Lootr settings/reload/export workflow and normal exit are checked together. This does not rerun Compat's full interface or qualify a full modpack. The engineering artifacts remain unpublished; the release rendering, hosted-build and full-pack results elsewhere on this page retain their original artifact identities.
+
+Public-library adoption selects re:form 0.3.0 in [the pin manifest](../gradle/reform.json). Anonymous release downloads and a fresh Gradle-home resolver verify the four public inputs without a staged repository or local fallback. The library's owned classes match dev.10, and all eight rebuilt Lootr archives preserve the qualified classes and assets. The normal public-input build passes 582 Java tests and 27 tooling checks. Four further macOS clients pass the full settings/reload/export workflow and exit normally; NeoForge 1.21.1 also loads the qualified Compat dev.6 through its stable-version admission. The prior reopen and GUI-scale evidence retains its dev.10 identity. Lootr's new build remains a local candidate; no new hosted, full-pack, publication or personal-instance qualification is implied.
 
 ## Barrel geometry and artwork
 
