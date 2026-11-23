@@ -2,7 +2,9 @@
 
 The four targets use native Loom or ModDevGradle, with a shared Java-only core. Minecraft 1.21.1 needs Loom's remapping plugin and official mappings on Fabric. Unobfuscated Minecraft 26.3 uses the non-remapping Loom plugin. These are build distinctions, not evidence that private renderer APIs match.
 
-Lootr is the initial companion dependency. Inspect runtime metadata rather than deriving version predicates from archive names. The inspected 1.21.1 Lootr version includes a Minecraft prefix; 26.3 uses a different version format. Its code license and asset permissions are separate. External mods and resource packs are not embedded.
+Lootr is the companion dependency. Inspect runtime metadata rather than deriving version predicates from archive names. The inspected 1.21.1 Lootr version includes a Minecraft prefix; 26.3 uses a different version format. Its code license and asset permissions are separate. External mods and resource packs are not embedded.
+
+## Settings library
 
 re:form is the required client settings library. [Its manifest](../gradle/reform.json) pins four separate game/loader JARs and SHA-256 values; [the version catalogue](../gradle/libs.versions.toml) selects the same version. Loader metadata requires that exact selected version. The product neither embeds re:form nor retains a second generic editor or settings writer. Update all four pins, the metadata expansion and the independent consumer together. Recheck existing format 1 files, missing and invalid input, title/ID controls, retained drafts, conflict review, save-only behavior, confirmed save followed by failed reload, retry without a write, export retirement and actual shutdown on every affected target. Library-only fixtures support their own API claims, not the addon’s native application or export behavior.
 
@@ -12,9 +14,15 @@ An unpublished re:form candidate resolves only from an explicitly supplied stage
 
 Read each selected library JAR’s loader metadata before updating its pin. A library API can remain compatible while its loader or Fabric API minimum changes. Keep those build pins and this addon’s expanded loader predicates aligned, then repeat actual loader startup. The legacy Fabric Lootr release also requires Cloth Config at runtime. It stays in that development/fixture runtime even though Lootr: Styled’s own settings use re:form; the addon neither compiles against Cloth nor bundles it. Modern Lootr does not declare that dependency.
 
+## Optional resources and coupled updates
+
 EMF/ETF/Fresh Objects capability admission must inspect the effective supported resources. Filename changes and installed-but-disabled packs do not establish availability. Keep adapters conditional before optional class resolution and document unsupported structures with native fallback.
 
 When updating Minecraft, a loader, Lootr or a rig adapter, inspect exact model parts, pivots, texture/material selection, resource lookup names and reload retirement. Update admitted ranges from actual ABI/capability evidence; do not silently widen coverage from a successful build. Repeat the affected absence, native rendering, reload, profile and artifact cases. Pack cutover must retain exactly one active Lootr presentation owner while preserving the existing pack-owned vanilla chest composition. Do not remove its selected geometry donor merely because runtime Lootr adaptation replaces the old Lootr outputs.
+
+Retire a patch only after checking its runtime readers, generated resources, loader metadata, mixins, and tests. Replace its maintained instructions with the surviving owner's procedure, while retaining the defect and regression evidence. Removal must preserve saved selections and fallbacks, and must not silently remove a runtime dependency required by another mod. Dependency upgrades and patch retirement need their own authorized scope.
+
+## Build and security tools
 
 Build-only Bend 2.0.40 and Lean 4.34.0 are pinned by [the proof toolchain](../proofs/toolchain.json). [Setup](../tools/setup_proofs.py) verifies release archives independently of sibling checkouts. [The proof check](../tools/check_proofs.py) requires the separate kernel verdict and Lean budget/publication theorems; a deliberately broken precedence branch must fail. No JVM bridge or runtime dependency is shipped. Source pins, model laws, Java comparisons and native evidence remain separately attributable.
 
@@ -24,7 +32,9 @@ The [build workflow](../.github/workflows/build.yml) configures three operating 
 
 Trivy's configured scope is the resolved core/test library inventory and tracked source secrets. It does not certify all Minecraft, loader, Lootr or installed resource-pack dependencies. No sibling project's vulnerability exceptions are inherited. Review actual findings and applicability before adding a narrow, expiring exception.
 
-Lootr's barrel model IDs changed between the inspected targets. The 1.21.1 leaves use `lootr_barrel_unopened`, `lootr_barrel_unopened_open`, `lootr_opened_barrel` and `lootr_opened_barrel_open`; 26.3 removes the `lootr_` prefix. Keep version-specific target maps rather than publishing one guessed model path on both versions. Lootr still distinguishes player-looted material from physical-open state.
+## Native resources and renderer hooks
+
+Lootr's barrel model IDs differ between the inspected targets. The 1.21.1 leaves use `lootr_barrel_unopened`, `lootr_barrel_unopened_open`, `lootr_opened_barrel` and `lootr_opened_barrel_open`; 26.3 removes the `lootr_` prefix. Keep version-specific target maps rather than publishing one guessed model path on both versions. Lootr still distinguishes player-looted material from physical-open state.
 
 Gson is compile-only at the Minecraft 1.21.1 ABI baseline of 2.10.1 and is never bundled. Runtime availability belongs to the game. The bounded streaming reader accepts declared metadata without reflective object construction. Core tests also execute on each native target's resolved runtime, including 26.3's Gson 2.14.0. Keep public parser calls within that shared ABI and retain strict-token tests; updating a test library alone cannot qualify a newer-only API. Modern test compilation needs error-prone annotations for Gson's class-file metadata, not as a product dependency.
 
@@ -36,6 +46,6 @@ Lootr 26.3 shares its single model across ordinary and copper states. The startu
 
 NeoForge 1.21.1's native physical-open barrel wrapper points its modern branches at closed leaves. When this addon supplies the open leaves, the known native wrapper redirects only those two parent references. External wrapper owners and old/vanilla branches remain intact. Fabric 1.21.1's plugin and 26.3's blockstates already select their open leaves; they need no wrapper rewrite.
 
-The 1.21.1 barrel lighting adapters admit the inspected five-child Lootr wrappers before applying their loader-specific mixins. A generated-model marker follows our plain cuboids through native model bake; it is not a block state or loot authority. NeoForge delegates three-argument AO selection to the chosen generated child. Fabric preserves the native selected model and renderer, replacing only its standard material with a renderer-owned AO-off material when required. Native vanilla/old/foreign branches keep their original policy. Unknown wrapper layouts retain native lighting and report that the adapter is unavailable. Recheck field descriptors, finality, selection order, config branches, the default AO extension and Fabric’s material store/local captures on updates. Fabric 1.21.1 now explicitly requires `fabric-renderer-api-v1`.
+The 1.21.1 barrel lighting adapters admit the inspected five-child Lootr wrappers before applying their loader-specific mixins. A generated-model marker follows our plain cuboids through native model bake; it is not a block state or loot authority. NeoForge delegates three-argument AO selection to the chosen generated child. Fabric preserves the native selected model and renderer, replacing only its standard material with a renderer-owned AO-off material when required. Native vanilla/old/foreign branches keep their original policy. Unknown wrapper layouts retain native lighting and report that the adapter is unavailable. Recheck field descriptors, finality, selection order, config branches, the default AO extension and Fabric’s material store/local captures on updates. Fabric 1.21.1 requires `fabric-renderer-api-v1`.
 
 Modern Lootr selects native model parts with their own lighting metadata; it has no legacy barrel lighting mixin. Recheck that effective part policy when updating 26.3. For every target, repeat the actual native baker/mip tests, model-marker and wrapper controls, packed-client scenes, items, repeated transitions, resource retirement and the installed Sodium/Iris path. Shared geometry does not imply that a native section mesh can avoid rebuilding. [Barrel rendering](barrels.md) defines the invariants and asset costs.

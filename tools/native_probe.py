@@ -44,6 +44,8 @@ def require_stopped(fixture):
 
 
 def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2):
+    if expected_private_sprites is not None and (local_profile is None or not 0 <= expected_private_sprites <= 128):
+        raise ValueError('An explicit private-sprite count requires a local profile and range 0..128')
     library = reform_dependency(target, reform_repository)
     game = '26.3' if target.endswith('26_3') else '1.21.1'
     loader = 'fabric' if target.startswith('fabric') else 'neoforge'
@@ -85,8 +87,6 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     if expected_private_sprites is None:
         sprite_expectation.unlink(missing_ok=True)
     else:
-        if local_profile is None or not 0 <= expected_private_sprites <= 128:
-            raise ValueError('An explicit private-sprite count requires a local profile and range 0..128')
         sprite_expectation.write_text(str(expected_private_sprites))
     (fixture / '.lootr-styled-expected-sha256').write_text(digest(product))
     (fixture / '.lootr-styled-expected-reform-sha256').write_text(library['sha256'])

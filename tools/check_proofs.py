@@ -1,5 +1,6 @@
 """Check explicit model laws through Bend and its separate Lean-backed kernel."""
 
+import argparse
 import hashlib
 import json
 import os
@@ -12,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    argparse.ArgumentParser(description=__doc__).parse_args()
     pin = json.loads((ROOT / 'proofs/toolchain.json').read_text())
     host = platform.system().lower() + ('_aarch64' if platform.machine() in ('arm64', 'aarch64') else '')
     lean = ROOT / f'.tools/lean-{pin["lean"]["version"]}-{host}/bin'

@@ -28,7 +28,7 @@ The source adapter supplies identity; metadata cannot rename itself. Namespaced 
 
 `format` is required and must be integer 1. The optional `title` appears in selectors; it defaults to the source identity. The profile ID remains available in tooltips and saved settings. `models` and `artwork` default to empty maps. Unknown or duplicate properties, duplicate targets, coercion, trailing JSON values, invalid UTF-8, escaping references and unsupported file categories are refused. Metadata contains references, not embedded model documents or image bytes.
 
-The metadata input policy permits 256 KiB, at most 128 mappings across both maps and a readable title of at most 160 Unicode characters. Resource IDs use the core's 256-character bound. Model references end in `.json`, `.jem` or `.jpm`; artwork references end in `.png` or `.png.mcmeta`. These are intake categories, not proof that a target renderer supports every such document. Native target, dependency, geometry, UV, reference and texture checks are still required before publication.
+The metadata input policy permits 256 KiB, at most 128 mappings across both maps and a readable title of at most 160 Unicode characters. Complete namespaced resource IDs are limited to 256 characters and refuse empty or traversing path segments. This is a local input-policy bound, not Minecraft's format maximum; local filesystem containment is checked separately. Model references end in `.json`, `.jem` or `.jpm`; artwork references end in `.png` or `.png.mcmeta`. These are intake categories, not proof that a target renderer supports every such document. Native target, dependency, geometry, UV, reference and texture checks are still required before publication.
 
 The parser's stream API consumes at most the metadata limit plus one byte and leaves the caller's stream open. Parsed values capture immutable, stably ordered maps. Local files still need rooted containment and file/reference budgets. Resource packs retain native overlay and priority semantics; version-specific target paths can be supplied through native resource-pack overlays rather than guessing one target map for both Minecraft versions.
 
@@ -54,6 +54,10 @@ Export artwork copies the twelve active Lootr chest and barrel PNGs, valid image
 
 After exporting, use Open profiles folder to open `config/lootr_styled/`. Edit the copy's PNG files and optional `title` in `profile.json`. Reload resources, then choose the copy and save and reload to use it. Export reads the active resource stack, so reload a profile before exporting its appearance. An exported copy is local and is not added to a public artifact automatically.
 
+## Resource limits
+
+Input policy permits 256 resource lookups and 16 MiB across profile scopes, at most 2 MiB per resource, 32 model-parent levels, 1,024 cuboids per model, and 128 texture variables. PNG dimensions are at most 4,096 per axis, with 16 million decoded pixels across a compilation. Generated output is independently limited to 256 resources and 16 MiB. These are product intake bounds rather than native format maxima.
+
 ## Chest rigs
 
 Supported explicit Lootr CEM model keys are:
@@ -66,5 +70,3 @@ Supported explicit Lootr CEM model keys are:
 These name Lootr-specific EMF identities, not vanilla chest overrides. A selected explicit profile wins its declared slot; effective Lootr-specific resources supplied by other packs are kept above automatic vanilla adaptation. Otherwise AUTO/ON read the effective vanilla `chest.jem` or `trapped_chest.jem` under `emf/cem/`, falling back to `optifine/cem/`. Source geometry and UV values remain unchanged. The native 64×64 material contract must qualify; arbitrary texture rebinding, renderer code or unknown attachment layouts are not admitted.
 
 Native attachment names map `base` to `bottom` and `knob` to `lock`; matching animation references are remapped without renaming arbitrary IDs or text. Relative JPM dependencies are captured and rewritten to private, target-specific resource names. Missing files, cycles, oversized expanded graphs and malformed/unsupported geometry cause an actionable native fallback. The reader permits 64 distinct references, depth 32, 2,048 cuboids and expanded graph cost 4,096; repeated graph edges consume expanded cost even when bytes are memoized. ON without usable input reports why it fell back. OFF keeps native parts while preserving native lid movement; explicit Lootr overrides remain independently owned.
-
-Input policy permits 256 resource lookups and 16 MiB across profile scopes, at most 2 MiB per resource, 32 model-parent levels, 1,024 cuboids per model and 128 texture variables. PNG dimensions are at most 4,096 per axis, with 16 million decoded pixels across a compilation. Generated output is independently limited to 256 resources and 16 MiB. These are product intake bounds rather than native format maxima.

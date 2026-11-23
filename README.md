@@ -18,7 +18,18 @@ Development builds use public re:form 0.3.0 for grouped, responsive settings and
 
 ## Further reading and participation
 
-Read [profiles](docs/profiles.md) for editing and selection, [architecture](docs/architecture.md) for behavior, and [development](docs/development.md) and [dependencies](docs/dependencies.md) for maintenance. Follow [contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md) for changes and disclosures.
+| Guide                                  | Owns                                                          |
+| -------------------------------------- | ------------------------------------------------------------- |
+| [Profiles](docs/profiles.md)           | Settings, selection, precedence, profile formats, and exports |
+| [Architecture](docs/architecture.md)   | Module boundaries, resource publication, and lifetimes        |
+| [Barrel rendering](docs/barrels.md)    | Geometry, state, lighting, culling, and asset costs           |
+| [Interface writing](docs/interface.md) | Labels, feedback, and shared UI ownership                     |
+| [Development](docs/development.md)     | Prerequisites, commands, fixtures, and artwork handoffs       |
+| [Dependencies](docs/dependencies.md)   | Input pins, adapters, updates, and retirement                 |
+| [Verification](docs/verification.md)   | Observed checks and their limits                              |
+| [Publishing](docs/publishing.md)       | Release checks and pack cutover                               |
+
+Follow [contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md) for changes and disclosures.
 
 ## Licensing and attribution
 

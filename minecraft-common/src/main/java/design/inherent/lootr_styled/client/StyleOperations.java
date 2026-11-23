@@ -151,7 +151,7 @@ final class StyleOperations {
                               action == Action.EXPORT_ARTWORK
                                   ? "Copies retain their artwork licenses. Select the copy under Artwork; also select Models when editing packed barrel textures."
                                   : "This copy contains geometry without artwork.",
-                              "Reload profiles, then choose the copy to use your edits."));
+                              "Reload resources, choose the copy, then use Save and reload resources."));
                     });
               }
             };

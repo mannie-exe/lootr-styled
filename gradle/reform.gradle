@@ -1,4 +1,5 @@
 def reformVersion = rootProject.libs.versions.reform.get()
+def targetName = project.name
 def module = "reform-${project.platform}-${project.minecraftTarget}"
 def coordinate = "design.inherent:${module}:${reformVersion}"
 def localRepository = providers.gradleProperty('reform_repository')
@@ -41,13 +42,13 @@ def verifyReform = tasks.register('verifyReform') {
     inputs.files configurations.reformArtifact
     doLast {
         def pins = new groovy.json.JsonSlurper().parse(pinsFile)
-        if (pins.version != reformVersion || !pins.artifacts.containsKey(project.name)) {
+        if (pins.version != reformVersion || !pins.artifacts.containsKey(targetName)) {
             throw new GradleException('Update the re:form version and four-target checksums together')
         }
         def jar = configurations.reformArtifact.singleFile
         def actual = java.security.MessageDigest.getInstance('SHA-256').digest(jar.bytes).encodeHex().toString()
-        if (actual != pins.artifacts[project.name]) {
-            throw new GradleException("Resolved re:form bytes differ for ${project.name}")
+        if (actual != pins.artifacts[targetName]) {
+            throw new GradleException("Resolved re:form bytes differ for ${targetName}")
         }
     }
 }

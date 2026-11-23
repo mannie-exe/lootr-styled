@@ -1,10 +1,10 @@
 """Inspect installable artifacts, not development classpaths or upstream metadata labels."""
 
+import argparse
 import json
 import hashlib
 from pathlib import Path
 import struct
-import sys
 import tomllib
 import zipfile
 
@@ -148,5 +148,8 @@ def distribution(root, version):
 
 
 if __name__ == '__main__':
-    files = distribution(Path(__file__).resolve().parents[1] / 'build/distributions', sys.argv[1])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('version', help='Exact mod_version from gradle.properties')
+    args = parser.parse_args()
+    files = distribution(Path(__file__).resolve().parents[1] / 'build/distributions', args.version)
     print(f'{len(files)} distribution artifacts verified; native rendering is a separate check')

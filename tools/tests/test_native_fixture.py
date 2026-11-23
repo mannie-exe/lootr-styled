@@ -50,6 +50,34 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertFalse((self.fixture / 'lootr-styled-probe-report.json').exists())
         self.assertFalse((self.fixture / 'lootr-styled-probe-state.txt').exists())
 
+    def test_invalid_sprite_expectations_preserve_settings_and_previous_evidence(self):
+        report = self.fixture / 'lootr-styled-probe-report.json'
+        report.write_text('Previous run')
+        with self.assertRaisesRegex(ValueError, 'requires a local profile'):
+            native_probe.prepare('neoforge-1_21_1', 'native', expected_private_sprites=4)
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+        self.assertEqual('Previous run', report.read_text())
+
+    def test_out_of_range_sprite_expectations_do_not_create_a_profile_fixture(self):
+        profile = self.root / 'source-profile'
+        profile.mkdir()
+        (profile / 'profile.json').write_text('{"format":1}')
+        for count in (-1, 129):
+            with self.subTest(count=count):
+                with self.assertRaisesRegex(ValueError, 'range 0..128'):
+                    native_probe.prepare('neoforge-1_21_1', 'native', local_profile=profile,
+                                         expected_private_sprites=count)
+                self.assertFalse((self.fixture.parent / 'native-profile').exists())
+
+    def test_valid_sprite_expectation_prepares_the_selected_profile(self):
+        profile = self.root / 'source-profile'
+        profile.mkdir()
+        (profile / 'profile.json').write_text('{"format":1}')
+        fixture, _, _ = native_probe.prepare('neoforge-1_21_1', 'native', local_profile=profile,
+                                              expected_private_sprites=4)
+        self.assertEqual('4', (fixture / '.lootr-styled-expected-private-sprites').read_text())
+        self.assertEqual('{"format":1}', (fixture / 'config/lootr_styled/fixture/profile.json').read_text())
+
     def test_zero_exit_with_a_different_products_success_report_is_refused(self):
         product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
         (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps({
