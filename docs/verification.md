@@ -1,6 +1,6 @@
 # Verification
 
-The four Fabric/NeoForge targets for Minecraft 1.21.1 and 26.3 pass 582 Java tests and 27 tooling checks. Core policy runs on Java 21/Gson 2.10.1 and against each native target’s Gson, including 26.3’s 2.14.0. Hosted builds pass on Linux, Windows and macOS; actual client rendering checks use macOS.
+Release 0.1.0 passes 582 Java tests and 27 tooling checks across the four Fabric/NeoForge targets for Minecraft 1.21.1 and 26.3. Core policy runs on Java 21/Gson 2.10.1 and against each native target’s Gson, including 26.3’s 2.14.0. Hosted builds pass on Linux, Windows and macOS; actual client rendering checks use macOS.
 
 Policy and resource tests cover strict metadata, catalogue isolation, local containment and edit detection, PNG/model/reference budgets, explicit precedence, independent selections, generation retirement and native parsing. Installable and source inventories require fourteen approved images and eight models. Mutation controls reject preview artwork/rigs, foreign or probe classes, vanilla asset overrides, retired carriers and screens, duplicate entries, incorrect dependency/side metadata and Java baselines.
 
@@ -8,7 +8,7 @@ The settings tests use re:form’s actual file owner with the existing format 1 
 
 ## Native clients
 
-The independent consumer under `verification/` loads packaged product JARs with exact requested SHA-256 identities and an external public re:form 0.2.0 library. It excludes product source outputs and a separate core JAR. Fabric 1.21.1’s Loom consumer remaps the installable artifact into its development namespace; the other targets use their pinned ModDev/Loom bootstrap. These are actual client executions with those bootstrap limits, rather than production-launcher tests.
+The release 0.1.0 consumer under `verification/` loads packaged product JARs with exact requested SHA-256 identities and an external public re:form 0.2.0 library. It excludes product source outputs and a separate core JAR. Fabric 1.21.1’s Loom consumer remaps the installable artifact into its development namespace; the other targets use their pinned ModDev/Loom bootstrap. These are actual client executions with those bootstrap limits, rather than production-launcher tests.
 
 | Target          | Integrated container scene | Startup, resource and settings checks |
 | --------------- | -------------------------- | ------------------------------------- |
@@ -24,6 +24,14 @@ The native settings checks show profile titles, open the source browser through 
 Container scenes place chests in four horizontal facings and barrels in six facings and both physical states. They drive native server interactions, ordered close/open operations, looted appearance, an untouched neighbor and repeated transitions. Each checks 216 neighbor/facing/state combinations against native culling controls and retains full collision. Item captures include held, inventory, dropped and framed forms. Resource reload also runs in the loaded world. These are controlled interactions, rather than adversarial packet or general multiplayer synchronization tests.
 
 The pinned EMF 3.3.12/ETF 7.2.7/Fresh Objects 2.1.2 inputs and their hashes are in [the native manifest](../verification/inputs.json). ON diagnostics, malformed or missing profiles, explicit overrides, partial artwork, corrupt-map fallback and exhaustion have shared/native resource tests. ON does not have a separate four-target rendered scene matrix. Dedicated-server exclusion has metadata/startup-plugin controls, rather than a full dedicated-server matrix.
+
+## Compositional settings candidate
+
+The current engineering candidate uses the exact four-target re:form inputs in [the pin manifest](../gradle/reform.json). Its local four-target build passes the same 582 Java tests and 27 tooling checks. Eight actual macOS client executions cover initial loading and a second JVM reopening the same saved format 1 file without fixture preparation or a settings rewrite. All exit normally.
+
+Those checks cover grouped title-first selectors, related-row expansion and narrow stacking, source browsing, Defaults and Undo over the same draft, collapsed invalid-ID rebuilds, native manual-ID repair, and refusal to save a valid sibling beside invalid input. Save and reload resources confirms persistence and the matching published resource generation; export copies twelve PNGs and four barrel bindings. Settings bytes are restored after each workflow. Separate Fabric 1.21.1 clients pass at GUI scales 1 and 4, alongside scale 2 on all four targets and logical 320×240 and 900×540 reflows. Captures and native control bounds retain their actual scale and viewport; this is not physical IME or spoken-audio verification.
+
+A separate minimum NeoForge 1.21.1 client passes with Compat 0.43.0-layout-dev.6, Lootr: Styled 0.2.0-reform-dev.2, and one re:form 0.3.0-dev.10 library. Actual startup admission, the Lootr settings/reload/export workflow and normal exit are checked together. This does not rerun Compat's full interface or qualify a full modpack. The engineering artifacts remain unpublished; the release rendering, hosted-build and full-pack results elsewhere on this page retain their original artifact identities.
 
 ## Barrel geometry and artwork
 

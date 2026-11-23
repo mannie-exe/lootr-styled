@@ -46,6 +46,7 @@ final class UiProbe {
   private Set<Path> existing;
   private int stage;
   private int mountTicks;
+  private boolean captured;
   private int nativeWidth, nativeHeight;
   private final JsonObject result = new JsonObject();
   private final JsonObject timings = new JsonObject();
@@ -173,35 +174,135 @@ final class UiProbe {
           throw new IllegalStateException("Browsing and choosing a profile saved settings");
         result.addProperty("sourceBrowserSearchAndChoice", true);
         pending = edit(MODELS, new DraftEdit.SetRaw("missing:kept"));
+        mountTicks = 0;
         stage = 1;
       }
       case 1 -> {
         assertModel("missing:kept");
-        NativeWorld.screenshot(mc, "reform-appearance", () -> {});
+        if (++mountTicks < 4) return null;
+        if (!editor
+            .form()
+            .fieldControl(MODELS)
+            .orElseThrow()
+            .getMessage()
+            .getString()
+            .contains("missing:kept"))
+          throw new IllegalStateException("Rendered profile title lost the current missing ID");
+        recordGeometry("actualLayout");
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-appearance", () -> captured = true);
+        stage = 101;
+      }
+      case 101 -> {
+        if (!captured) return null;
         NativeBindings.resize(root, mc, 320, 240);
         assertModel("missing:kept");
+        recordGeometry("compactLayout");
         NativeBindings.resize(root, mc, 900, 540);
+        recordGeometry("expandedLayout");
         NativeBindings.resize(root, mc, nativeWidth, nativeHeight);
         if (!editor.canSubmit())
           throw new IllegalStateException("Valid missing identity cannot be submitted");
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Unsaved selection changed settings");
+        NativeBindings.press(button(root, "Document actions…"));
+        mountTicks = 0;
+        stage = 102;
+      }
+      case 102 -> {
+        if (!NativeUi.current().getClass().getSimpleName().equals("DocumentActionsScreen"))
+          throw new IllegalStateException("Document actions did not open the shared auxiliary");
+        if (++mountTicks < 4) return null;
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-document-actions", () -> captured = true);
+        stage = 103;
+      }
+      case 103 -> {
+        if (!captured) return null;
+        NativeBindings.press(button(NativeUi.current(), "Defaults"));
+        mountTicks = 0;
+        stage = 104;
+      }
+      case 104 -> {
+        if (NativeUi.current() != root || workflow.documents().getFirst().busy()) return null;
+        if (++mountTicks < 4) return null;
+        assertModel(ClientSettings.DEFAULTS.models().toString());
+        if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Document Defaults saved the draft");
+        NativeBindings.press(button(root, "Document actions…"));
+        mountTicks = 0;
+        stage = 105;
+      }
+      case 105 -> {
+        if (!NativeUi.current().getClass().getSimpleName().equals("DocumentActionsScreen")) {
+          if (++mountTicks > 120)
+            throw new IllegalStateException("Document actions did not reopen after Defaults");
+          return null;
+        }
+        var undo = button(NativeUi.current(), "Undo");
+        if (!undo.active)
+          throw new IllegalStateException("Defaults lost the retained undo history");
+        NativeBindings.press(undo);
+        stage = 106;
+      }
+      case 106 -> {
+        if (NativeUi.current() != root || workflow.documents().getFirst().busy()) return null;
+        assertModel("missing:kept");
+        if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Document Undo saved the draft");
+        result.addProperty("documentActionsDefaultsUndoSameDraft", true);
         pending =
             edit(
                 FieldPath.ROOT,
                 new DraftEdit.SetRecordScalars(Map.of("models", "bad id", "enabled", "false")));
-        stage++;
+        mountTicks = 0;
+        stage = 2;
       }
       case 2 -> {
+        if (++mountTicks < 4) return null;
         if (editor.canSubmit())
           throw new IllegalStateException("Invalid profile plus valid sibling permits submission");
         if (button(root, "Save and reload resources").active)
           throw new IllegalStateException("Combined action permits invalid input");
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Rejected draft partially saved valid siblings");
-        pending = edit(MODELS, new DraftEdit.SetRaw("missing:kept"));
         result.addProperty("invalidDraftAndSiblingPreserved", true);
-        stage++;
+        var manual =
+            children(root).stream()
+                .filter(Button.class::isInstance)
+                .map(Button.class::cast)
+                .filter(control -> control.getMessage().getString().equals("Edit ID"))
+                .filter(control -> NativeBindings.narration(control).startsWith("Models:"))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Models lost its manual-ID action"));
+        NativeBindings.press(manual);
+        mountTicks = 0;
+        stage = 107;
+      }
+      case 107 -> {
+        var input = editor.form().fieldControl(MODELS);
+        if (input.isEmpty()
+            || !(input.get() instanceof net.minecraft.client.gui.components.EditBox)) {
+          if (++mountTicks > 120)
+            throw new IllegalStateException("Edit ID did not expose native input");
+          return null;
+        }
+        var raw = (net.minecraft.client.gui.components.EditBox) input.get();
+        if (!raw.getValue().equals("bad id"))
+          throw new IllegalStateException("Manual input lost the invalid retained value");
+        raw.setValue("missing:kept");
+        mountTicks = 0;
+        stage = 108;
+      }
+      case 108 -> {
+        if (!editor.canSubmit()) {
+          if (++mountTicks > 120)
+            throw new IllegalStateException("Repairing the native ID input did not enable saving");
+          return null;
+        }
+        assertModel("missing:kept");
+        result.addProperty("nativeManualIdRepair", true);
+        stage = 3;
       }
       case 3 -> {
         if (!editor.canSubmit()) return null;
@@ -351,6 +452,25 @@ final class UiProbe {
     var settings = ClientSettings.class.cast(inspected.candidate().orElseThrow().value());
     if (!settings.models().toString().equals(id))
       throw new IllegalStateException("Retained draft lost profile identity");
+  }
+
+  private void recordGeometry(String key) throws java.io.IOException {
+    var layout = new JsonObject();
+    for (var path : List.of(MODELS, ARTWORK)) {
+      var control = editor.form().fieldControl(path).orElseThrow();
+      var bounds = new JsonObject();
+      bounds.addProperty("x", control.getX());
+      bounds.addProperty("y", control.getY());
+      bounds.addProperty("width", control.getWidth());
+      bounds.addProperty("height", control.getHeight());
+      bounds.addProperty("title", control.getMessage().getString());
+      bounds.addProperty("narration", NativeBindings.narration(control));
+      layout.add(path.toString(), bounds);
+    }
+    result.add(key, layout);
+    Files.writeString(
+        Minecraft.getInstance().gameDirectory.toPath().resolve("lootr-styled-ui-observations.json"),
+        new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(result));
   }
 
   private static List<GuiEventListener> children(Screen screen) {

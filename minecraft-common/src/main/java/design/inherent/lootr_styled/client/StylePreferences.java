@@ -10,6 +10,8 @@ import design.inherent.reform.minecraft.client.ReferenceTitles;
 import design.inherent.reform.owner.ApplicationEffects;
 import design.inherent.reform.owner.FileOwner;
 import design.inherent.reform.owner.OwnerContext;
+import design.inherent.reform.presentation.FormCatalog;
+import design.inherent.reform.presentation.FormLayout;
 import design.inherent.reform.presentation.FormPresentation;
 import design.inherent.reform.reference.ReferenceActions;
 import design.inherent.reform.reference.ReferenceIndex;
@@ -174,7 +176,7 @@ public final class StylePreferences {
   private static ClientFormOptions<ClientSettings> options() {
     refreshProfiles();
     return new ClientFormOptions<ClientSettings>(
-            FormPresentation.EMPTY, Map.of(StyleSettingsStore.PROFILES, profiles))
+            presentation(), Map.of(StyleSettingsStore.PROFILES, profiles))
         .withDefaults(
             Component.literal("Defaults"),
             Component.literal("Load appearance defaults into this draft. Save to keep them."))
@@ -196,6 +198,42 @@ public final class StylePreferences {
                                     Optional.of("settings.json"))
                                 .withTechnicalDetails(
                                     FormInformation.TechnicalDetails.DISCLOSURE))));
+  }
+
+  private static FormPresentation presentation() {
+    var root = design.inherent.reform.definition.FieldPath.ROOT;
+    var enabled = root.field("enabled");
+    var models = root.field("models");
+    var artwork = root.field("artwork");
+    var fresh = root.field("freshObjects");
+    var catalog =
+        new FormCatalog(
+            List.of(
+                new FormCatalog.Section(
+                    enabled, "lootr_styled.settings.enabled", "Enabled", help(enabled)),
+                new FormCatalog.Section(
+                    models, "lootr_styled.settings.models", "Models", help(models)),
+                new FormCatalog.Section(
+                    artwork, "lootr_styled.settings.artwork", "Artwork", help(artwork)),
+                new FormCatalog.Section(
+                    fresh, "lootr_styled.settings.fresh", "Fresh Objects", help(fresh))));
+    var layout =
+        new FormLayout(
+            List.of(new FormLayout.Row("profiles", List.of(models, artwork))),
+            List.of(
+                new FormLayout.Group(
+                    "styling",
+                    "lootr_styled.settings.styling",
+                    "Styling",
+                    "",
+                    List.of(enabled, fresh)),
+                new FormLayout.Group(
+                    "selection",
+                    "lootr_styled.settings.selection",
+                    "Profile selection",
+                    "",
+                    List.of(models, artwork))));
+    return FormPresentation.EMPTY.withCatalog(catalog).withLayout(layout);
   }
 
   private static String help(design.inherent.reform.definition.FieldPath path) {

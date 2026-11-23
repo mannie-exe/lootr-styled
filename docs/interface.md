@@ -4,6 +4,10 @@ Use short, familiar labels that describe the action: Save, Defaults, Reload reso
 
 Show a profile's optional `title` in selectors. Keep its ID unchanged in settings and available in tooltips; use the ID as the label only when no title is available. Built-in titles are Default and Vanilla (Inherited). Custom profiles follow the same rule.
 
+Use re:form's shared layout declarations for the Appearance page. Styling groups the enable switch and Fresh Objects adaptation; Profile selection groups Models and Artwork. Those selectors may share a row when their measured content fits and stack in order when it does not. Their values and validation remain independent. Keep field purpose beside the controls and complete source/application details in contextual information.
+
+Document actions opens the shared auxiliary over the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Domain Save and reload resources and profile exports remain separate guarded operations.
+
 Report routine outcomes briefly, such as Saved or Reloaded. Keep errors specific and provide a recovery action. Put paths, resource decisions, and diagnostic detail behind Details rather than opening a report after every successful action. Distinguish a draft reset, a saved setting, a resource reload, and an exported editing copy.
 
 Lead feedback with the outcome and what it affected. “Settings saved; resource reload failed” preserves useful information that “Something went wrong” discards. Saving, requesting a reload, applying resources, and verifying the result are separate facts. A cancellation request does not establish that work stopped or that a save was undone. If a write is uncertain, guide the user to inspect the saved file before retrying.
