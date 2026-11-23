@@ -126,7 +126,15 @@ final class UiProbe {
         NativeBindings.press(button(root, "Settings"));
         pending =
             WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION)
-                .thenAccept(opened -> editor = opened);
+                .thenAccept(
+                    opened -> {
+                      var models = opened.form().fieldControl(MODELS).orElseThrow();
+                      if (!children(workflow.screen()).contains(models))
+                        throw new IllegalStateException(
+                            "Appearance controls were not mounted when its reveal completed");
+                      editor = opened;
+                      result.addProperty("documentMountedAtReveal", true);
+                    });
         captured = false;
         mountTicks = 0;
         stage = -2;
