@@ -18,6 +18,7 @@ public final class NativeProbe {
   private static IsolatedGraphicProbe graphics;
   private static SharedGraphicHostProbe sharedHost;
   private static RendererShutdownProbe rendererShutdown;
+  private static PreviewCombinationProbe combinations;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
@@ -134,9 +135,15 @@ public final class NativeProbe {
         var observations = sharedHost.tick(mc);
         if (observations == null) return;
         REPORT.add("sharedGraphicHost", observations);
-        rendererShutdown = new RendererShutdownProbe();
+        combinations = new PreviewCombinationProbe();
         stage = 13;
       } else if (stage == 13) {
+        var observations = combinations.tick(mc);
+        if (observations == null) return;
+        REPORT.add("previewCombinations", observations);
+        rendererShutdown = new RendererShutdownProbe();
+        stage = 14;
+      } else if (stage == 14) {
         rendererShutdown.tick(mc);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);

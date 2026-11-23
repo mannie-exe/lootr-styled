@@ -186,22 +186,41 @@ final class StyleGraphicProvider
                       facts.add(fact("models", "Requested models", settings.models().toString()));
                       facts.add(
                           fact("artwork", "Requested artwork", settings.artwork().toString()));
+                      var scene =
+                          StyleStillMaterials.classify(
+                              mesh.prepare(work.ledger(), METADATA, checkpoint),
+                              request.limits(),
+                              checkpoint);
+                      var reference =
+                          StyleReferenceLighting.prepare(scene, request.limits(), checkpoint);
+                      facts.add(
+                          fact(
+                              "native_ambient_occlusion",
+                              "Native ambient occlusion",
+                              reference.nativeAoTriangles() == 0
+                                  ? "Not requested"
+                                  : "Requested on "
+                                      + reference.nativeAoTriangles()
+                                      + " triangles"));
+                      facts.add(
+                          fact(
+                              "reference_lighting",
+                              "Reference lighting",
+                              "Model shading and emission; world ambient occlusion is not simulated"));
                       if (diagnostics.size() + facts.size() > 64)
                         throw new PolicyRefusal(
                             "preview.budget",
                             "The preview resource diagnostics exceed their output allowance");
                       for (int i = 0; i < diagnostics.size(); i++)
                         facts.add(fact("resource/" + i, "Resource", diagnostics.get(i)));
-                      var scene =
-                          StyleStillMaterials.classify(
-                              mesh.prepare(work.ledger(), METADATA, checkpoint),
-                              request.limits(),
-                              checkpoint);
                       checkpoint.run();
                       return (GraphicScenePreparation)
                           new GraphicScenePreparation.Ready(
                               new GraphicSceneData(
-                                  request.stamp(), scene, GraphicCamera.STANDARD, facts));
+                                  request.stamp(),
+                                  reference.scene(),
+                                  GraphicCamera.STANDARD,
+                                  facts));
                     }));
   }
 

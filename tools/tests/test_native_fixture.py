@@ -128,11 +128,12 @@ class NativeFixtureTest(unittest.TestCase):
                    'afterShutdown': released}
         report = {'passed': True, 'artifactSha256': native_probe.digest(product),
                   'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
-                  'rendererShutdown': receipt}
+                  'rendererShutdown': receipt, 'previewCombinations': self._combinations()}
 
         def publish_after_wait(**_):
             (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
             (self.fixture / 'lootr-styled-shutdown-report.json').write_text(json.dumps(receipt))
+            (self.fixture / 'lootr-styled-combinations-report.json').write_text(json.dumps(report['previewCombinations']))
             return 0
 
         with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
@@ -158,6 +159,35 @@ class NativeFixtureTest(unittest.TestCase):
         bad = copy.deepcopy(receipt)
         bad['afterShutdown']['workflowClosed'] = False
         self._refuse_shutdown(report, bad, product)
+
+    def _combinations(self):
+        ids = ('lootr_styled:default', 'lootr_styled:vanilla')
+        return {'complete': True, 'failures': 0, 'settingsUnchanged': True,
+                'rows': [{'models': m, 'artwork': a, 'container': c, 'open': o,
+                          'state': 'READY', 'drawn': True, 'retired': True, 'prepared': {'aoTriangles': 0}}
+                         for m in ids for a in ids
+                         for c, o in (('CHEST', False), ('TRAPPED_CHEST', True), ('BARREL', False), ('BARREL', True))]}
+
+    def test_preview_combinations_require_complete_independent_selections_and_retirement(self):
+        original = self._combinations()
+        (self.fixture / 'lootr-styled-combinations-report.json').write_text(json.dumps(original))
+        native_probe.require_preview_combinations({'previewCombinations': original}, self.fixture)
+        for defect in ('missing', 'duplicate', 'not_drawn', 'not_retired', 'world_ao', 'stale'):
+            bad = copy.deepcopy(original)
+            if defect == 'missing':
+                bad['rows'].pop()
+            elif defect == 'duplicate':
+                bad['rows'][0] = copy.deepcopy(bad['rows'][1])
+            elif defect == 'not_drawn':
+                bad['rows'][0]['drawn'] = False
+            elif defect == 'not_retired':
+                bad['rows'][0]['retired'] = False
+            elif defect == 'world_ao':
+                bad['rows'][0]['prepared']['aoTriangles'] = 12
+            if defect != 'stale':
+                (self.fixture / 'lootr-styled-combinations-report.json').write_text(json.dumps(bad))
+            with self.subTest(defect=defect), self.assertRaisesRegex(RuntimeError, 'Preview combinations'):
+                native_probe.require_preview_combinations({'previewCombinations': bad if defect != 'stale' else original}, self.fixture)
 
     def _refuse_shutdown(self, report, receipt, product):
         report = {**report, 'rendererShutdown': receipt}

@@ -27,6 +27,8 @@ Use `--preview-host` to exercise the retained settings owner, actual domain prov
 
 Ordinary fixtures select Default models and artwork. The mode selects the optional rig inputs and adaptation state; it does not substitute native artwork. Use the saved profile selection explicitly when qualifying Vanilla (Inherited) or a custom-artwork control.
 
+The host fixture also stages every built-in Models/Artwork combination without saving. It checks chest, trapped chest, and both physical barrel states through the default provider, including native AO facts, disclosed reference lighting, drawing, and retirement. Its separate combinations report retains partial results when one selection fails.
+
 ### Prism pack fixtures
 
 Full-pack qualification uses the production launcher rather than adding the entire pack to a ModDev runtime. Build the separate NeoForge 1.21.1 probe JAR against the requested product hash, then use `python3 tools/prepare_pack_probe.py --help` to prepare a new disposable Prism instance from an owned, extracted bundled-pack projection. The helper refuses existing destinations and never reads or copies launcher accounts. Launch that instance through Prism after obtaining desktop access. In this marked fixture, the probe waits for AnalogLib's “Ask me later” action without downloading optional binaries and accepts Minecraft's experimental-settings confirmation for the disposable scene. Separate shader-off/on instances check the actual Iris API state after rendering; configuration text alone is insufficient. Keep the probe out of every product artifact and remove only these marked instances after collecting reports and confirming their JVMs stopped.

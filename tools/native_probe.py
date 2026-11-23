@@ -83,7 +83,8 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     fixture.mkdir(parents=True, exist_ok=True)
     marker.write_text('lootr-styled-native-verification-v1\n')
     for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt',
-                     'lootr-styled-shutdown-report.json', '.lootr-styled-probe-pid'):
+                     'lootr-styled-shutdown-report.json', 'lootr-styled-combinations-report.json',
+                     '.lootr-styled-probe-pid'):
         (fixture / previous).unlink(missing_ok=True)
     for previous in ('lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json',
                      *(f'{name}.png' for name in CAPTURES)):
@@ -186,6 +187,26 @@ def require_renderer_shutdown(data, fixture, product, target):
         raise RuntimeError('Renderer shutdown did not pass; inspect the post-shutdown receipt and native report')
 
 
+def require_preview_combinations(data, fixture):
+    path = fixture / 'lootr-styled-combinations-report.json'
+    result = data.get('previewCombinations')
+    if (not isinstance(result, dict) or result.get('complete') is not True
+            or result.get('failures') != 0 or result.get('settingsUnchanged') is not True
+            or not path.is_file() or json.loads(path.read_text()) != result):
+        raise RuntimeError('Preview combinations did not complete; inspect the retained reports')
+    ids = ('lootr_styled:default', 'lootr_styled:vanilla')
+    expected = {(m, a, c, o) for m in ids for a in ids
+                for c, o in (('CHEST', False), ('TRAPPED_CHEST', True), ('BARREL', False), ('BARREL', True))}
+    rows = result.get('rows', [])
+    actual = {(r.get('models'), r.get('artwork'), r.get('container'), r.get('open')) for r in rows}
+    if len(rows) != len(expected) or actual != expected:
+        raise RuntimeError('Preview combinations are incomplete or duplicated')
+    for row in rows:
+        if (row.get('state') != 'READY' or row.get('drawn') is not True
+                or row.get('retired') is not True or row.get('prepared', {}).get('aoTriangles') != 0):
+            raise RuntimeError('Preview combinations did not draw and retire every selection')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=TARGETS, required=True)
@@ -232,6 +253,7 @@ def main():
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
     if args.preview_host:
         require_renderer_shutdown(data, fixture, product, args.target)
+        require_preview_combinations(data, fixture)
     print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 
