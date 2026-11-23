@@ -6,6 +6,7 @@ import design.inherent.reform.minecraft.client.ClientMeshGraphic;
 public final class GraphicDrawAudit {
   private static long rendered, waiting, empty;
   private static Runnable nextRendered;
+  private static java.util.function.Consumer<ClientMeshGraphic> nextGraphic;
 
   private GraphicDrawAudit() {}
 
@@ -20,7 +21,12 @@ public final class GraphicDrawAudit {
     nextRendered = java.util.Objects.requireNonNull(action);
   }
 
-  public static void observed(ClientMeshGraphic.DrawOutcome outcome) {
+  static void afterNextRenderedGraphic(java.util.function.Consumer<ClientMeshGraphic> action) {
+    if (nextGraphic != null) throw new IllegalStateException("A graphic control is already armed");
+    nextGraphic = java.util.Objects.requireNonNull(action);
+  }
+
+  public static void observed(ClientMeshGraphic graphic, ClientMeshGraphic.DrawOutcome outcome) {
     switch (outcome) {
       case RENDERED -> rendered++;
       case WAITING -> waiting++;
@@ -29,7 +35,10 @@ public final class GraphicDrawAudit {
     if (outcome == ClientMeshGraphic.DrawOutcome.RENDERED) {
       var action = nextRendered;
       nextRendered = null;
+      var observation = nextGraphic;
+      nextGraphic = null;
       if (action != null) action.run();
+      if (observation != null) observation.accept(graphic);
     }
   }
 }

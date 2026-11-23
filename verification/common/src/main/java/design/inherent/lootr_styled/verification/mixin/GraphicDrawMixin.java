@@ -12,6 +12,6 @@ abstract class GraphicDrawMixin {
   @Inject(method = "draw", at = @At("RETURN"), remap = false)
   private void lootrStyled$drawResult(
       CallbackInfoReturnable<ClientMeshGraphic.DrawOutcome> result) {
-    GraphicDrawAudit.observed(result.getReturnValue());
+    GraphicDrawAudit.observed((ClientMeshGraphic) (Object) this, result.getReturnValue());
   }
 }

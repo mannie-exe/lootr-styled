@@ -18,6 +18,7 @@ public final class NativeProbe {
   private static IsolatedGraphicProbe graphics;
   private static SharedGraphicHostProbe sharedHost;
   private static RendererShutdownProbe rendererShutdown;
+  private static ProductionShutdownProbe productionShutdown;
   private static PreviewCombinationProbe combinations;
   private static PreviewAuthorityProbe authority;
   private static PreviewCleanupFailureProbe cleanupFailure;
@@ -124,7 +125,10 @@ public final class NativeProbe {
         if (widgets == null) return;
         REPORT.add("nativeWidgets", widgets);
         REPORT.addProperty("nativeWidgetsComplete", true);
-        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-scene"))) {
+        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-shutdown"))) {
+          productionShutdown = new ProductionShutdownProbe();
+          stage = 20;
+        } else if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-scene"))) {
           stage = 2;
           SceneProbe.begin(mc);
         } else {
@@ -187,6 +191,8 @@ public final class NativeProbe {
         stage = 16;
       } else if (stage == 16) {
         rendererShutdown.tick(mc);
+      } else if (stage == 20) {
+        productionShutdown.tick(mc);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);
         if (scene != null) {
@@ -263,13 +269,35 @@ public final class NativeProbe {
       JsonObject initial,
       java.util.function.BooleanSupplier workflowOpen,
       java.util.function.BooleanSupplier editorOpen) {
+    requestLiveShutdown(
+        mc,
+        host,
+        lease.releaseCompletion(),
+        settings,
+        originalSettings,
+        initial,
+        workflowOpen,
+        editorOpen);
+  }
+
+  static synchronized void requestLiveShutdown(
+      Minecraft mc,
+      design.inherent.reform.minecraft.client.ClientGraphicHost host,
+      java.util.concurrent.CompletionStage<
+              design.inherent.reform.presentation.graphics.RenderLifetime.State>
+          release,
+      Path settings,
+      byte[] originalSettings,
+      JsonObject initial,
+      java.util.function.BooleanSupplier workflowOpen,
+      java.util.function.BooleanSupplier editorOpen) {
     if (terminal) throw new IllegalStateException("Native fixture already finished");
     var fixture = mc.gameDirectory.toPath();
     initial.addProperty("artifactSha256", REPORT.get("artifactSha256").getAsString());
     initial.addProperty("libraryInputSha256", REPORT.get("libraryInputSha256").getAsString());
     RendererShutdownEvidence.arm(
         host,
-        lease,
+        release,
         settings,
         originalSettings,
         initial,

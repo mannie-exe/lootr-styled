@@ -83,6 +83,17 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertTrue(host.is_file())
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(host.exists())
+        production = self.fixture / '.lootr-styled-production-shutdown'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_shutdown=True)
+        self.assertTrue(production.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(production.exists())
+
+    def test_production_shutdown_cannot_replace_another_selected_scope(self):
+        for scope in ('scene', 'graphics_only', 'preview_host'):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
+                native_probe.prepare('neoforge-1_21_1', 'native', production_shutdown=True, **{scope: True})
+        self.assertEqual('Preserve running client input', self.settings.read_text())
 
     def test_conflicting_graphics_and_world_scopes_preserve_existing_evidence(self):
         with self.assertRaisesRegex(ValueError, 'Choose one check'):
@@ -117,6 +128,19 @@ class NativeFixtureTest(unittest.TestCase):
             with patch.object(native_probe.subprocess, 'Popen') as launch:
                 launch.return_value.wait.return_value = 0
                 with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run', '--preview-host']):
+                    with self.assertRaisesRegex(RuntimeError, 'Renderer shutdown'):
+                        native_probe.main()
+
+    def test_ordinary_ui_success_cannot_substitute_for_production_shutdown(self):
+        product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
+        (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps({
+            'passed': True, 'artifactSha256': native_probe.digest(product),
+            'libraryInputSha256': 'fixture', 'snapshots': [{}, {}],
+        }))
+        with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
+            with patch.object(native_probe.subprocess, 'Popen') as launch:
+                launch.return_value.wait.return_value = 0
+                with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run', '--production-shutdown']):
                     with self.assertRaisesRegex(RuntimeError, 'Renderer shutdown'):
                         native_probe.main()
 

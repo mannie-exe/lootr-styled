@@ -1123,7 +1123,7 @@ final class UiProbe {
     result.add("chooserAdjacentFocusedAdjacent", arrangements);
   }
 
-  private static boolean focusControl(ContainerEventHandler parent, GuiEventListener target) {
+  static boolean focusControl(ContainerEventHandler parent, GuiEventListener target) {
     for (var child : parent.children()) {
       if (child == target
           || child instanceof ContainerEventHandler nested && focusControl(nested, target)) {

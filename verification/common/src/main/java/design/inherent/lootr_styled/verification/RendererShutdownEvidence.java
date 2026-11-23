@@ -2,7 +2,6 @@ package design.inherent.lootr_styled.verification;
 
 import com.google.gson.JsonObject;
 import design.inherent.reform.minecraft.client.ClientGraphicHost;
-import design.inherent.reform.minecraft.client.PreparedGraphic;
 import design.inherent.reform.presentation.graphics.RenderLifetime;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,7 +25,7 @@ public final class RendererShutdownEvidence {
 
   private RendererShutdownEvidence(
       ClientGraphicHost host,
-      PreparedGraphic lease,
+      java.util.concurrent.CompletionStage<RenderLifetime.State> released,
       Path settings,
       byte[] originalSettings,
       JsonObject request,
@@ -34,7 +33,7 @@ public final class RendererShutdownEvidence {
       BooleanSupplier editorOpen,
       Consumer<JsonObject> complete) {
     this.host = host;
-    release = lease.releaseCompletion().toCompletableFuture();
+    release = released.toCompletableFuture();
     this.settings = settings;
     this.originalSettings = originalSettings.clone();
     this.request = request.deepCopy();
@@ -45,7 +44,7 @@ public final class RendererShutdownEvidence {
 
   static void arm(
       ClientGraphicHost host,
-      PreparedGraphic lease,
+      java.util.concurrent.CompletionStage<RenderLifetime.State> released,
       Path settings,
       byte[] originalSettings,
       JsonObject request,
@@ -54,7 +53,14 @@ public final class RendererShutdownEvidence {
       Consumer<JsonObject> complete) {
     var evidence =
         new RendererShutdownEvidence(
-            host, lease, settings, originalSettings, request, workflowOpen, editorOpen, complete);
+            host,
+            released,
+            settings,
+            originalSettings,
+            request,
+            workflowOpen,
+            editorOpen,
+            complete);
     if (!active.compareAndSet(null, evidence))
       throw new IllegalStateException("Renderer shutdown evidence is already armed");
     Runtime.getRuntime()
