@@ -1,6 +1,9 @@
 """Fixture preparation must not rewrite a running client's input files."""
 
 import os
+import copy
+import contextlib
+import io
 import json
 from pathlib import Path
 import sys
@@ -47,11 +50,12 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertEqual(b'Preserve live capture', capture.read_bytes())
 
     def test_a_stopped_fixture_cannot_reuse_a_previous_success_receipt(self):
-        for name in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt'):
+        for name in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt', 'lootr-styled-shutdown-report.json'):
             (self.fixture / name).write_text('Previous run')
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse((self.fixture / 'lootr-styled-probe-report.json').exists())
         self.assertFalse((self.fixture / 'lootr-styled-probe-state.txt').exists())
+        self.assertFalse((self.fixture / 'lootr-styled-shutdown-report.json').exists())
 
     def test_stopped_preparation_clears_owned_captures_but_keeps_other_files(self):
         for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png',
@@ -98,6 +102,68 @@ class NativeFixtureTest(unittest.TestCase):
                 with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run']):
                     with self.assertRaisesRegex(RuntimeError, 'Client did not pass'):
                         native_probe.main()
+
+    def test_preview_host_success_before_shutdown_is_not_a_shutdown_result(self):
+        product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
+        (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps({
+            'passed': True, 'artifactSha256': native_probe.digest(product),
+            'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
+        }))
+        with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
+            with patch.object(native_probe.subprocess, 'Popen') as launch:
+                launch.return_value.wait.return_value = 0
+                with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run', '--preview-host']):
+                    with self.assertRaisesRegex(RuntimeError, 'Renderer shutdown'):
+                        native_probe.main()
+
+    def test_preview_shutdown_receipt_is_read_after_the_process_exits(self):
+        product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
+        released = {'passed': True, 'releaseCompleted': True, 'released': True,
+                    'outstandingUses': 0, 'nativeBytes': 0, 'nativeResources': 0,
+                    'sceneBytes': 0, 'sceneResources': 0, 'workflowClosed': True, 'editorClosed': True}
+        receipt = {'passed': True, 'artifactSha256': native_probe.digest(product),
+                   'libraryInputSha256': 'fixture', 'rendererReturned': True, 'settingsUnchanged': True,
+                   'workflowOpenAtStop': True, 'editorOpenAtStop': True, 'pendingUsesAtStop': 1, 'nativeBytesAtStop': 64,
+                   'sceneBytesAtStop': 64, 'atRendererReturn': {**released, 'boundary': 'Minecraft.close'},
+                   'afterShutdown': released}
+        report = {'passed': True, 'artifactSha256': native_probe.digest(product),
+                  'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
+                  'rendererShutdown': receipt}
+
+        def publish_after_wait(**_):
+            (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
+            (self.fixture / 'lootr-styled-shutdown-report.json').write_text(json.dumps(receipt))
+            return 0
+
+        with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
+            with patch.object(native_probe.subprocess, 'Popen') as launch:
+                launch.return_value.wait.side_effect = publish_after_wait
+                with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run', '--preview-host']):
+                    with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                        native_probe.main()
+                    self.assertEqual('preview-host', json.loads(stdout.getvalue())['scope'])
+
+        for key, value in [('artifactSha256', 'old'), ('libraryInputSha256', 'old'),
+                           ('rendererReturned', False), ('settingsUnchanged', False),
+                           ('pendingUsesAtStop', 0), ('workflowOpenAtStop', False), ('editorOpenAtStop', False)]:
+            with self.subTest(key=key):
+                bad = copy.deepcopy(receipt)
+                bad[key] = value
+                self._refuse_shutdown(report, bad, product)
+        for section in ('atRendererReturn', 'afterShutdown'):
+            with self.subTest(section=section):
+                bad = copy.deepcopy(receipt)
+                bad[section]['releaseCompleted'] = False
+                self._refuse_shutdown(report, bad, product)
+        bad = copy.deepcopy(receipt)
+        bad['afterShutdown']['workflowClosed'] = False
+        self._refuse_shutdown(report, bad, product)
+
+    def _refuse_shutdown(self, report, receipt, product):
+        report = {**report, 'rendererShutdown': receipt}
+        (self.fixture / 'lootr-styled-shutdown-report.json').write_text(json.dumps(receipt))
+        with self.assertRaisesRegex(RuntimeError, 'Renderer shutdown'):
+            native_probe.require_renderer_shutdown(report, self.fixture, product, 'neoforge-1_21_1')
 
     def test_invalid_sprite_expectations_preserve_settings_and_previous_evidence(self):
         report = self.fixture / 'lootr-styled-probe-report.json'

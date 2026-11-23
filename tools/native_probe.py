@@ -82,7 +82,8 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         raise ValueError('Refusing a pre-existing directory without this fixture owner marker')
     fixture.mkdir(parents=True, exist_ok=True)
     marker.write_text('lootr-styled-native-verification-v1\n')
-    for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt', '.lootr-styled-probe-pid'):
+    for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt',
+                     'lootr-styled-shutdown-report.json', '.lootr-styled-probe-pid'):
         (fixture / previous).unlink(missing_ok=True)
     for previous in ('lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json',
                      *(f'{name}.png' for name in CAPTURES)):
@@ -154,6 +155,37 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     return fixture, product, command
 
 
+def require_renderer_shutdown(data, fixture, product, target):
+    path = fixture / 'lootr-styled-shutdown-report.json'
+    record = json.loads(path.read_text()) if path.is_file() else None
+    boundary = 'RenderSystem.shutdownRenderer' if target.endswith('26_3') else 'Minecraft.close'
+
+    def released(value):
+        return (isinstance(value, dict) and value.get('passed') is True
+                and value.get('releaseCompleted') is True and value.get('released') is True
+                and all(type(value.get(key)) is int and value[key] == 0
+                        for key in ('outstandingUses', 'nativeBytes', 'nativeResources', 'sceneBytes', 'sceneResources'))
+                and 'releaseError' not in value)
+
+    if (not isinstance(record, dict) or record != data.get('rendererShutdown')
+            or data.get('shutdownPending', False) or record.get('passed') is not True
+            or record.get('artifactSha256') != digest(product)
+            or not data.get('libraryInputSha256')
+            or record.get('libraryInputSha256') != data.get('libraryInputSha256')
+            or record.get('rendererReturned') is not True
+            or record.get('settingsUnchanged') is not True
+            or record.get('workflowOpenAtStop') is not True
+            or record.get('editorOpenAtStop') is not True
+            or type(record.get('pendingUsesAtStop')) is not int or record['pendingUsesAtStop'] < 1
+            or type(record.get('nativeBytesAtStop')) is not int or record['nativeBytesAtStop'] < 1
+            or type(record.get('sceneBytesAtStop')) is not int or record['sceneBytesAtStop'] < 1
+            or not released(record.get('atRendererReturn')) or not released(record.get('afterShutdown'))
+            or record['afterShutdown'].get('workflowClosed') is not True
+            or record['afterShutdown'].get('editorClosed') is not True
+            or record['atRendererReturn'].get('boundary') != boundary):
+        raise RuntimeError('Renderer shutdown did not pass; inspect the post-shutdown receipt and native report')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=TARGETS, required=True)
@@ -198,6 +230,8 @@ def main():
             or ('isolatedGraphic' in data) != args.graphics_only
             or ('sharedGraphicHost' in data) != args.preview_host):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
+    if args.preview_host:
+        require_renderer_shutdown(data, fixture, product, args.target)
     print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 

@@ -17,6 +17,7 @@ public final class NativeProbe {
   private static UiProbe ui;
   private static IsolatedGraphicProbe graphics;
   private static SharedGraphicHostProbe sharedHost;
+  private static RendererShutdownProbe rendererShutdown;
   private static final JsonObject REPORT = new JsonObject();
   private static final JsonArray snapshots = new JsonArray();
   private static int ticks, stage;
@@ -133,8 +134,10 @@ public final class NativeProbe {
         var observations = sharedHost.tick(mc);
         if (observations == null) return;
         REPORT.add("sharedGraphicHost", observations);
-        REPORT.addProperty("passed", true);
-        finish(mc, null);
+        rendererShutdown = new RendererShutdownProbe();
+        stage = 13;
+      } else if (stage == 13) {
+        rendererShutdown.tick(mc);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);
         if (scene != null) {
@@ -196,5 +199,63 @@ public final class NativeProbe {
       com.mojang.logging.LogUtils.getLogger().error("Cannot write native fixture report", failure);
     }
     mc.execute(mc::stop);
+  }
+
+  static synchronized void requestLiveShutdown(
+      Minecraft mc,
+      design.inherent.reform.minecraft.client.ClientGraphicHost host,
+      design.inherent.reform.minecraft.client.PreparedGraphic lease,
+      Path settings,
+      byte[] originalSettings,
+      JsonObject initial,
+      java.util.function.BooleanSupplier workflowOpen,
+      java.util.function.BooleanSupplier editorOpen) {
+    if (terminal) throw new IllegalStateException("Native fixture already finished");
+    var fixture = mc.gameDirectory.toPath();
+    initial.addProperty("artifactSha256", REPORT.get("artifactSha256").getAsString());
+    initial.addProperty("libraryInputSha256", REPORT.get("libraryInputSha256").getAsString());
+    RendererShutdownEvidence.arm(
+        host,
+        lease,
+        settings,
+        originalSettings,
+        initial,
+        workflowOpen,
+        editorOpen,
+        value -> completeLiveShutdown(fixture, value));
+    REPORT.add("rendererShutdownRequest", initial);
+    REPORT.addProperty("passed", false);
+    REPORT.addProperty("shutdownPending", true);
+    terminal = true;
+    try {
+      Files.writeString(
+          fixture.resolve("lootr-styled-probe-report.json"),
+          new GsonBuilder().setPrettyPrinting().create().toJson(REPORT) + "\n",
+          StandardCharsets.UTF_8);
+    } catch (java.io.IOException failed) {
+      System.err.println("Cannot write pending renderer shutdown report: " + failed);
+    }
+    // A normal stop request while this submitted use and workflow are still live. Native
+    // shutdown hooks own every close/drain; the test observer does not release anything.
+    mc.stop();
+  }
+
+  private static synchronized void completeLiveShutdown(Path fixture, JsonObject result) {
+    REPORT.add("rendererShutdown", result);
+    REPORT.remove("shutdownPending");
+    REPORT.addProperty("passed", result.get("passed").getAsBoolean());
+    var gson = new GsonBuilder().setPrettyPrinting().create();
+    try {
+      Files.writeString(
+          fixture.resolve("lootr-styled-shutdown-report.json"),
+          gson.toJson(result) + "\n",
+          StandardCharsets.UTF_8);
+      Files.writeString(
+          fixture.resolve("lootr-styled-probe-report.json"),
+          gson.toJson(REPORT) + "\n",
+          StandardCharsets.UTF_8);
+    } catch (java.io.IOException failed) {
+      System.err.println("Cannot write renderer shutdown evidence: " + failed);
+    }
   }
 }

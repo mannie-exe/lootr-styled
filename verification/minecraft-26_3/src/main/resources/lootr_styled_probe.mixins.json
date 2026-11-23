@@ -6,7 +6,8 @@
   "client": [
     "ProbeTickMixin",
     "ResourceLookupMixin",
-    "GraphicDrawMixin"
+    "GraphicDrawMixin",
+    "RendererShutdownMixin"
   ],
   "injectors": {
     "defaultRequire": 1
