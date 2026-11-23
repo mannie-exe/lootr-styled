@@ -33,8 +33,7 @@ public final class StylePreferences {
       ApplicationEffects.root(
           ApplicationEffects.Timing.EXPLICIT_RELOAD,
           "Save settings, then reload resources to update appearance.");
-  private static final ReferenceLimits REFERENCES =
-      new ReferenceLimits(4096, 1048576, 64, 256, 4096);
+  static final ReferenceLimits REFERENCES = new ReferenceLimits(4096, 1048576, 64, 256, 4096);
   private static final List<StyleWorkflow> workflows = new ArrayList<>();
   private static final ReferenceTitles profileTitles = new ReferenceTitles(Map.of());
   private static ClientFileSettings<ClientSettings> preferences;
@@ -174,9 +173,8 @@ public final class StylePreferences {
   }
 
   private static ClientFormOptions<ClientSettings> options() {
-    refreshProfiles();
     return new ClientFormOptions<ClientSettings>(
-            presentation(), Map.of(StyleSettingsStore.PROFILES, profiles))
+            presentation(), Map.of(StyleSettingsStore.PROFILES, profileReferences()))
         .withDefaults(
             Component.literal("Defaults"),
             Component.literal("Load default appearance settings into this draft."))
@@ -198,6 +196,15 @@ public final class StylePreferences {
                                     Optional.of("settings.json"))
                                 .withTechnicalDetails(
                                     FormInformation.TechnicalDetails.DISCLOSURE))));
+  }
+
+  /** Borrow the same generation-bound catalogue used by the two settings fields. */
+  static ReferenceActions<String, String> profileReferences() {
+    refreshProfiles();
+    if (profiles == null)
+      throw new design.inherent.reform.owner.PolicyRefusal(
+          "profiles.unavailable", "Profiles are unavailable; finish loading settings");
+    return profiles;
   }
 
   private static FormPresentation presentation() {

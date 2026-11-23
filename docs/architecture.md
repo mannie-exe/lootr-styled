@@ -10,7 +10,9 @@ One compiler prepares a complete immutable resource generation from config/resou
 
 Optional foreign classes must not resolve when their adapter is absent or disabled. Client rendering must not load on a dedicated server. Native and foreign subclass renderers need explicit scope admission; inheritance alone is not authority to modify their output.
 
-The settings workspace declares a stable identity and Home page through re:form. Home links to settings and profile tools without opening an appearance editor. Category destinations have their own presentation identities; they do not create settings owners or change serialized fields. Opening Appearance retains the existing document and save path.
+The settings workspace declares a stable identity and Home page through re:form. Home links to Settings and Profiles without admitting an editor. Entering Profiles or Appearance uses the same retained document and save path within that workflow. Category destinations have their own presentation identities; they do not create another settings owner or change serialized fields.
+
+Profiles registers a shared catalogue task over the generation-bound source already used by Models and Artwork. The task borrows that source and offers separate guarded field actions. Inspection does not stage a value. Its shared preview slot captures the complete draft only after an explicit request; the inspected profile never replaces a draft selection automatically. Provider construction is lightweight, and compilation, image preparation, upload, visibility, and retirement continue through the existing domain provider and shared host. The twelve subject presets keep looted appearance independent of closed/open barrel state or chest lid endpoints.
 
 Settings persistence, retained editing, conflicts, references, commands and operation screens use public re:form services. One staged file owner reads and writes the existing format 1 `settings.json`; profile discovery, compilation and export remain domain operations. Profile initialization never writes settings. Ordinary control rendering and search use immutable cached metadata, without filesystem or resource analysis.
 
@@ -23,6 +25,8 @@ The core resource envelope captures a complete owned byte set in deterministic i
 [Barrel rendering](barrels.md) owns the shared shell, state/UV, lighting, culling and cache contract. Native section rebuilds remain Minecraft/Sodium’s responsibility.
 
 ## Isolated preview preparation
+
+The production task declares one preview view per workflow, with 16 MiB of encoded input, 32 MiB of retained output, 16,777,216 decoded pixels, 256 resources, and 128 MiB of native accounting. These are admission budgets, not measurements of physical memory. A resource accepted by the profile format may still exceed a preview budget and refuse explicitly; the prepared mesh is never silently simplified to fit.
 
 Draft preparation starts with re:form’s actual READ capture and binds its native-input/reference stamps to the current resource generation. It uses guarded lower sources, excluding the installed generated layer, and the same complete-settings compiler as reload. Frozen chest/barrel inputs own their selected bytes; they do not retain borrowed packs or source streams. Local profile enumeration is reusable within one read scope, with directory identity/listing and file-content checks; cached names cannot survive closure. No preview preparation seeds profiles, saves settings, installs resources, or initiates a reload.
 

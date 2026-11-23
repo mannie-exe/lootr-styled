@@ -123,6 +123,7 @@ public final class NativeProbe {
         var widgets = ui.tick(mc);
         if (widgets == null) return;
         REPORT.add("nativeWidgets", widgets);
+        REPORT.addProperty("nativeWidgetsComplete", true);
         if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-scene"))) {
           stage = 2;
           SceneProbe.begin(mc);
@@ -235,6 +236,10 @@ public final class NativeProbe {
     terminal = true;
     try {
       if (error != null) {
+        if (ui != null && !REPORT.has("nativeWidgets")) {
+          REPORT.add("nativeWidgets", ui.observations());
+          REPORT.addProperty("nativeWidgetsComplete", false);
+        }
         REPORT.addProperty("passed", false);
         REPORT.addProperty("error", error.toString());
         com.mojang.logging.LogUtils.getLogger().error("Lootr Styled native fixture failed", error);

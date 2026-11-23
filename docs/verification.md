@@ -31,11 +31,19 @@ The pinned EMF 3.3.12/ETF 7.2.7/Fresh Objects 2.1.2 inputs and their hashes are 
 
 ## Development settings interface
 
-The re:form 0.4 migration is incomplete. The current engineering inputs are recorded in [the pin manifest](../gradle/reform.json); historical reports retain their original inputs. Native settings checks open the packaged workflow. Preview checks use shared viewports mounted by verification code; the production settings UI has no preview panel yet.
+The re:form 0.4 migration is incomplete. The current engineering inputs are recorded in [the pin manifest](../gradle/reform.json); historical reports retain their original inputs. The production Profiles task now prepares and draws through the shared provider and viewport on all four targets. Final combined acceptance remains open.
+
+### Production Profiles task
+
+Packaged clients check the registered production task on all four targets. Home initially admits no editor. Entering Profiles admits the settings editor, which remains the same object through Home and Appearance. Inspection leaves the draft unchanged; Use for Models and Use for Artwork stage their actual resource-ID fields independently. Both selections restore through the same document actions without saving. Entry and selection leave tracked native and retained preview bytes at zero before any explicit preparation.
+
+The actual Prepare draft preview button draws a closed, unlooted Default barrel through the registered provider and shared native renderer. The inspected list item remains Vanilla (Inherited), while the draft retains Default Models and Artwork. Preparation leaves the draft and settings bytes unchanged. Changing the subject to an open barrel without preparing again retires the submitted preview and both tracked ledgers reach zero, without another rendered submission. The existing retained-input, chooser, save/reload, and export controls then pass, restore the settings file, and exit normally. These observers use public widget actions, host accounting, and a verification-only draw hook; they do not mount a substitute viewport.
+
+These runs cover one production draw per target, not all twelve declared subjects or the complete production lifecycle. Subject replacement during entered preparation, source replacement, owner discard and reopen, live-preview shutdown, camera controls, actual window resizing, and complete accessibility remain open. GUI scale 4 scrolls the preview beyond the visible body, so its capture does not establish that the full container fits at once. Programmatic native controls do not establish physical input or uninterrupted OS focus. Earlier settings and isolated-preview results below retain their separate inputs and scope.
 
 ### Settings and navigation
 
-Packaged settings checks pass on all four targets. Home and profile tools leave the appearance editor unopened and settings unchanged. Styling and Profile selection focus through their declared section identities; an absent section refuses. Section and field order match the rendered body without changing codec order. Navigation and a Home round trip retain the actual editor, actions, draft revision, and invalid input.
+The earlier packaged settings checks pass on all four targets. Home leaves the appearance editor unopened and settings unchanged. Styling and Profile selection focus through their declared section identities; an absent section refuses. Section and field order match the rendered body without changing codec order. Navigation and a Home round trip retain the actual editor, actions, draft revision, and invalid input.
 
 The same runs exercise profile search and selection, Defaults and Undo, missing and malformed IDs, native repair, refusal of partial submission, save followed by matching resource publication, active-artwork export, and restoration of settings bytes. They use GUI scale 2 on three targets and scale 4 on Fabric 26.3, plus logical 320×240 and 900×540 reflows. Large-scale panes scroll rather than keeping every row visible. Navigation-driven checks await an identified document reveal before inspecting controls.
 

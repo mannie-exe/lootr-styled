@@ -10,6 +10,8 @@ Navigation should follow the rendered groups and their responsive stacking order
 
 The shared chooser separates search and choices from inspected-value details when both panes fit. Narrow layouts keep the complete task in one pane. Reflow must retain the query, inspected ID, caret, and focus. Inspecting a profile does not change Models or Artwork; Use selection stages the chosen field. Manual ID editing stays inside a labelled group, and collapsing it retains the draft and returns focus to the live disclosure control.
 
+Profiles uses that same source in its own shared task. Use for Models and Use for Artwork stage independent fields in the retained settings draft. Keep the inspected profile, draft selections, and effective resources distinct. Prepare draft preview uses the complete draft and chosen subject; it leaves the file and installed resources unchanged. Switching subject or leaving the page retires the displayed interest without automatically preparing another preview.
+
 Document actions opens a shared view of the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Save and reload resources and profile exports remain separate guarded operations.
 
 Report routine outcomes briefly, such as Saved or Reloaded. Keep errors specific and provide a recovery action. Put paths, resource decisions, and diagnostic detail behind Details rather than opening a report after every successful action. Distinguish a draft reset, a saved setting, a resource reload, and an exported editing copy.

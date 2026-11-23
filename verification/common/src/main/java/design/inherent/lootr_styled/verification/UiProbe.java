@@ -40,6 +40,15 @@ final class UiProbe {
       STYLING_SECTION = -12,
       PROFILE_SECTION = -11,
       PROFILE_TOOLS = -9,
+      PROFILE_INSPECT = -13,
+      PROFILE_MODELS = -14,
+      PROFILE_ARTWORK = -15,
+      PROFILE_RESTORE = -16,
+      PROFILE_RESTORE_ARTWORK = -17,
+      PROFILE_PREVIEW_BEFORE = -18,
+      PROFILE_PREVIEW_DRAW = -20,
+      PROFILE_PREVIEW_CAPTURE = -21,
+      PROFILE_SUBJECT_RETIRED = -22,
       HOME_RETURN = -8,
       ENTER_SETTINGS = -7;
   private static final int HOME_DIRTY = 210, RETURN_DIRTY = 211;
@@ -51,6 +60,9 @@ final class UiProbe {
   private final ClientSettings original;
   private final Path settingsFile;
   private ClientEditor<?> editor;
+  private ClientEditor<?> profileOwner;
+  private design.inherent.reform.minecraft.client.ClientGraphicHost profileHost;
+  private DraftRevision profileRevision;
   private DraftRevision homeRevision;
   private DraftRevision sectionRevision;
   private DraftRevision manualRevision;
@@ -65,6 +77,7 @@ final class UiProbe {
   private final JsonObject timings = new JsonObject();
   private final long openedAt = System.nanoTime();
   private long actionAt, searchAt, exportAt;
+  private long profileDraws;
 
   UiProbe() throws Exception {
     result.add("timingsMs", timings);
@@ -93,24 +106,187 @@ final class UiProbe {
         if (workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::opened))
           throw new IllegalStateException("Home eagerly opened an appearance editor");
         NativeBindings.press(button(root, "Profiles"));
+        pending =
+            WorkflowReveal.view(
+                    workflow,
+                    StyleSettingsStore.DEFINITION,
+                    design.inherent.reform.presentation.DestinationId.parse(
+                        "lootr_styled:profiles_page"))
+                .thenAccept(
+                    opened -> {
+                      profileOwner = opened;
+                      editor = opened;
+                    });
         mountTicks = 0;
         stage = PROFILE_TOOLS;
       }
       case PROFILE_TOOLS -> {
         if (++mountTicks < 4) return null;
-        if (workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::opened))
-          throw new IllegalStateException("Profile tools opened an appearance editor");
+        if (profileOwner == null
+            || workflow.editor(StyleSettingsStore.DEFINITION) != profileOwner
+            || workflow.documents().stream()
+                    .filter(ClientEditingWorkflow.DocumentState::opened)
+                    .count()
+                != 1)
+          throw new IllegalStateException("Profiles did not retain the existing settings owner");
+        button(root, "Use for Models");
+        button(root, "Use for Artwork");
+        button(root, "Prepare draft preview");
+        profileHost =
+            workflow.graphics(
+                new design.inherent.reform.presentation.graphics.GraphicLimits(
+                    16L * 1024 * 1024,
+                    32L * 1024 * 1024,
+                    16L * 1024 * 1024,
+                    256,
+                    128L * 1024 * 1024),
+                1);
+        if (profileHost.nativeOwnership().bytes() != 0 || profileHost.retainedOutput().bytes() != 0)
+          throw new IllegalStateException("Profiles allocated graphics before an explicit request");
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Profile tools changed settings without an action");
-        result.addProperty("profileToolsLazy", true);
+        result.addProperty("profileTaskUsesSettingsOwner", true);
+        result.addProperty("profileTaskIdleNativeBytes", profileHost.nativeOwnership().bytes());
+        result.addProperty("profileTaskIdleOutputBytes", profileHost.retainedOutput().bytes());
+        var inherited =
+            children(root).stream()
+                .filter(Button.class::isInstance)
+                .map(Button.class::cast)
+                .filter(value -> value.getMessage().getString().equals("Vanilla (Inherited)"))
+                .findFirst();
+        if (inherited.isEmpty()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Profiles did not list the inherited profile");
+          return null;
+        }
+        profileRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        NativeBindings.press(inherited.orElseThrow());
+        mountTicks = 0;
+        stage = PROFILE_INSPECT;
+      }
+      case PROFILE_INSPECT -> {
+        if (!button(root, "Use for Models").active) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Inspected profile did not permit guarded selection");
+          return null;
+        }
+        if (!profileRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
+            || !profileCandidate().equals(original))
+          throw new IllegalStateException("Profile inspection changed the draft");
+        result.addProperty("profileInspectionDoesNotStage", true);
+        NativeBindings.press(button(root, "Use for Models"));
+        mountTicks = 0;
+        stage = PROFILE_MODELS;
+      }
+      case PROFILE_MODELS -> {
+        if (!profileCandidate().models().equals(ClientSettings.VANILLA)) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Use for Models did not stage the profile ID");
+          return null;
+        }
+        if (!profileCandidate().artwork().equals(original.artwork()))
+          throw new IllegalStateException("Choosing Models also changed Artwork");
+        NativeBindings.press(button(root, "Use for Artwork"));
+        mountTicks = 0;
+        stage = PROFILE_ARTWORK;
+      }
+      case PROFILE_ARTWORK -> {
+        if (!profileCandidate().artwork().equals(ClientSettings.VANILLA)) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Use for Artwork did not stage the profile ID");
+          return null;
+        }
+        if (!profileCandidate().models().equals(ClientSettings.VANILLA)
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Profile field choices saved or lost a selection");
+        result.addProperty("profileTaskIndependentChoices", true);
+        pending = edit(MODELS, new DraftEdit.SetRaw(original.models().toString()));
+        stage = PROFILE_RESTORE_ARTWORK;
+      }
+      case PROFILE_RESTORE_ARTWORK -> {
+        // Operation completion may run on a worker; enter the next GUI edit on this native tick.
+        pending = edit(ARTWORK, new DraftEdit.SetRaw(original.artwork().toString()));
+        stage = PROFILE_RESTORE;
+      }
+      case PROFILE_RESTORE -> {
+        if (!profileCandidate().equals(original)
+            || profileHost.nativeOwnership().bytes() != 0
+            || profileHost.retainedOutput().bytes() != 0
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException(
+              "Profiles changed files or prepared unrequested graphics");
+        if (!focusControl(root, productionPreview(root)))
+          throw new IllegalStateException("The production preview is not in the native focus tree");
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-production-preview-idle", () -> captured = true);
+        stage = PROFILE_PREVIEW_BEFORE;
+      }
+      case PROFILE_PREVIEW_BEFORE -> {
+        if (!captured) return null;
+        profileDraws = GraphicDrawAudit.state().rendered();
+        if (!profileSubject(root).getValue().equals("barrel/unlooted/closed"))
+          throw new IllegalStateException("The production preview lost its default barrel subject");
+        result.addProperty("profilePreviewDraftModels", profileCandidate().models().toString());
+        result.addProperty("profilePreviewDraftArtwork", profileCandidate().artwork().toString());
+        NativeBindings.press(button(root, "Prepare draft preview"));
+        mountTicks = 0;
+        stage = PROFILE_PREVIEW_DRAW;
+      }
+      case PROFILE_PREVIEW_DRAW -> {
+        if (GraphicDrawAudit.state().rendered() <= profileDraws
+            || profileHost.nativeOwnership().bytes() == 0) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException(
+                "Production draft preview did not draw; native="
+                    + profileHost.nativeOwnership().bytes()
+                    + ", output="
+                    + profileHost.retainedOutput().bytes());
+          return null;
+        }
+        if (!profileCandidate().equals(original)
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Production preview changed the settings draft or file");
+        result.addProperty("productionProfilePreviewRendered", true);
+        result.addProperty("productionPreviewNativeBytes", profileHost.nativeOwnership().bytes());
+        result.addProperty("productionPreviewOutputBytes", profileHost.retainedOutput().bytes());
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-production-preview-drawn", () -> captured = true);
+        stage = PROFILE_PREVIEW_CAPTURE;
+      }
+      case PROFILE_PREVIEW_CAPTURE -> {
+        if (!captured) return null;
+        NativeBindings.press(profileSubject(root));
+        profileDraws = GraphicDrawAudit.state().rendered();
+        mountTicks = 0;
+        stage = PROFILE_SUBJECT_RETIRED;
+      }
+      case PROFILE_SUBJECT_RETIRED -> {
+        if (!profileSubject(root).getValue().equals("barrel/unlooted/open"))
+          throw new IllegalStateException("The subject control did not select the open barrel");
+        if (profileHost.nativeOwnership().bytes() != 0
+            || profileHost.retainedOutput().bytes() != 0) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("The old production preview did not retire");
+          return null;
+        }
+        if (++mountTicks < 4) return null;
+        if (GraphicDrawAudit.state().rendered() != profileDraws)
+          throw new IllegalStateException("The changed subject submitted an unrequested draw");
+        result.addProperty("productionSubjectRetiresWithoutNewRenderedSubmission", true);
+        result.addProperty("productionSubjectRetiredNativeBytes", 0);
+        result.addProperty("productionSubjectRetiredOutputBytes", 0);
         NativeBindings.press(navigation(root, "Home"));
         mountTicks = 0;
         stage = HOME_RETURN;
       }
       case HOME_RETURN -> {
         if (++mountTicks < 4) return null;
-        if (workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::opened))
-          throw new IllegalStateException("Home eagerly opened an appearance editor");
+        if (workflow.editor(StyleSettingsStore.DEFINITION) != profileOwner
+            || workflow.documents().stream()
+                    .filter(ClientEditingWorkflow.DocumentState::opened)
+                    .count()
+                != 1)
+          throw new IllegalStateException("Home did not retain the Profiles settings owner");
         if (!root.getTitle().getString().equals("Lootr: Styled"))
           throw new IllegalStateException("The workspace lost its stable identity");
         button(root, "Settings");
@@ -118,6 +294,7 @@ final class UiProbe {
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Home changed settings");
         result.addProperty("lazyHome", true);
+        result.addProperty("homeRetainsProfileOwner", true);
         captured = false;
         NativeWorld.screenshot(mc, "reform-home", () -> captured = true);
         stage = ENTER_SETTINGS;
@@ -129,6 +306,9 @@ final class UiProbe {
             WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION)
                 .thenAccept(
                     opened -> {
+                      if (opened != profileOwner)
+                        throw new IllegalStateException(
+                            "Appearance opened a different owner from Profiles");
                       var models = opened.form().fieldControl(MODELS).orElseThrow();
                       if (!children(workflow.screen()).contains(models))
                         throw new IllegalStateException(
@@ -718,6 +898,10 @@ final class UiProbe {
     return "ui=" + stage + (pending == null ? "" : ",pending=" + !pending.isDone());
   }
 
+  JsonObject observations() {
+    return result.deepCopy();
+  }
+
   private CompletableFuture<?> edit(FieldPath path, DraftEdit.Action action) {
     var snapshot = editor.view().snapshot().orElseThrow();
     return DocumentActions.result(
@@ -785,6 +969,11 @@ final class UiProbe {
     var settings = ClientSettings.class.cast(inspected.candidate().orElseThrow().value());
     if (!settings.models().toString().equals(id))
       throw new IllegalStateException("Retained draft lost profile identity");
+  }
+
+  private ClientSettings profileCandidate() {
+    return ClientSettings.class.cast(
+        profileOwner.view().snapshot().orElseThrow().inspect().candidate().orElseThrow().value());
   }
 
   private void recordGeometry(String key) throws java.io.IOException {
@@ -880,6 +1069,29 @@ final class UiProbe {
         .filter(control -> NativeBindings.narration(control).startsWith("Models:"))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException("Models lost its " + label + " action"));
+  }
+
+  private static AbstractWidget productionPreview(Screen screen) {
+    return children(screen).stream()
+        .filter(AbstractWidget.class::isInstance)
+        .map(AbstractWidget.class::cast)
+        .filter(widget -> widget.getMessage().getString().equals("Draft preview"))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("The production preview widget is missing"));
+  }
+
+  private static net.minecraft.client.gui.components.CycleButton<?> profileSubject(Screen screen) {
+    return children(screen).stream()
+        .filter(net.minecraft.client.gui.components.CycleButton.class::isInstance)
+        .map(net.minecraft.client.gui.components.CycleButton.class::cast)
+        .filter(
+            widget ->
+                widget.getValue() instanceof String id
+                    && (id.startsWith("barrel/")
+                        || id.startsWith("chest/")
+                        || id.startsWith("trapped-chest/")))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("The production preview subject is missing"));
   }
 
   private static List<GuiEventListener> children(Screen screen) {

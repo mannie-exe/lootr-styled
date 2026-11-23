@@ -21,6 +21,7 @@ PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST',
 CAPTURES = (
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
+    'reform-production-preview-idle', 'reform-production-preview-drawn',
     'scene-closed', 'scene-ordinary-open', 'scene-looted', 'barrel-closed-again', 'barrel-reopened',
     'barrel-third-person-item', 'barrel-framed-and-dropped-items', 'barrel-inventory-item',
     'barrel-neighbor-cases',

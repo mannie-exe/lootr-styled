@@ -31,7 +31,7 @@ final class NativeBindings {
     screen.resize(w, h);
   }
 
-  static void press(net.minecraft.client.gui.components.Button button) {
+  static void press(net.minecraft.client.gui.components.AbstractButton button) {
     button.onPress(
         new net.minecraft.client.input.InputWithModifiers() {
           public int input() {
