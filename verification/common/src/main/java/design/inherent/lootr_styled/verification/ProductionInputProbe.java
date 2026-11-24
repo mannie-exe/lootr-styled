@@ -8,13 +8,18 @@ import design.inherent.lootr_styled.client.StylePreferences;
 import design.inherent.lootr_styled.client.StyleSettingsStore;
 import design.inherent.lootr_styled.profile.ClientSettings;
 import design.inherent.reform.definition.FieldPath;
+import design.inherent.reform.edit.DraftEdit;
 import design.inherent.reform.edit.DraftNode;
 import design.inherent.reform.edit.DraftRevision;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
+import design.inherent.reform.operation.DocumentActions;
+import design.inherent.reform.operation.OperationDescriptor.EntryPoint;
+import design.inherent.reform.presentation.DestinationId;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
@@ -38,6 +43,18 @@ final class ProductionInputProbe {
     RETURNED_IMAGE,
     REPAIR,
     RESTORE,
+    ACTIONS_OPEN,
+    ACTIONS_STAGED,
+    PARTIAL,
+    PARTIAL_QUERY,
+    PARTIAL_CAPTURE,
+    DEFAULT_MENU,
+    DEFAULTED,
+    DEFAULT_CAPTURE,
+    UNDO_MENU,
+    UNDONE,
+    RESTORE_MENU,
+    RESTORED_ORIGINAL,
     CLOSED
   }
 
@@ -59,6 +76,8 @@ final class ProductionInputProbe {
   private CompletableFuture<?> pending;
   private DraftRevision invalidRevision;
   private JsonObject invalidDraft;
+  private final JsonObject filteredActions = new JsonObject();
+  private JsonObject stagedActions;
   private Phase phase = Phase.OPEN;
   private int ticks, captureTicks;
   private boolean captureRequested, captured;
@@ -82,6 +101,7 @@ final class ProductionInputProbe {
         WorkflowReveal.field(workflow, StyleSettingsStore.DEFINITION, ENABLED)
             .thenAccept(value -> editor = value);
     result.add("states", states);
+    result.add("filteredActions", filteredActions);
   }
 
   JsonObject tick(Minecraft mc) throws Exception {
@@ -188,8 +208,128 @@ final class ProductionInputProbe {
                 .equals(original)) return null;
         result.addProperty("repairRestoresOriginalValuesWithoutSaving", true);
         result.add("restoredWholeDraft", draft());
+        pending =
+            WorkflowReveal.view(
+                workflow,
+                StyleSettingsStore.DEFINITION,
+                DestinationId.parse("lootr_styled:profiles_page"));
+        next(Phase.ACTIONS_OPEN);
+      }
+      case ACTIONS_OPEN -> {
+        if (!ready()) return null;
+        for (String key : new String[] {"enabled", "models", "artwork", "freshObjects"})
+          if (editor.form().fieldControl(FieldPath.ROOT.field(key)).isPresent())
+            throw new IllegalStateException("Backend edit would bypass mounted native input");
+        var snapshot = editor.view().snapshot().orElseThrow();
+        pending =
+            DocumentActions.result(
+                    editor
+                        .actions()
+                        .edit(
+                            EntryPoint.GUI,
+                            new DraftEdit(
+                                snapshot.target(FieldPath.ROOT),
+                                new DraftEdit.SetRecordScalars(
+                                    Map.of(
+                                        "enabled",
+                                        "false",
+                                        "models",
+                                        "lootr_styled:vanilla",
+                                        "artwork",
+                                        "lootr_styled:vanilla",
+                                        "freshObjects",
+                                        "OFF")))))
+                .toCompletableFuture();
+        next(Phase.ACTIONS_STAGED);
+      }
+      case ACTIONS_STAGED -> {
+        if (!ready() || !editor.canSubmit()) return null;
+        stagedActions = draft();
+        if (!raw(MODELS).equals("lootr_styled:vanilla")
+            || !raw(FieldPath.ROOT.field("artwork")).equals("lootr_styled:vanilla")
+            || !raw(ENABLED).equals("false")
+            || !raw(FieldPath.ROOT.field("freshObjects")).equals("OFF"))
+          throw new IllegalStateException("Complete action setup was not admitted");
+        filteredActions.add("stagedWholeDraft", stagedActions.deepCopy());
+        next(Phase.PARTIAL);
+      }
+      case PARTIAL -> {
+        if (!ready()
+            || !UiProbe.hasButton(root, "Prepare draft preview")
+            || !UiProbe.hasButton(root, "Search")
+            || !UiProbe.button(root, "Search").active) return null;
+        query().setValue("Vanilla");
+        press("Search");
+        next(Phase.PARTIAL_QUERY);
+      }
+      case PARTIAL_QUERY -> {
+        if (busy()
+            || UiProbe.hasButton(root, "Default")
+            || !UiProbe.hasButton(root, "Vanilla (Inherited)")) return null;
+        filteredActions.addProperty("searchRemovedDefaultChoice", true);
+        partial();
+        if (!stagedActions.equals(draft()))
+          throw new IllegalStateException("Partial view changed hidden values");
+        filteredActions.addProperty("hiddenModelAndArtworkControls", true);
+        filteredActions.addProperty("query", query().getValue());
+        next(Phase.PARTIAL_CAPTURE);
+      }
+      case PARTIAL_CAPTURE -> {
+        if (!capture(mc, "production-input-filtered")) return null;
+        partial();
+        press("Document actions…");
+        next(Phase.DEFAULT_MENU);
+      }
+      case DEFAULT_MENU -> {
+        if (!UiProbe.hasButton(root, "Defaults") || !UiProbe.button(root, "Defaults").active)
+          return null;
+        press("Defaults");
+        next(Phase.DEFAULTED);
+      }
+      case DEFAULTED -> {
+        if (busy() || UiProbe.hasButton(root, "Defaults")) return null;
+        partial();
+        if (!candidate().equals(ClientSettings.DEFAULTS)) return null;
+        filteredActions.add("defaultWholeDraft", draft());
+        next(Phase.DEFAULT_CAPTURE);
+      }
+      case DEFAULT_CAPTURE -> {
+        if (!capture(mc, "production-input-filtered-defaults")) return null;
+        partial();
+        press("Document actions…");
+        next(Phase.UNDO_MENU);
+      }
+      case UNDO_MENU -> {
+        if (!UiProbe.hasButton(root, "Undo") || !UiProbe.button(root, "Undo").active) return null;
+        press("Undo");
+        next(Phase.UNDONE);
+      }
+      case UNDONE -> {
+        if (busy() || !editor.canSubmit() || UiProbe.hasButton(root, "Undo")) return null;
+        partial();
+        if (!stagedActions.equals(draft())) return null;
+        filteredActions.add("undoneWholeDraft", draft());
+        filteredActions.addProperty("canUndoAfterDefaultsUndo", editor.view().canUndo());
+        if (!editor.view().canUndo())
+          throw new IllegalStateException("Actual actor has no setup undo after Defaults undo");
+        press("Document actions…");
+        next(Phase.RESTORE_MENU);
+      }
+      case RESTORE_MENU -> {
+        if (!UiProbe.hasButton(root, "Undo") || !UiProbe.button(root, "Undo").active) return null;
+        press("Undo");
+        next(Phase.RESTORED_ORIGINAL);
+      }
+      case RESTORED_ORIGINAL -> {
+        if (busy() || UiProbe.hasButton(root, "Undo") || !editor.canSubmit()) return null;
+        partial();
+        if (!candidate().equals(original)) return null;
+        filteredActions.add("restoredWholeDraft", draft());
+        filteredActions.addProperty("wholeDocumentDefaultsAndUndo", true);
+        filteredActions.addProperty("sameOwnerAndNoWrite", true);
+        result.add("filteredActions", filteredActions);
         if (!UiProbe.button(root, "Done").active) return null;
-        NativeBindings.press(UiProbe.button(root, "Done"));
+        press("Done");
         next(Phase.CLOSED);
       }
       case CLOSED -> {
@@ -208,6 +348,41 @@ final class ProductionInputProbe {
       }
     }
     return null;
+  }
+
+  private ClientSettings candidate() {
+    return editor.view().snapshot().orElseThrow().inspect().candidate().orElseThrow().value();
+  }
+
+  private boolean ready() {
+    if (!pending.isDone()) return false;
+    pending.join();
+    return !busy();
+  }
+
+  private EditBox query() {
+    return UiProbe.children(root).stream()
+        .filter(EditBox.class::isInstance)
+        .map(EditBox.class::cast)
+        .filter(box -> box.getMessage().getString().equals("Search"))
+        .findFirst()
+        .orElseThrow();
+  }
+
+  private void partial() {
+    if (NativeUi.current() != root
+        || !query().getValue().equals("Vanilla")
+        || editor.form().fieldControl(ENABLED).isPresent()
+        || editor.form().fieldControl(MODELS).isPresent()
+        || editor.form().fieldControl(FieldPath.ROOT.field("artwork")).isPresent())
+      throw new IllegalStateException(
+          "Not the actual filtered Profiles view with hidden native fields: " + observations());
+  }
+
+  private void press(String label) {
+    var button = UiProbe.button(root, label);
+    if (!button.active) throw new IllegalStateException("Inactive document action: " + label);
+    NativeBindings.press(button);
   }
 
   private void assertInput() {
@@ -308,6 +483,18 @@ final class ProductionInputProbe {
     if (editor == null || !editor.isOpen()) return value;
     value.add("draft", draft());
     value.addProperty("canSubmit", editor.canSubmit());
+    value.addProperty("canUndo", editor.view().canUndo());
+    value.addProperty("canRedo", editor.view().canRedo());
+    value.add("filteredActions", filteredActions.deepCopy());
+    var buttons = new JsonArray();
+    for (var child : UiProbe.children(root))
+      if (child instanceof net.minecraft.client.gui.components.AbstractButton button) {
+        var fact = new JsonObject();
+        fact.addProperty("label", button.getMessage().getString());
+        fact.addProperty("active", button.active);
+        buttons.add(fact);
+      }
+    value.add("buttons", buttons);
     editor
         .form()
         .fieldControl(MODELS)

@@ -138,6 +138,20 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
 
+    def test_filtered_document_actions_cover_all_fields_without_write(self):
+        defaults = dict(enabled='true',models='lootr_styled:default',artwork='lootr_styled:default',freshObjects='AUTO')
+        staged = dict(enabled='false',models='lootr_styled:vanilla',artwork='lootr_styled:vanilla',freshObjects='OFF')
+        facts = dict(query='Vanilla',hiddenModelAndArtworkControls=True,wholeDocumentDefaultsAndUndo=True,
+                     sameOwnerAndNoWrite=True,searchRemovedDefaultChoice=True,stagedWholeDraft=staged,undoneWholeDraft=staged,
+                     defaultWholeDraft=defaults,restoredWholeDraft=defaults)
+        value = dict(baselineWholeDraft=defaults,filteredActions=facts)
+        native_probe.require_filtered_actions({'productionInput':value})
+        for key,replacement in [('query',''),('hiddenModelAndArtworkControls',False),
+                                ('sameOwnerAndNoWrite',False),('undoneWholeDraft',defaults),
+                                ('defaultWholeDraft',staged),('restoredWholeDraft',staged)]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Filtered document actions'):
+                native_probe.require_filtered_actions({'productionInput':{**value,'filteredActions':{**facts,key:replacement}}})
+
     def test_production_operation_scope_is_exclusive_and_cleared(self):
         marker = self.fixture / '.lootr-styled-production-operation'
         native_probe.prepare('neoforge-1_21_1', 'native', production_operation=True)

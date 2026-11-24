@@ -27,6 +27,7 @@ CAPTURES = (
     'production-document-conflict', 'production-document-import',
     'production-viewport-narrow', 'production-viewport-returned',
     'production-input-narrow', 'production-input-returned',
+    'production-input-filtered', 'production-input-filtered-defaults',
     'production-chooser-narrow', 'production-chooser-returned',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'reform-review',
@@ -316,6 +317,22 @@ def require_production_chooser(data):
             or states[0].get('window') != states[2].get('window')
             or states[0].get('gui') != states[2].get('gui')):
         raise RuntimeError('Production chooser lost query, inspection or unchanged field evidence')
+
+
+def require_filtered_actions(data):
+    value = data.get('productionInput', {}).get('filteredActions')
+    if (not isinstance(value, dict) or value.get('query') != 'Vanilla'
+            or any(value.get(k) is not True for k in ('hiddenModelAndArtworkControls',
+                'wholeDocumentDefaultsAndUndo', 'sameOwnerAndNoWrite', 'searchRemovedDefaultChoice'))):
+        raise RuntimeError('Filtered document actions lack actual hidden-field evidence')
+    original = data['productionInput'].get('baselineWholeDraft')
+    staged = dict(enabled='false', models='lootr_styled:vanilla', artwork='lootr_styled:vanilla', freshObjects='OFF')
+    defaults = dict(enabled='true', models='lootr_styled:default', artwork='lootr_styled:default', freshObjects='AUTO')
+    if (value.get('stagedWholeDraft') != staged or value.get('undoneWholeDraft') != staged
+            or value.get('defaultWholeDraft') != defaults
+            or not isinstance(original, dict) or set(original) != set(defaults)
+            or value.get('restoredWholeDraft') != original):
+        raise RuntimeError('Filtered document actions omitted or changed hidden draft values')
 
 
 def require_production_input(data):
@@ -611,7 +628,8 @@ def main():
         require_production_document(data)
     if args.production_input:
         require_production_input(data)
-        for name in ('production-input-narrow', 'production-input-returned'):
+        require_filtered_actions(data)
+        for name in ('production-input-narrow', 'production-input-returned', 'production-input-filtered', 'production-input-filtered-defaults'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production input capture missing: {name}')
     if args.production_operation:

@@ -55,6 +55,12 @@ The frozen candidate 26/re:form 63 artifacts also pass a separate input check on
 
 This is an admitted invalid draft value, not a rejected native edit outside the actor. The reported edit-to-guard duration starts after the native setter returns and includes client ticks and observer work; it is not an input-latency or rendering benchmark. Chooser reflow, active operations, language changes, and complete accessibility acceptance remain separate checks.
 
+### Whole-document actions from Profiles
+
+A further candidate 26/re:form 63 check on NeoForge 1.21.1 at GUI scale 2 and Fabric 26.3 at scale 4 enters Profiles with the same retained editor. With no native field inputs mounted, the original edit service stages all four settings. A submitted Vanilla search filters Default out of the catalogue without changing that draft. Native Document actions loads defaults into every field, including the hidden Models and Artwork values. Undo restores the complete staged candidate; another Undo restores the original values. The catalogue query, editor, settings bytes, modification time, reported file identity, and resource generation remain unchanged, and both clients close normally.
+
+This checks document actions from the registered Profiles task, rather than a form whose fields were filtered by search. The actual complete four-field snapshots support the hidden-value checks; larger-text captures show only the scrolling task's upper rows. These runs do not extend the final four-target gate or language/font acceptance.
+
 ### Saving and failed reloads
 
 Candidate 24/re:form 59 passes native save-only, failed application, and retry checks on NeoForge 1.21.1 at GUI scale 2 and Fabric 26.3 at scale 4. The actual Enabled control stages each change. Save settings changes the file without reloading. One verification-only failed future at Styled’s native reload boundary follows a confirmed save; the retained result contains both Saved persistence and Failed application. Retry reload uses that saved revision, has no persistence receipt, preserves file bytes, modification time, and reported file identity, and publishes a new matching generation. The original saved values and owner remain, and both clients close normally.
