@@ -60,6 +60,8 @@ final class UiProbe {
       HOME_RETURN = -8,
       ENTER_SETTINGS = -7;
   private static final int HOME_DIRTY = 210, RETURN_DIRTY = 211;
+  private static final int INSPECT_SAVED_RESULT = 212;
+  private static final int REVIEW_DRAFT = 213, REVIEW_CAPTURE = 214, REVIEW_BACK = 215;
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
   private static final FieldPath ARTWORK = FieldPath.ROOT.field("artwork");
   private final Screen parent;
@@ -86,6 +88,11 @@ final class UiProbe {
   private final long openedAt = System.nanoTime();
   private long actionAt, searchAt, exportAt;
   private long profileDraws;
+  private java.util.UUID inspectedOperation, inspectedGeneration;
+  private byte[] inspectedSavedBytes;
+  private DraftRevision reviewRevision;
+  private byte[] reviewSavedBytes;
+  private java.util.UUID reviewGeneration;
   private int profileVariant = 1;
   private final com.google.gson.JsonArray profileVariants = new com.google.gson.JsonArray();
   private static final List<String> PROFILE_SUBJECTS =
@@ -689,9 +696,7 @@ final class UiProbe {
             children(browser).stream()
                 .filter(Button.class::isInstance)
                 .map(Button.class::cast)
-                .filter(
-                    button ->
-                        NativeBindings.narration(button).startsWith(ClientSettings.VANILLA + ": "))
+                .filter(button -> button.getMessage().getString().equals("Vanilla (Inherited)"))
                 .findFirst();
         if (choice.isEmpty() || !choice.orElseThrow().active) {
           if (++mountTicks > 200)
@@ -699,10 +704,21 @@ final class UiProbe {
           return null;
         }
         NativeBindings.press(choice.orElseThrow());
+        result.addProperty(
+            "titleFirstChooserChoice", choice.orElseThrow().getMessage().getString());
         timings.addProperty("search", elapsed(searchAt));
         stage = 92;
       }
       case 92 -> {
+        var identity =
+            children(NativeUi.current()).stream()
+                .filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
+                .map(net.minecraft.client.gui.components.EditBox.class::cast)
+                .filter(box -> box.getMessage().getString().equals("Reference ID"))
+                .findFirst()
+                .orElseThrow();
+        if (!identity.getValue().equals(ClientSettings.VANILLA.toString()))
+          throw new IllegalStateException("The titled choice resolved a different profile ID");
         var choose = button(NativeUi.current(), "Use selection");
         if (!choose.active) return null;
         NativeBindings.press(choose);
@@ -936,6 +952,97 @@ final class UiProbe {
             || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Manual ID collapse lost focus or changed the draft");
         result.addProperty("manualIdCollapseKeepsDraftAndFocus", true);
+        reviewRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        reviewSavedBytes = Files.readAllBytes(settingsFile);
+        reviewGeneration = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
+        NativeBindings.press(button(root, "Review changes…"));
+        mountTicks = 0;
+        stage = REVIEW_DRAFT;
+      }
+      case REVIEW_DRAFT -> {
+        if (!(NativeUi.current()
+                instanceof design.inherent.reform.minecraft.client.ReviewScreen<?> review)
+            || review.reviewedInput().isEmpty()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Review did not capture the retained draft");
+          return null;
+        }
+        var visual =
+            List.of(
+                FieldPath.ROOT.field("enabled"),
+                FieldPath.ROOT.field("freshObjects"),
+                MODELS,
+                ARTWORK);
+        if (!editor.form().fieldOrder().equals(visual))
+          throw new IllegalStateException(
+              "The form field order differs from its actual composition");
+        var capturedOrder =
+            review.reviewedInput().orElseThrow().entries().stream()
+                .map(value -> value.path())
+                .toList();
+        var facts = new JsonObject();
+        facts.addProperty("captureOrder", capturedOrder.toString());
+        facts.addProperty("formOrder", visual.toString());
+        var buttons =
+            children(review).stream()
+                .filter(Button.class::isInstance)
+                .map(Button.class::cast)
+                .filter(
+                    value ->
+                        Set.of("Enabled", "Fresh Objects", "Models", "Artwork")
+                            .contains(value.getMessage().getString()))
+                .sorted(
+                    java.util.Comparator.comparingInt(Button::getY).thenComparingInt(Button::getX))
+                .toList();
+        var labels = buttons.stream().map(value -> value.getMessage().getString()).toList();
+        facts.addProperty("nativeLabels", labels.toString());
+        var coordinates = new com.google.gson.JsonArray();
+        for (var value : buttons) {
+          var row = new JsonObject();
+          row.addProperty("label", value.getMessage().getString());
+          row.addProperty("x", value.getX());
+          row.addProperty("y", value.getY());
+          coordinates.add(row);
+        }
+        facts.add("nativePositions", coordinates);
+        result.add("capturedReviewOrderAndLabels", facts);
+        if (root.width >= 700
+            && (buttons.size() != 4 || buttons.stream().anyMatch(value -> value.getY() <= 0))) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException(
+                "Review field controls did not reach their native layout: " + facts);
+          return null;
+        }
+        if (root.width >= 700
+            && !labels.equals(List.of("Enabled", "Fresh Objects", "Models", "Artwork")))
+          throw new IllegalStateException(
+              "Review index does not follow the displayed form order: " + facts);
+        if (!reviewRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
+            || !java.util.Arrays.equals(reviewSavedBytes, Files.readAllBytes(settingsFile))
+            || !PreviewProbeAccess.generation(PreviewProbeAccess.activePack())
+                .equals(reviewGeneration))
+          throw new IllegalStateException(
+              "Review changed the draft, saved file, or effective resources");
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-review", () -> captured = true);
+        stage = REVIEW_CAPTURE;
+      }
+      case REVIEW_CAPTURE -> {
+        if (!captured) return null;
+        NativeUi.current().onClose();
+        mountTicks = 0;
+        stage = REVIEW_BACK;
+      }
+      case REVIEW_BACK -> {
+        if (NativeUi.current() != root) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Review Back lost its parent workflow");
+          return null;
+        }
+        if (!reviewRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
+            || !java.util.Arrays.equals(reviewSavedBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException("Review Back changed its retained draft or file");
+        result.addProperty("reviewRetainsVisualOrderAndDraft", true);
         stage = 3;
       }
       case 3 -> {
@@ -953,9 +1060,48 @@ final class UiProbe {
         timings.addProperty("firstSaveAndReload", elapsed(actionAt));
         if (!(NativeUi.current() instanceof OperationScreen<?>))
           throw new IllegalStateException("Combined action did not use the shared result screen");
+        inspectedOperation =
+            ((OperationScreen<?>) NativeUi.current()).observedOperation().orElseThrow().id();
+        inspectedGeneration = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
+        inspectedSavedBytes = Files.readAllBytes(settingsFile);
         NativeUi.current().onClose();
         if (NativeUi.current() != root)
           throw new IllegalStateException("Result Back lost the retained workflow");
+        if (!button(root, "Save and reload resources")
+            .getMessage()
+            .getString()
+            .equals("Save and reload resources"))
+          throw new IllegalStateException("The immediate operation lost its effect-named button");
+        var inspect =
+            children(root).stream()
+                .filter(Button.class::isInstance)
+                .map(Button.class::cast)
+                .filter(value -> value.getMessage().getString().equals("Inspect result"))
+                .filter(
+                    value ->
+                        NativeBindings.narration(value).startsWith("Save and reload resources: "))
+                .findFirst()
+                .orElseThrow();
+        NativeBindings.press(inspect);
+        mountTicks = 0;
+        stage = INSPECT_SAVED_RESULT;
+      }
+      case INSPECT_SAVED_RESULT -> {
+        if (!(NativeUi.current() instanceof OperationScreen<?> screen)) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Inspect result did not open its retained operation");
+          return null;
+        }
+        if (!screen.observedOperation().orElseThrow().id().equals(inspectedOperation)
+            || !PreviewProbeAccess.generation(PreviewProbeAccess.activePack())
+                .equals(inspectedGeneration)
+            || !java.util.Arrays.equals(inspectedSavedBytes, Files.readAllBytes(settingsFile)))
+          throw new IllegalStateException(
+              "Inspect result restarted the effect or changed saved/effective state");
+        result.addProperty("effectNamedActionAndInspectionSeparated", true);
+        screen.onClose();
+        if (NativeUi.current() != root)
+          throw new IllegalStateException("Inspection Back lost its retained workflow");
         pending =
             edit(
                 FieldPath.ROOT,
@@ -970,7 +1116,7 @@ final class UiProbe {
                         "freshObjects",
                         original.fresh().name())));
         result.addProperty("disabledAndMissingIdentitySavedThenApplied", true);
-        stage++;
+        stage = 5;
       }
       case 5 -> {
         if (!editor.canSubmit()) return null;
@@ -1308,10 +1454,7 @@ final class UiProbe {
                     || NativeBindings.narration(button).startsWith(label + ": "))
         .sorted(
             java.util.Comparator.comparingInt(
-                button ->
-                    button.getMessage().getString().equals("Run again…")
-                        ? 0
-                        : button.getMessage().getString().equals("View operation") ? 2 : 1))
+                button -> button.getMessage().getString().equals(label) ? 0 : 1))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException("Missing shared action: " + label));
   }

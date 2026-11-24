@@ -16,6 +16,8 @@ Show preview reveals and focuses the existing viewport without preparing a new s
 
 Document actions opens a shared view of the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Save and reload resources and profile exports remain separate guarded operations.
 
+Name immediate operation buttons for their effects. Inspect result opens the retained result without starting that effect again. Use the same field captions in editing and review; keep backend terms, raw identities, and revision details behind Details unless they help explain an actionable state.
+
 Report routine outcomes briefly, such as Saved or Reloaded. Keep errors specific and provide a recovery action. Put paths, resource decisions, and diagnostic detail behind Details rather than opening a report after every successful action. Distinguish a draft reset, a saved setting, a resource reload, and an exported editing copy.
 
 Lead feedback with the outcome and what it affected. “Settings saved; resource reload failed” preserves useful information that “Something went wrong” discards. Saving, requesting a reload, applying resources, and verifying the result are separate facts. A cancellation request does not establish that work stopped or that a save was undone. If a write is uncertain, guide the user to inspect the saved file before retrying.

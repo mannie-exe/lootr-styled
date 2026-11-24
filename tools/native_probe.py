@@ -19,6 +19,7 @@ TARGETS = ('fabric-1_21_1', 'neoforge-1_21_1', 'fabric-26_3', 'neoforge-26_3')
 PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST', 'BARREL')
                          for looted in (False, True) for opened in ((False, True) if c == 'BARREL' else (False,)))
 CAPTURES = (
+    'reform-review',
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
     'reform-production-preview-idle', 'reform-production-preview-drawn',
