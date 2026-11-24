@@ -76,6 +76,10 @@ final class NativeBindings {
     return mc.gui.screen();
   }
 
+  static boolean unobscured(Minecraft mc) {
+    return mc.gui.overlay() == null;
+  }
+
   static boolean ready(Minecraft mc) {
     return mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen
         && mc.gui.overlay() == null;

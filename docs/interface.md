@@ -32,6 +32,8 @@ Keep problems available near the affected control after transient notifications 
 
 Retain the actual result independently of progress notifications or an open result view. A late result must not replace newer edits. Keep resource and operation identities available for inspection.
 
+Keep save and reload outcomes, causes, and recovery instructions visible. Mark raw status codes, saved revisions, and resource-generation IDs as technical details; disclosure changes presentation without changing the retained result or starting another effect.
+
 Say each thing once. Remove filler, marketing claims, dramatic fragments, repeated caveats, and implementation-first explanations. Prefer complete, direct sentences in prose. Use ordinary punctuation rather than em-dash asides. Keep essential limits and source information available without making them the normal path through the interface.
 
 This applies the [inherent.design writing reference](https://github.com/inherent-design/inherent.design/blob/main/packages/docs/knowledge/process-notes/prose-and-communication-reference.md) to a Minecraft settings screen.

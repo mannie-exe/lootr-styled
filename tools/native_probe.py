@@ -18,9 +18,12 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGETS = ('fabric-1_21_1', 'neoforge-1_21_1', 'fabric-26_3', 'neoforge-26_3')
 PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST', 'BARREL')
                          for looted in (False, True) for opened in ((False, True) if c == 'BARREL' else (False,)))
+EFFECT_CAPTURES = ('production-effects-failed', 'production-effects-retried',
+                   'production-effects-failed-technical', 'production-effects-failed-hidden',
+                   'production-effects-retried-technical')
 CAPTURES = (
     'production-close-ready', 'production-close-decision',
-    'production-effects-failed', 'production-effects-retried',
+    *EFFECT_CAPTURES,
     'production-document-conflict', 'production-document-import',
     'production-viewport-narrow', 'production-viewport-returned',
     'reform-review',
@@ -247,12 +250,21 @@ def require_production_document(data):
         raise RuntimeError('Production document conflict/import did not retain complete guarded draft/source')
 
 
+def require_effect_captures(fixture):
+    for name in EFFECT_CAPTURES:
+        path = fixture / (name + '.png')
+        if not path.is_file() or not path.stat().st_size:
+            raise RuntimeError(f'Production effects capture is missing or empty: {path}')
+
+
 def require_production_effects(data):
     value = data.get('productionEffects')
     if (not isinstance(value, dict)
             or any(value.get(key) is not True for key in ('saveOnlyDoesNotReload',
                 'confirmedSaveSurvivesFailedReload', 'retryUsesSavedRevisionWithoutPersistence',
                 'retryPreservesSavedFileIdentity', 'originalSavedValuesRestored',
+                'failedDisclosurePreservesHandleFileAndEffects',
+                'retryDisclosurePreservesHandleFileAndEffects',
                 'sameOwnerAndRoot', 'closedCleanly'))
             or type(value.get('injectedFailures')) is not int or value['injectedFailures'] != 1):
         raise RuntimeError('Production effects did not retain the save, retry and restored owner')
@@ -481,6 +493,7 @@ def main():
         require_production_document(data)
     if args.production_effects:
         require_production_effects(data)
+        require_effect_captures(fixture)
     if args.production_close:
         require_production_close(data)
     if args.production_viewport:

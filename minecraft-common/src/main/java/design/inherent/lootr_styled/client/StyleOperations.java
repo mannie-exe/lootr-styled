@@ -234,7 +234,7 @@ final class StyleOperations {
                             case UNKNOWN -> "Not confirmed";
                           })));
               details.add(
-                  new OperationScreen.Detail(
+                  OperationScreen.Detail.technical(
                       Component.literal("Status code"), Component.literal(result.code().name())));
               if (!outcome.summary().equals(result.message()))
                 details.add(
@@ -245,7 +245,7 @@ final class StyleOperations {
                   .ifPresent(
                       revision ->
                           details.add(
-                              new OperationScreen.Detail(
+                              OperationScreen.Detail.technical(
                                   Component.literal("Saved revision"),
                                   Component.literal(revision))));
               result
@@ -253,7 +253,7 @@ final class StyleOperations {
                   .ifPresent(
                       generation ->
                           details.add(
-                              new OperationScreen.Detail(
+                              OperationScreen.Detail.technical(
                                   Component.literal("Resource generation"),
                                   Component.literal(generation.toString()))));
             });

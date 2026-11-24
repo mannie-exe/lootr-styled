@@ -217,9 +217,8 @@ class StylePreviewWorkloadTest {
             PolicyRefusal.class,
             () -> mesh.prepare(stillLedger, StyleGraphicProvider.METADATA, () -> {}));
     assertEquals("preview.budget", refusal.report().issues().getFirst().code());
-    // The shared batch owns a temporary reservation before decodeStill's frame/output preflight.
-    // A reservation peak is not evidence that the native decoder actually allocated that image.
-    assertEquals(4096L * 4096 * Integer.BYTES, stillLedger.state().peakBytes());
+    // The still-output preflight refuses before entering native decode or reserving its buffers.
+    assertEquals(0, stillLedger.state().peakBytes());
     assertEquals(0, stillLedger.state().bytes());
     assertEquals(0, stillLedger.state().resources());
     var row = new JsonObject();

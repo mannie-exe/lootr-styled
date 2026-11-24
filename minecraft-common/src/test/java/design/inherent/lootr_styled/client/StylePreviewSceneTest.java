@@ -66,7 +66,12 @@ class StylePreviewSceneTest {
     var frames = source.prepare(ledger, METADATA, () -> {});
     assertEquals(0, ledger.state().bytes());
     assertEquals(0, ledger.state().resources());
-    assertEquals(512L * 512 * Integer.BYTES, ledger.state().peakBytes());
+    long encodedBytes =
+        source.textures().values().stream()
+            .mapToLong(GraphicTexture::encodedBytes)
+            .max()
+            .orElseThrow();
+    assertEquals(512L * 512 * Integer.BYTES + encodedBytes, ledger.state().peakBytes());
     assertEquals(source.textures().keySet(), frames.textures().keySet());
     for (var entry : frames.textures().entrySet()) {
       var texture = source.textures().get(entry.getKey());

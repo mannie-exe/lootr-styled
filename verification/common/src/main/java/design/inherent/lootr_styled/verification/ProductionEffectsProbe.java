@@ -30,9 +30,12 @@ final class ProductionEffectsProbe {
     STAGE_ENABLED,
     FAILED_RESULT,
     FAILED_CAPTURE,
+    FAILED_TECHNICAL_CAPTURE,
+    FAILED_HIDDEN_CAPTURE,
     RETRY_READY,
     RETRIED_RESULT,
     RETRIED_CAPTURE,
+    RETRIED_TECHNICAL_CAPTURE,
     CLOSED
   }
 
@@ -51,9 +54,10 @@ final class ProductionEffectsProbe {
   private BasicFileAttributes savedAttributes;
   private String savedRevision;
   private UUID failedHandle;
+  private UUID appliedGeneration;
   private Phase phase = Phase.OPEN;
-  private int ticks;
-  private boolean captured;
+  private int ticks, unobscuredTicks;
+  private boolean captured, captureRequested;
 
   ProductionEffectsProbe() throws Exception {
     parent = NativeUi.current();
@@ -136,11 +140,27 @@ final class ProductionEffectsProbe {
         result.add("failedSaveReload", facts);
         result.addProperty("confirmedSaveSurvivesFailedReload", true);
         captured = false;
-        NativeWorld.screenshot(mc, "production-effects-failed", () -> captured = true);
         next(Phase.FAILED_CAPTURE);
       }
       case FAILED_CAPTURE -> {
-        if (!captured) return null;
+        if (!capture(mc, "production-effects-failed")) return null;
+        disclosure(false, failedHandle, oldGeneration, initialReloadCalls + 1);
+        press("Show technical details");
+        disclosure(true, failedHandle, oldGeneration, initialReloadCalls + 1);
+        captured = false;
+        next(Phase.FAILED_TECHNICAL_CAPTURE);
+      }
+      case FAILED_TECHNICAL_CAPTURE -> {
+        if (!capture(mc, "production-effects-failed-technical")) return null;
+        press("Hide technical details");
+        disclosure(false, failedHandle, oldGeneration, initialReloadCalls + 1);
+        captured = false;
+        next(Phase.FAILED_HIDDEN_CAPTURE);
+      }
+      case FAILED_HIDDEN_CAPTURE -> {
+        if (!capture(mc, "production-effects-failed-hidden")) return null;
+        disclosure(false, failedHandle, oldGeneration, initialReloadCalls + 1);
+        result.addProperty("failedDisclosurePreservesHandleFileAndEffects", true);
         pending = WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION);
         next(Phase.RETRY_READY);
       }
@@ -168,14 +188,29 @@ final class ProductionEffectsProbe {
           throw new IllegalStateException(
               "Retry did not apply the saved revision exactly once: " + facts);
         result.add("retryReload", facts);
+        appliedGeneration = generation();
         result.addProperty("retryUsesSavedRevisionWithoutPersistence", true);
         result.addProperty("retryPreservesSavedFileIdentity", true);
         captured = false;
-        NativeWorld.screenshot(mc, "production-effects-retried", () -> captured = true);
         next(Phase.RETRIED_CAPTURE);
       }
       case RETRIED_CAPTURE -> {
-        if (!captured) return null;
+        if (!capture(mc, "production-effects-retried")) return null;
+        var snapshot = operation();
+        if (snapshot == null) return null;
+        disclosure(false, snapshot.id(), appliedGeneration, initialReloadCalls + 2);
+        press("Show technical details");
+        disclosure(true, snapshot.id(), appliedGeneration, initialReloadCalls + 2);
+        captured = false;
+        next(Phase.RETRIED_TECHNICAL_CAPTURE);
+      }
+      case RETRIED_TECHNICAL_CAPTURE -> {
+        if (!capture(mc, "production-effects-retried-technical")) return null;
+        var snapshot = operation();
+        if (snapshot == null) return null;
+        press("Hide technical details");
+        disclosure(false, snapshot.id(), appliedGeneration, initialReloadCalls + 2);
+        result.addProperty("retryDisclosurePreservesHandleFileAndEffects", true);
         if (!ClientSettings.parse(Files.readAllBytes(settings)).equals(original)
             || StylePreferences.resourceStatus().state()
                 != design.inherent.lootr_styled.client.StyleApplication.State.APPLIED
@@ -197,6 +232,38 @@ final class ProductionEffectsProbe {
       }
     }
     return null;
+  }
+
+  private boolean capture(Minecraft mc, String name) throws Exception {
+    // Keep the already-admitted view stable across ticks before capture. Modern capture completes
+    // asynchronously: enter only once and inspect the saved pixels separately from admission.
+    if (!NativeBindings.unobscured(mc)) {
+      unobscuredTicks = 0;
+      return false;
+    }
+    if (++unobscuredTicks < 4) return false;
+    if (!captureRequested) {
+      captureRequested = true;
+      NativeWorld.screenshot(mc, name, () -> captured = true);
+    }
+    return captured;
+  }
+
+  private void disclosure(boolean expanded, UUID handle, UUID expectedGeneration, int reloadCalls)
+      throws Exception {
+    unchangedSavedFile();
+    var snapshot = operation();
+    String narration = root.getNarrationMessage().getString();
+    if (snapshot == null
+        || !snapshot.id().equals(handle)
+        || !generation().equals(expectedGeneration)
+        || ReloadFault.calls() != reloadCalls
+        || narration.contains(handle.toString()) != expanded
+        || !UiProbe.hasButton(root, expanded ? "Hide technical details" : "Show technical details"))
+      throw new IllegalStateException("Technical disclosure changed the operation or its effects");
+    // The screen summary narrates operation identity, not every rendered detail row. Captures
+    // separately retain the actual ordinary/expanded presentation of domain codes and revisions.
+    result.addProperty(expanded ? "expandedNarration" : "ordinaryNarration", narration);
   }
 
   private void unchangedSavedFile() throws Exception {
@@ -261,6 +328,9 @@ final class ProductionEffectsProbe {
   private void next(Phase value) {
     phase = value;
     ticks = 0;
+    captured = false;
+    captureRequested = false;
+    unobscuredTicks = 0;
   }
 
   String progress() {

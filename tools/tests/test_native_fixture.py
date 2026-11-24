@@ -138,6 +138,21 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
 
+    def test_production_effects_requires_each_capture_to_complete(self):
+        # File presence is a completion gate, not image-content or rendering certification.
+        for name in native_probe.EFFECT_CAPTURES:
+            (self.fixture / (name + '.png')).write_bytes(b'completed fixture capture')
+        native_probe.require_effect_captures(self.fixture)
+        for name in native_probe.EFFECT_CAPTURES:
+            path = self.fixture / (name + '.png')
+            path.unlink()
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'capture'):
+                native_probe.require_effect_captures(self.fixture)
+            path.write_bytes(b'')
+            with self.subTest(name=name, empty=True), self.assertRaisesRegex(RuntimeError, 'capture'):
+                native_probe.require_effect_captures(self.fixture)
+            path.write_bytes(b'completed fixture capture')
+
     def test_production_effects_requires_persistence_then_a_distinct_no_write_retry(self):
         failed = dict(hasPersistenceReceipt=True, persistence='SAVED', application='FAILED',
                       code='NATIVE_FAILURE', savedRevision='saved', sourceRevision='saved', handle='first',
@@ -147,10 +162,14 @@ class NativeFixtureTest(unittest.TestCase):
         value = dict(saveOnlyDoesNotReload=True, confirmedSaveSurvivesFailedReload=True,
                      retryUsesSavedRevisionWithoutPersistence=True, retryPreservesSavedFileIdentity=True,
                      originalSavedValuesRestored=True, sameOwnerAndRoot=True, closedCleanly=True,
+                     failedDisclosurePreservesHandleFileAndEffects=True,
+                     retryDisclosurePreservesHandleFileAndEffects=True,
                      injectedFailures=1, failedSaveReload=failed, retryReload=retry)
         native_probe.require_production_effects({'productionEffects': value})
         for key, bad in [('saveOnlyDoesNotReload', False), ('injectedFailures', True),
                          ('originalSavedValuesRestored', False),
+                         ('failedDisclosurePreservesHandleFileAndEffects', False),
+                         ('retryDisclosurePreservesHandleFileAndEffects', False),
                          ('failedSaveReload', []),
                          ('failedSaveReload', {**failed, 'persistence': 'UNKNOWN'}),
                          ('retryReload', {**retry, 'sourceRevision': 'different'}),
