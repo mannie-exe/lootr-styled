@@ -202,6 +202,18 @@ final class ProductionCancellationProbe {
       case UNKNOWN_CAPTURE -> {
         unchanged();
         if (!capture(mc, "production-effects-cancelled")) return null;
+        var observed = operation();
+        String terminalNarration = root.getNarrationMessage().getString();
+        if (observed == null
+            || !observed.id().equals(handle)
+            || !observed.terminal()
+            || terminalNarration.contains("Wait for pending operations")
+            || !terminalNarration.contains("Saved; reload not confirmed"))
+          throw new IllegalStateException(
+              "Terminal cancellation lost its result or retained the close wait: "
+                  + terminalNarration);
+        result.addProperty("terminalPendingNoticeCleared", true);
+        result.addProperty("terminalNarration", terminalNarration);
         result.addProperty(
             "detailsScrollAccepted",
             root.mouseScrolled(root.width * .8, root.height * .5, 0, -100));

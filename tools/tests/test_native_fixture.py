@@ -438,9 +438,10 @@ class NativeFixtureTest(unittest.TestCase):
                         savedRevision='original', sourceRevision='original', generation='restored')
         return dict(requestRetainsPendingWork=True, escapeReturnsWithoutCancellingOwner=True,
                     pendingWorkPreventsWorkspaceClose=True, confirmedSaveAndUnknownApplication=True,
-                    cancellationRequested=True, retryPreservesSavedFileIdentity=True,
+                    cancellationRequested=True, terminalPendingNoticeCleared=True, retryPreservesSavedFileIdentity=True,
                     originalSavedValuesRestored=True, nativeReloads=3,
                     pendingCloseNarration='Wait for pending operations before closing.',
+                    terminalNarration='Saved; reload not confirmed',
                     publishedGenerationAfterCancellation='unconfirmed', cancelledSaveReload=cancelled,
                     retryAfterCancellation=retry, restoredSaveReload=restored,
                     detailsRetainSameOutcome=True, captureFrames=[
@@ -467,10 +468,12 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.require_production_cancellation(value)
         for key in ('requestRetainsPendingWork', 'escapeReturnsWithoutCancellingOwner',
                     'pendingWorkPreventsWorkspaceClose', 'confirmedSaveAndUnknownApplication',
-                    'cancellationRequested', 'retryPreservesSavedFileIdentity', 'originalSavedValuesRestored'):
+                    'cancellationRequested', 'terminalPendingNoticeCleared', 'retryPreservesSavedFileIdentity', 'originalSavedValuesRestored'):
             with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production cancellation'):
                 native_probe.require_production_cancellation({**value, key: False})
         for key, bad in [('nativeReloads', True), ('nativeReloads', 2), ('pendingCloseNarration', ''),
+                         ('terminalNarration', 'Wait for pending operations. Saved; reload not confirmed'),
+                         ('terminalNarration', ''),
                          ('cancelledSaveReload', {**value['cancelledSaveReload'], 'hasPersistenceReceipt': False}),
                          ('cancelledSaveReload', {**value['cancelledSaveReload'], 'application': 'APPLIED'}),
                          ('cancelledSaveReload', {**value['cancelledSaveReload'], 'savedRevision': 'other'}),

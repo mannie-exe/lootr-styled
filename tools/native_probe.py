@@ -509,10 +509,13 @@ def require_production_cancellation(value):
             or any(value.get(key) is not True for key in (
                 'requestRetainsPendingWork', 'escapeReturnsWithoutCancellingOwner',
                 'pendingWorkPreventsWorkspaceClose', 'confirmedSaveAndUnknownApplication',
-                'cancellationRequested', 'retryPreservesSavedFileIdentity',
+                'cancellationRequested', 'terminalPendingNoticeCleared', 'retryPreservesSavedFileIdentity',
                 'originalSavedValuesRestored'))
             or not isinstance(value.get('pendingCloseNarration'), str)
             or 'Wait for pending operations' not in value['pendingCloseNarration']
+            or not isinstance(value.get('terminalNarration'), str)
+            or 'Wait for pending operations' in value['terminalNarration']
+            or 'Saved; reload not confirmed' not in value['terminalNarration']
             or type(value.get('nativeReloads')) is not int or value['nativeReloads'] != 3):
         raise RuntimeError('Production cancellation lost pending work, close guards, or restoration')
     cancelled = value.get('cancelledSaveReload')
