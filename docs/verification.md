@@ -55,6 +55,12 @@ The frozen candidate 26/re:form 63 artifacts also pass a separate input check on
 
 This is an admitted invalid draft value, not a rejected native edit outside the actor. The reported edit-to-guard duration starts after the native setter returns and includes client ticks and observer work; it is not an input-latency or rendering benchmark. Chooser reflow, active operations, language changes, and complete accessibility acceptance remain separate checks.
 
+### Language and font reload
+
+A separate candidate 26/re:form 63 check retains a malformed native Models ID beside a valid Enabled edit while switching from English to German and enabling Minecraft's Unicode font, then restoring both selections. NeoForge 1.21.1 at GUI scale 2 and Fabric 26.3 at scale 4 observe changed native translations, changed font widths, and a new resource generation for each reload. The complete draft, draft revision, invalid input, caret, selection, focus, and disabled Save guard survive both transitions. Explicit native repair restores the original draft without saving; file bytes, modification time, and reported file identity remain unchanged, and both clients close normally.
+
+The fixture uses the game's actual language manager, font option, and resource reload, rather than opening an operating-system language control. Lootr: Styled's English captions remain English; the native translation witness establishes the loaded game language. These two fonts/languages do not qualify every script, physical IME, spoken narration, custom font pack, or final four-target input.
+
 ### Whole-document actions from Profiles
 
 A further candidate 26/re:form 63 check on NeoForge 1.21.1 at GUI scale 2 and Fabric 26.3 at scale 4 enters Profiles with the same retained editor. With no native field inputs mounted, the original edit service stages all four settings. A submitted Vanilla search filters Default out of the catalogue without changing that draft. Native Document actions loads defaults into every field, including the hidden Models and Artwork values. Undo restores the complete staged candidate; another Undo restores the original values. The catalogue query, editor, settings bytes, modification time, reported file identity, and resource generation remain unchanged, and both clients close normally.

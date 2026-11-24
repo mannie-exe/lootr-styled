@@ -152,6 +152,39 @@ class NativeFixtureTest(unittest.TestCase):
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Filtered document actions'):
                 native_probe.require_filtered_actions({'productionInput':{**value,'filteredActions':{**facts,key:replacement}}})
 
+    def test_production_locale_scope_is_exclusive_and_cleared(self):
+        marker = self.fixture / '.lootr-styled-production-locale'
+        native_probe.prepare('neoforge-1_21_1','native',production_locale=True)
+        self.assertTrue(marker.is_file())
+        with self.assertRaisesRegex(ValueError,'Choose one'):
+            native_probe.prepare('neoforge-1_21_1','native',production_locale=True,production_input=True)
+        native_probe.prepare('neoforge-1_21_1','native')
+        self.assertFalse(marker.exists())
+
+    def test_production_locale_requires_native_witness_and_complete_retained_input(self):
+        baseline=dict(enabled='true',models='lootr_styled:default',artwork='lootr_styled:default',freshObjects='AUTO')
+        invalid={**baseline,'enabled':'false','models':'bad id'}
+        def state(phase,lang,unicode,done,widths,generation):
+            return dict(phase=phase,language=lang,unicode=unicode,doneLabel=done,fontWidths=widths,
+                        generation=generation,draft=invalid,canSubmit=False,text='bad id',caret=3,
+                        selection='ad',modelFocus=True)
+        states=[state('original','en_us',False,'Done',[8,16,20,8],'a'),
+                state('changed','de_de',True,'Fertig',[16,24,28,10],'b'),
+                state('restored','en_us',False,'Done',[8,16,20,8],'c')]
+        value=dict(states=states,baselineWholeDraft=baseline,invalidWholeDraft=invalid,
+                   restoredWholeDraft=baseline,localeRoundTripRetainsWholeDraft=True,
+                   caretSelectionFocusAndSaveGuardRetained=True,originalLocaleRestored=True,
+                   settingsUnchanged=True,sameOwnerUntilClose=True,closedCleanly=True)
+        native_probe.require_production_locale({'productionLocale':value})
+        for key,replacement in [('modelFocus',False),('caret',0),('language','en_us'),('unicode',False),
+                                ('doneLabel','Done'),('fontWidths',[8,16,20,8]),('generation','a'),('draft',baseline)]:
+            bad=copy.deepcopy(value);bad['states'][1][key]=replacement
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production locale'):
+                native_probe.require_production_locale({'productionLocale':bad})
+        for states in [[],[None]*3]:
+            with self.assertRaisesRegex(RuntimeError,'Production locale'):
+                native_probe.require_production_locale({'productionLocale':{**value,'states':states}})
+
     def test_production_operation_scope_is_exclusive_and_cleared(self):
         marker = self.fixture / '.lootr-styled-production-operation'
         native_probe.prepare('neoforge-1_21_1', 'native', production_operation=True)

@@ -30,6 +30,7 @@ CAPTURES = (
     'production-input-filtered', 'production-input-filtered-defaults',
     'production-chooser-narrow', 'production-chooser-returned',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
+    'production-locale-changed', 'production-locale-restored',
     'reform-review',
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
@@ -67,9 +68,9 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False):
-    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation)) > 1:
-        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, or --scene')
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False, production_locale=False):
+    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation, production_locale)) > 1:
+        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, --production-locale, or --scene')
     if expected_private_sprites is not None and (local_profile is None or not 0 <= expected_private_sprites <= 128):
         raise ValueError('An explicit private-sprite count requires a local profile and range 0..128')
     library = reform_dependency(target, reform_repository)
@@ -195,6 +196,11 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         operation_marker.write_text('Actual running reload/disclosure and window reflow, then one native reload without persistence\n')
     else:
         operation_marker.unlink(missing_ok=True)
+    locale_marker = fixture / '.lootr-styled-production-locale'
+    if production_locale:
+        locale_marker.write_text('Actual language/font reload and restoration beside invalid native input; no settings save\n')
+    else:
+        locale_marker.unlink(missing_ok=True)
     graphics_marker = fixture / '.lootr-styled-graphic-probe'
     if graphics_only:
         graphics_marker.write_text('Isolated domain draw only; excludes editor and integrated scene qualification\n')
@@ -267,6 +273,37 @@ def require_production_document(data):
                 'wholeDraftInvalidImportRetained', 'undoRestoresCompleteDraft',
                 'originalSavedValuesRestored', 'resourceGenerationUnchanged', 'closedCleanly'))):
         raise RuntimeError('Production document conflict/import did not retain complete guarded draft/source')
+
+
+def require_production_locale(data):
+    value = data.get('productionLocale')
+    if (not isinstance(value, dict) or any(value.get(k) is not True for k in (
+            'localeRoundTripRetainsWholeDraft', 'caretSelectionFocusAndSaveGuardRetained',
+            'originalLocaleRestored', 'settingsUnchanged', 'sameOwnerUntilClose', 'closedCleanly'))):
+        raise RuntimeError('Production locale reload lost retained input or source facts')
+    states, baseline, invalid = value.get('states'), value.get('baselineWholeDraft'), value.get('invalidWholeDraft')
+    if (not isinstance(states, list) or len(states) != 3 or any(not isinstance(s, dict) for s in states)
+            or [s.get('phase') for s in states] != ['original', 'changed', 'restored']
+            or not isinstance(baseline, dict) or set(baseline) != {'enabled','models','artwork','freshObjects'}
+            or not isinstance(invalid, dict) or set(invalid) != set(baseline)
+            or baseline.get('enabled') not in ('true','false')
+            or invalid.get('enabled') != ('false' if baseline['enabled'] == 'true' else 'true')
+            or invalid.get('models') != 'bad id'
+            or any(invalid[k] != baseline[k] for k in ('artwork','freshObjects'))
+            or value.get('restoredWholeDraft') != baseline
+            or any(s.get('draft') != invalid or s.get('canSubmit') is not False
+                   or s.get('text') != 'bad id' or s.get('caret') != 3 or s.get('selection') != 'ad'
+                   or s.get('modelFocus') is not True or not s.get('generation')
+                   or not s.get('language') or type(s.get('unicode')) is not bool
+                   or not s.get('doneLabel') or not isinstance(s.get('fontWidths'),list)
+                   or len(s['fontWidths']) != 4
+                   or any(type(w) is not int or w < 0 for w in s['fontWidths']) for s in states)
+            or len({s['generation'] for s in states}) != 3
+            or states[0]['language'] == states[1]['language'] or states[0]['language'] != states[2]['language']
+            or states[0]['unicode'] == states[1]['unicode'] or states[0]['unicode'] != states[2]['unicode']
+            or states[0]['doneLabel'] == states[1]['doneLabel'] or states[0]['doneLabel'] != states[2]['doneLabel']
+            or states[0]['fontWidths'] == states[1]['fontWidths'] or states[0]['fontWidths'] != states[2]['fontWidths']):
+        raise RuntimeError('Production locale reload lacks actual font/language/generation or complete-draft evidence')
 
 
 def require_production_operation(data):
@@ -569,6 +606,7 @@ def main():
     parser.add_argument('--production-shutdown', action='store_true', help='Check preview discard, recovery, and normal shutdown after settings checks')
     parser.add_argument('--production-document', action='store_true', help='Check real source conflicts, native imported value JSON, Stage and Undo')
     parser.add_argument('--production-input', action='store_true', help='Check invalid native text and a valid sibling across actual window reflow')
+    parser.add_argument('--production-locale', action='store_true', help='Check invalid native input across real language/font reload and restoration')
     parser.add_argument('--production-operation', action='store_true', help='Check running reload/disclosure through actual window reflow, then one real reload')
     parser.add_argument('--production-chooser', action='store_true', help='Check actual profile search/inspection across real window reflow without choosing')
     parser.add_argument('--production-effects', action='store_true', help='Check actual save-only, failed reload after save, and no-write retry')
@@ -581,7 +619,7 @@ def main():
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale)
     if not args.run:
         print(json.dumps({'prepared': str(fixture.relative_to(ROOT)), 'artifact': product.name, 'sha256': digest(product)}))
         return
@@ -616,7 +654,8 @@ def main():
             or ('productionDocument' in data) != args.production_document
             or ('productionInput' in data) != args.production_input
             or ('productionChooser' in data) != args.production_chooser
-            or ('productionOperation' in data) != args.production_operation):
+            or ('productionOperation' in data) != args.production_operation
+            or ('productionLocale' in data) != args.production_locale):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
     if args.preview_host or args.production_shutdown:
         require_renderer_shutdown(data, fixture, product, args.target)
@@ -632,6 +671,12 @@ def main():
         for name in ('production-input-narrow', 'production-input-returned', 'production-input-filtered', 'production-input-filtered-defaults'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production input capture missing: {name}')
+    if args.production_locale:
+        require_production_locale(data)
+        for name in ('production-locale-changed', 'production-locale-restored'):
+            path = fixture / (name + '.png')
+            if not path.is_file() or not path.stat().st_size:
+                raise RuntimeError(f'Production locale capture missing: {name}')
     if args.production_operation:
         require_production_operation(data)
         for name in ('production-operation-narrow', 'production-operation-returned', 'production-operation-completed'):
@@ -657,7 +702,7 @@ def main():
         require_preview_cleanup_modes(data)
         require_preview_review(data)
         require_preview_selection_states(data, fixture)
-    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
+    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-locale' if args.production_locale else 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 
 if __name__ == '__main__':

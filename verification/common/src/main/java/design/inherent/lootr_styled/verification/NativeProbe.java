@@ -26,6 +26,7 @@ public final class NativeProbe {
   private static ProductionInputProbe productionInput;
   private static ProductionChooserProbe productionChooser;
   private static ProductionOperationProbe productionOperation;
+  private static ProductionLocaleProbe productionLocale;
   private static PreviewCombinationProbe combinations;
   private static PreviewAuthorityProbe authority;
   private static PreviewCleanupFailureProbe cleanupFailure;
@@ -62,6 +63,7 @@ public final class NativeProbe {
       if (productionInput != null) progress += ":input=" + productionInput.progress();
       if (productionChooser != null) progress += ":chooser=" + productionChooser.progress();
       if (productionOperation != null) progress += ":operation=" + productionOperation.progress();
+      if (productionLocale != null) progress += ":locale=" + productionLocale.progress();
       if (!lastProgress.equals(progress)) {
         Files.writeString(
             mc.gameDirectory.toPath().resolve("lootr-styled-probe-state.txt"), progress + "\n");
@@ -124,7 +126,11 @@ public final class NativeProbe {
       } else if (stage == 1 && reloaded) {
         snapshots.add(NativeBindings.capture(mc, mode));
         REPORT.add("snapshots", snapshots);
-        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-operation"))) {
+        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-locale"))) {
+          productionLocale = new ProductionLocaleProbe(mc);
+          stage = 28;
+        } else if (Files.exists(
+            mc.gameDirectory.toPath().resolve(".lootr-styled-production-operation"))) {
           productionOperation = new ProductionOperationProbe(mc);
           stage = 27;
         } else if (Files.exists(
@@ -276,6 +282,12 @@ public final class NativeProbe {
         REPORT.add("productionOperation", observations);
         REPORT.addProperty("passed", true);
         finish(mc, null);
+      } else if (stage == 28) {
+        var observations = productionLocale.tick(mc);
+        if (observations == null) return;
+        REPORT.add("productionLocale", observations);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);
         if (scene != null) {
@@ -325,6 +337,8 @@ public final class NativeProbe {
     terminal = true;
     try {
       if (error != null) {
+        if (productionLocale != null)
+          REPORT.add("productionLocale", productionLocale.observations(mc));
         if (productionOperation != null)
           REPORT.add("productionOperation", productionOperation.observations());
         ReloadGate.abort();
