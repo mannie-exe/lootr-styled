@@ -12,6 +12,7 @@ import urllib.request
 import os
 import signal
 import time
+import zipfile
 from reform import dependency as reform_dependency
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +87,9 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     require_stopped(fixture)
     if fixture.is_symlink() or any(parent.is_symlink() for parent in fixture.parents if parent != ROOT.parent):
         raise ValueError('Fixture paths must not contain symbolic links')
+    runtime_artifacts = fixture / 'runtime-artifacts'
+    if runtime_artifacts.is_symlink() or runtime_artifacts.exists() and not runtime_artifacts.is_dir():
+        raise ValueError('Runtime artifact output must be a regular fixture directory')
     if local_profile:
         if local_profile.is_symlink() or not local_profile.is_dir():
             raise ValueError('Local fixture profile must be a regular directory')
@@ -100,6 +104,8 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         raise ValueError('Refusing a pre-existing directory without this fixture owner marker')
     fixture.mkdir(parents=True, exist_ok=True)
     marker.write_text('lootr-styled-native-verification-v1\n')
+    if runtime_artifacts.exists():
+        shutil.rmtree(runtime_artifacts)
     for previous in ('lootr-styled-probe-report.json', 'lootr-styled-probe-state.txt',
                      'lootr-styled-shutdown-report.json', 'lootr-styled-combinations-report.json',
                      'lootr-styled-selection-states-report.json',
@@ -409,6 +415,53 @@ def require_effect_captures(fixture):
         path = fixture / (name + '.png')
         if not path.is_file() or not path.stat().st_size:
             raise RuntimeError(f'Production effects capture is missing or empty: {path}')
+
+
+def require_runtime_artifacts(data, fixture):
+    expected = {
+        'lootr_styled': ('design/inherent/lootr_styled/ResourceId.class',
+                         'design/inherent/lootr_styled/client/ClientRuntime.class',
+                         'design/inherent/lootr_styled/client/StylePreferences.class'),
+        'reform': ('design/inherent/reform/minecraft/client/ClientFileSettings.class',
+                   'design/inherent/reform/minecraft/client/ClientEditingWorkflow.class',
+                   'design/inherent/reform/minecraft/client/ClientGraphicHost.class'),
+    }
+    facts = data.get('runtimeArtifacts')
+    if not isinstance(facts, dict) or set(facts) != set(expected):
+        raise RuntimeError('Loaded runtime artifacts must identify exactly Styled and re:form')
+    for mod, members in expected.items():
+        row = facts[mod]
+        relative = f'runtime-artifacts/{mod}.jar'
+        if (not isinstance(row, dict) or row.get('copy') != relative
+                or not isinstance(row.get('path'), str) or not row['path']
+                or type(row.get('bytes')) is not int or not 0 < row['bytes'] <= 64 * 1024 * 1024):
+            raise RuntimeError(f'Loaded runtime archive has invalid identity or size: {mod}')
+        copied = fixture / relative
+        if (copied.parent.is_symlink() or copied.is_symlink() or not copied.is_file()
+                or copied.stat().st_size != row['bytes'] or digest(copied) != row.get('sha256')):
+            raise RuntimeError(f'Loaded runtime archive copy/hash differs: {mod}')
+        witnesses = row.get('witnesses')
+        if (not isinstance(witnesses, list) or len(witnesses) != len(members)
+                or any(not isinstance(w, dict) or w.get('member') != name
+                       or w.get('resourceMatchesArchive') is not True
+                       or not isinstance(w.get('resource'), str) or not w['resource']
+                       for w, name in zip(witnesses, members))):
+            raise RuntimeError(f'Loaded runtime class-resource witnesses differ: {mod}')
+        try:
+            with zipfile.ZipFile(copied) as archive:
+                for witness in witnesses:
+                    item = archive.getinfo(witness['member'])
+                    if not 0 < item.file_size <= 4 * 1024 * 1024:
+                        raise RuntimeError(f'Loaded runtime class exceeds fixture allowance: {mod}')
+                    with archive.open(item) as source:
+                        content = source.read(4 * 1024 * 1024 + 1)
+                    if len(content) != item.file_size:
+                        raise RuntimeError(f'Loaded runtime class size differs: {mod}/{item.filename}')
+                    actual = hashlib.sha256(content).hexdigest()
+                    if actual != witness.get('sha256'):
+                        raise RuntimeError(f'Loaded runtime class hash differs: {mod}/{item.filename}')
+        except (OSError, KeyError, zipfile.BadZipFile) as error:
+            raise RuntimeError(f'Loaded runtime archive cannot supply its classes: {mod}') from error
 
 
 def require_production_effects(data):
@@ -759,6 +812,7 @@ def main():
             or ('productionOperation' in data) != args.production_operation
             or ('productionLocale' in data) != args.production_locale):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
+    require_runtime_artifacts(data, fixture)
     if args.preview_host or args.production_shutdown:
         require_renderer_shutdown(data, fixture, product, args.target)
     if args.production_shutdown and data['rendererShutdown'].get('productionTask') is not True:

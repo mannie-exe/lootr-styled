@@ -5,6 +5,8 @@ import copy
 import contextlib
 import io
 import json
+import hashlib
+import zipfile
 from pathlib import Path
 import sys
 import tempfile
@@ -34,6 +36,93 @@ class NativeFixtureTest(unittest.TestCase):
             mocked = patch.object(native_probe, name, replacement)
             mocked.start()
             self.addCleanup(mocked.stop)
+
+
+    def runtime_artifact_facts(self):
+        facts = {}
+        for mod, members in {
+            'lootr_styled': ('design/inherent/lootr_styled/ResourceId.class',
+                             'design/inherent/lootr_styled/client/ClientRuntime.class',
+                             'design/inherent/lootr_styled/client/StylePreferences.class'),
+            'reform': ('design/inherent/reform/minecraft/client/ClientFileSettings.class',
+                       'design/inherent/reform/minecraft/client/ClientEditingWorkflow.class',
+                       'design/inherent/reform/minecraft/client/ClientGraphicHost.class'),
+        }.items():
+            relative = f'runtime-artifacts/{mod}.jar'
+            path = self.fixture / relative
+            path.parent.mkdir(exist_ok=True)
+            witnesses = []
+            with zipfile.ZipFile(path, 'w') as archive:
+                for member in members:
+                    # Symbolic class bytes exercise the receipt verifier, not JVM class loading.
+                    content = ('Fixture class resource: ' + member).encode()
+                    archive.writestr(member, content)
+                    witnesses.append(dict(member=member, sha256=hashlib.sha256(content).hexdigest(),
+                                          resource='jar:' + path.as_uri() + '!/' + member,
+                                          resourceMatchesArchive=True))
+            facts[mod] = dict(copy=relative, path=str(path), bytes=path.stat().st_size,
+                              sha256=native_probe.digest(path), witnesses=witnesses)
+        return facts
+
+    def test_runtime_archives_keep_loaded_bytes_distinct_from_original_inputs(self):
+        facts = self.runtime_artifact_facts()
+        native_probe.require_runtime_artifacts(dict(runtimeArtifacts=facts,
+            artifactSha256='expected-original-before-remap', libraryInputSha256='expected-library'), self.fixture)
+
+    def test_runtime_archives_refuse_missing_or_misidentified_copies_and_classes(self):
+        facts = self.runtime_artifact_facts()
+        for bad in (None, {}, {'reform': facts['reform']}, {**facts, 'foreign': facts['reform']}):
+            with self.subTest(value=bad), self.assertRaisesRegex(RuntimeError, 'Loaded runtime'):
+                native_probe.require_runtime_artifacts({'runtimeArtifacts': bad}, self.fixture)
+        for key, bad in [('copy', '../outside.jar'), ('bytes', True), ('bytes', 0),
+                         ('bytes', 64 * 1024 * 1024 + 1), ('sha256', 'other'), ('path', ''),
+                         ('witnesses', []), ('witnesses', [facts['reform']['witnesses'][0]] * 3)]:
+            broken = copy.deepcopy(facts)
+            broken['reform'][key] = bad
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Loaded runtime'):
+                native_probe.require_runtime_artifacts({'runtimeArtifacts': broken}, self.fixture)
+        for key, bad in [('sha256', 'other'), ('resourceMatchesArchive', False),
+                         ('member', 'foreign.class'), ('resource', '')]:
+            broken = copy.deepcopy(facts)
+            broken['reform']['witnesses'][0][key] = bad
+            with self.subTest(witness=key), self.assertRaisesRegex(RuntimeError, 'Loaded runtime'):
+                native_probe.require_runtime_artifacts({'runtimeArtifacts': broken}, self.fixture)
+
+    def test_runtime_archive_copy_corruption_cannot_reuse_a_good_receipt(self):
+        facts = self.runtime_artifact_facts()
+        path = self.fixture / facts['reform']['copy']
+        path.write_bytes(b'Corrupt archive')
+        with self.assertRaisesRegex(RuntimeError, 'copy/hash'):
+            native_probe.require_runtime_artifacts({'runtimeArtifacts': facts}, self.fixture)
+        facts['reform'].update(bytes=path.stat().st_size, sha256=native_probe.digest(path))
+        with self.assertRaisesRegex(RuntimeError, 'cannot supply'):
+            native_probe.require_runtime_artifacts({'runtimeArtifacts': facts}, self.fixture)
+
+    def test_expected_hash_markers_cannot_replace_loaded_archive_evidence_in_main(self):
+        product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
+        report = dict(passed=True, artifactSha256=native_probe.digest(product),
+                      libraryInputSha256='fixture', snapshots=[{}, {}], sharedGraphicHost={})
+        (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps(report))
+        with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
+            with patch.object(native_probe.subprocess, 'Popen') as launch:
+                launch.return_value.wait.return_value = 0
+                with patch.object(sys, 'argv', ['native_probe.py', '--target', 'neoforge-1_21_1', '--run', '--preview-host']):
+                    with self.assertRaisesRegex(RuntimeError, 'Loaded runtime artifacts'):
+                        native_probe.main()
+
+    def test_preparation_removes_only_stopped_fixture_runtime_copies(self):
+        directory = self.fixture / 'runtime-artifacts'
+        directory.mkdir()
+        saved = directory / 'reform.jar'
+        saved.write_bytes(b'Keep while live')
+        (self.fixture / '.lootr-styled-probe-pid').write_text(str(os.getpid()))
+        with self.assertRaisesRegex(ValueError, 'before preparing'):
+            native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertEqual(saved.read_bytes(), b'Keep while live')
+        (self.fixture / '.lootr-styled-probe-pid').unlink()
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(directory.exists())
+
 
     def test_a_live_fixture_pid_refuses_before_inputs_or_marker_are_replaced(self):
         marker = self.fixture / '.lootr-styled-probe-pid'
@@ -448,7 +537,7 @@ class NativeFixtureTest(unittest.TestCase):
         product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
         (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps({
             'passed': True, 'artifactSha256': native_probe.digest(product),
-            'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
+            'runtimeArtifacts': self.runtime_artifact_facts(), 'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
         }))
         with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
             with patch.object(native_probe.subprocess, 'Popen') as launch:
@@ -461,7 +550,7 @@ class NativeFixtureTest(unittest.TestCase):
         product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
         (self.fixture / 'lootr-styled-probe-report.json').write_text(json.dumps({
             'passed': True, 'artifactSha256': native_probe.digest(product),
-            'libraryInputSha256': 'fixture', 'snapshots': [{}, {}],
+            'runtimeArtifacts': self.runtime_artifact_facts(), 'libraryInputSha256': 'fixture', 'snapshots': [{}, {}],
         }))
         with patch.object(native_probe, 'prepare', return_value=(self.fixture, product, ['not-run'])):
             with patch.object(native_probe.subprocess, 'Popen') as launch:
@@ -533,7 +622,7 @@ class NativeFixtureTest(unittest.TestCase):
                    'workflowOpenAtStop': True, 'editorOpenAtStop': True, 'pendingUsesAtStop': 1, 'nativeBytesAtStop': 64,
                    'sceneBytesAtStop': 64, 'atRendererReturn': {**released, 'boundary': 'Minecraft.close'},
                    'afterShutdown': released}
-        report = {'passed': True, 'artifactSha256': native_probe.digest(product),
+        report = {'runtimeArtifacts': self.runtime_artifact_facts(), 'passed': True, 'artifactSha256': native_probe.digest(product),
                   'libraryInputSha256': 'fixture', 'snapshots': [{}, {}], 'sharedGraphicHost': {},
                   'rendererShutdown': receipt, 'previewCombinations': self._combinations(),
                   'previewAuthority': self._authority(), 'previewCleanupFailure': self._cleanup_failure()}

@@ -115,6 +115,9 @@ public final class NativeProbe {
                 .strip());
         REPORT.addProperty("mode", mode);
         REPORT.addProperty("java", Runtime.version().feature());
+        REPORT.add(
+            "runtimeArtifacts",
+            RuntimeArtifacts.capture(mc.gameDirectory.toPath(), NativeRuntimeArtifacts.roots()));
         snapshots.add(NativeBindings.capture(mc, mode));
         stage = 1;
         mc.reloadResourcePacks()
