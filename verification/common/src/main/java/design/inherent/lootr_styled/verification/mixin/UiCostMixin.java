@@ -1,5 +1,6 @@
 package design.inherent.lootr_styled.verification.mixin;
 
+import design.inherent.lootr_styled.verification.FrameAudit;
 import design.inherent.lootr_styled.verification.UiCostAudit;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -25,5 +26,6 @@ abstract class UiCostMixin {
       at = @At("RETURN"))
   private void lootrStyled$endUi(CallbackInfo callback) {
     UiCostAudit.end(this);
+    FrameAudit.drew(this);
   }
 }

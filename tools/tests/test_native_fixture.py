@@ -353,7 +353,25 @@ class NativeFixtureTest(unittest.TestCase):
                     originalSavedValuesRestored=True, nativeReloads=3,
                     pendingCloseNarration='Wait for pending operations before closing.',
                     publishedGenerationAfterCancellation='unconfirmed', cancelledSaveReload=cancelled,
-                    retryAfterCancellation=retry, restoredSaveReload=restored)
+                    retryAfterCancellation=retry, restoredSaveReload=restored,
+                    detailsRetainSameOutcome=True, captureFrames=[
+                        dict(name=name, expectedRootDrawn=True,
+                             expectedScreen='design.inherent.reform.minecraft.client.ClientEditingWorkflow$Overview',
+                             baselineRootDraw=10, requestedRootDraw=14, requestedLoop=20, completedLoop=21)
+                        for name in ('production-effects-cancel-pending', 'production-effects-cancelled',
+                                     'production-effects-cancelled-details')])
+
+    def test_capture_frames_requires_actual_root_draws_and_completion_order(self):
+        rows = self.cancellation_facts()['captureFrames']
+        native_probe.require_capture_frames(rows)
+        for key, bad in [('expectedRootDrawn', False), ('expectedScreen', 'OtherScreen'),
+                         ('baselineRootDraw', True), ('requestedRootDraw', 13),
+                         ('requestedLoop', 12), ('completedLoop', 19), ('name', 'wrong')]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Capture'):
+                native_probe.require_capture_frames([{**rows[0], key: bad}, *rows[1:]])
+        for bad in (None, [], rows[:-1], [rows[0], rows[0], rows[2]]):
+            with self.subTest(rows=bad), self.assertRaisesRegex(RuntimeError, 'Capture'):
+                native_probe.require_capture_frames(bad)
 
     def test_production_cancellation_requires_saved_receipt_uncertainty_and_real_retry(self):
         value = self.cancellation_facts()

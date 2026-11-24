@@ -21,7 +21,8 @@ PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST',
 EFFECT_CAPTURES = ('production-effects-failed', 'production-effects-retried',
                    'production-effects-failed-technical', 'production-effects-failed-hidden',
                    'production-effects-retried-technical', 'production-effects-resources',
-                   'production-effects-cancel-pending', 'production-effects-cancelled')
+                   'production-effects-cancel-pending', 'production-effects-cancelled',
+                   'production-effects-cancelled-details')
 CAPTURES = (
     'production-close-ready', 'production-close-decision',
     *EFFECT_CAPTURES,
@@ -486,6 +487,25 @@ def require_production_cancellation(value):
             or restored['savedRevision'] != restored.get('sourceRevision')
             or not restored.get('generation') or restored['generation'] == retry['generation']):
         raise RuntimeError('Production cancellation lost confirmed persistence or uncertain/retried application')
+    if value.get('detailsRetainSameOutcome') is not True:
+        raise RuntimeError('Production cancellation lost its retained details outcome')
+    require_capture_frames(value.get('captureFrames'))
+
+
+def require_capture_frames(rows):
+    names = ('production-effects-cancel-pending', 'production-effects-cancelled',
+             'production-effects-cancelled-details')
+    if (not isinstance(rows, list) or len(rows) != len(names)
+            or any(not isinstance(row, dict) or row.get('name') != name
+                   or row.get('expectedRootDrawn') is not True
+                   or row.get('expectedScreen') != 'design.inherent.reform.minecraft.client.ClientEditingWorkflow$Overview'
+                   or any(type(row.get(key)) is not int or row[key] < 1
+                          for key in ('baselineRootDraw', 'requestedRootDraw', 'requestedLoop', 'completedLoop'))
+                   or row['requestedRootDraw'] - row['baselineRootDraw'] < 4
+                   or row['requestedLoop'] < row['requestedRootDraw']
+                   or row['completedLoop'] < row['requestedLoop']
+                   for row, name in zip(rows, names))):
+        raise RuntimeError('Capture lacks expected-root draw and completed native-loop evidence')
 
 
 def require_production_close(data):

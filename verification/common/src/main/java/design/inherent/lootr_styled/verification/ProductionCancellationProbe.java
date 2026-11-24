@@ -1,5 +1,6 @@
 package design.inherent.lootr_styled.verification;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import design.inherent.lootr_styled.client.ClientRuntime;
 import design.inherent.lootr_styled.client.NativeUi;
@@ -35,6 +36,7 @@ final class ProductionCancellationProbe {
     REVEALED,
     UNKNOWN,
     UNKNOWN_CAPTURE,
+    UNKNOWN_DETAILS_CAPTURE,
     RETRY_READY,
     RETRIED,
     RESTORE_READY,
@@ -58,8 +60,9 @@ final class ProductionCancellationProbe {
   private BasicFileAttributes attributes;
   private String revision;
   private Phase phase = Phase.OPEN;
-  private int ticks, captureTicks;
-  private boolean requestedCapture, captured;
+  private int ticks;
+  private FrameCapture capture;
+  private final JsonArray captureFrames = new JsonArray();
 
   ProductionCancellationProbe(ClientEditingWorkflow workflow, ClientEditor<ClientSettings> editor)
       throws Exception {
@@ -73,6 +76,7 @@ final class ProductionCancellationProbe {
     initialRequests = ReloadGate.requests();
     initialReleases = ReloadGate.releases();
     pending = WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION);
+    result.add("captureFrames", captureFrames);
   }
 
   JsonObject tick(Minecraft mc) throws Exception {
@@ -198,6 +202,21 @@ final class ProductionCancellationProbe {
       case UNKNOWN_CAPTURE -> {
         unchanged();
         if (!capture(mc, "production-effects-cancelled")) return null;
+        result.addProperty(
+            "detailsScrollAccepted",
+            root.mouseScrolled(root.width * .8, root.height * .5, 0, -100));
+        next(Phase.UNKNOWN_DETAILS_CAPTURE);
+      }
+      case UNKNOWN_DETAILS_CAPTURE -> {
+        unchanged();
+        var observed = operation();
+        if (observed == null
+            || !observed.id().equals(handle)
+            || !observed.terminal()
+            || !generation().equals(unknownGeneration))
+          throw new IllegalStateException("Details scrolling changed the retained outcome");
+        if (!capture(mc, "production-effects-cancelled-details")) return null;
+        result.addProperty("detailsRetainSameOutcome", true);
         pending = WorkflowReveal.document(workflow, StyleSettingsStore.DEFINITION);
         next(Phase.RETRY_READY);
       }
@@ -316,16 +335,10 @@ final class ProductionCancellationProbe {
   }
 
   private boolean capture(Minecraft mc, String name) throws Exception {
-    if (!NativeBindings.unobscured(mc)) {
-      captureTicks = 0;
-      return false;
-    }
-    if (++captureTicks < 4) return false;
-    if (!requestedCapture) {
-      requestedCapture = true;
-      NativeWorld.screenshot(mc, name, () -> captured = true);
-    }
-    return captured;
+    if (capture == null) capture = new FrameCapture(root);
+    if (!capture.poll(mc, name)) return false;
+    captureFrames.add(capture.receipt(name));
+    return true;
   }
 
   private static UUID generation() throws Exception {
@@ -334,8 +347,8 @@ final class ProductionCancellationProbe {
 
   private void next(Phase value) {
     phase = value;
-    ticks = captureTicks = 0;
-    requestedCapture = captured = false;
+    ticks = 0;
+    capture = null;
   }
 
   String progress() {
