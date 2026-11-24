@@ -18,6 +18,8 @@ Document actions stays in the workspace and uses the same document, draft, and h
 
 Review and operation results stay in the settings window. Navigation history restores an earlier view; a task’s return action names its parent, such as Back to settings. Neither should start another effect.
 
+Closing with unsaved changes keeps the decision in the workspace. Keep editing returns to the draft; Discard draft ends the editing session and retains the saved settings. Hiding Profiles retires its graphic, so returning requires an explicit Prepare draft preview request.
+
 Name immediate operation buttons for their effects. Inspect result opens the retained result without starting that effect again. Use the same field captions in editing and review; keep backend terms, raw identities, and revision details behind Details unless they help explain an actionable state.
 
 Report routine outcomes briefly, such as Saved or Reloaded. Keep errors specific and provide a recovery action. Put paths, resource decisions, and diagnostic detail behind Details rather than opening a report after every successful action. Distinguish a draft reset, a saved setting, a resource reload, and an exported editing copy.

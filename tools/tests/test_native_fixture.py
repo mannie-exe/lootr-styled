@@ -94,6 +94,30 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(viewport.exists())
 
+    def test_production_close_scope_preserves_other_selected_inputs(self):
+        for scope in ('scene', 'graphics_only', 'preview_host', 'production_shutdown', 'production_viewport'):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
+                native_probe.prepare('neoforge-1_21_1', 'native', production_close=True, **{scope: True})
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+        marker = self.fixture / '.lootr-styled-production-close'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_close=True)
+        self.assertTrue(marker.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
+    def test_production_close_requires_both_releases_and_unsaved_choice_recovery(self):
+        release = dict(released=True, outstandingUses=0, releaseFailed=False, nativeBytes=0, sceneBytes=0)
+        value = dict(sameRootDecision=True, keepEditingRetainsDraft=True, noAutomaticPreparation=True,
+                     discardClosesOwner=True, freshOwnerUsesSavedChoice=True, settingsUnchanged=True,
+                     resourceGenerationUnchanged=True, explicitPreparations=2,
+                     releasedNativeBytes=0, releasedSceneBytes=0, releases=[release, release])
+        native_probe.require_production_close({'productionClose': value})
+        for key, bad in [('sameRootDecision', False), ('freshOwnerUsesSavedChoice', False),
+                         ('releasedNativeBytes', 1), ('explicitPreparations', 3),
+                         ('releases', [release]), ('releases', [release, {**release, 'releaseFailed': True}])]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production close'):
+                native_probe.require_production_close({'productionClose': {**value, key: bad}})
+
     def test_production_shutdown_cannot_replace_another_selected_scope(self):
         for scope in ('scene', 'graphics_only', 'preview_host'):
             with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):

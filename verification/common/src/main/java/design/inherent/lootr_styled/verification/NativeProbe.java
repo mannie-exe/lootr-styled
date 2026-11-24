@@ -20,6 +20,7 @@ public final class NativeProbe {
   private static RendererShutdownProbe rendererShutdown;
   private static ProductionShutdownProbe productionShutdown;
   private static ProductionViewportProbe productionViewport;
+  private static ProductionCloseProbe productionClose;
   private static PreviewCombinationProbe combinations;
   private static PreviewAuthorityProbe authority;
   private static PreviewCleanupFailureProbe cleanupFailure;
@@ -50,6 +51,7 @@ public final class NativeProbe {
               + (ui == null ? "" : ":" + ui.progress());
       if (authority != null) progress += ":authority=" + authority.progress();
       if (productionViewport != null) progress += ":viewport=" + productionViewport.progress();
+      if (productionClose != null) progress += ":close=" + productionClose.progress();
       if (!lastProgress.equals(progress)) {
         Files.writeString(
             mc.gameDirectory.toPath().resolve("lootr-styled-probe-state.txt"), progress + "\n");
@@ -115,6 +117,10 @@ public final class NativeProbe {
         if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-viewport"))) {
           productionViewport = new ProductionViewportProbe(mc);
           stage = 21;
+        } else if (Files.exists(
+            mc.gameDirectory.toPath().resolve(".lootr-styled-production-close"))) {
+          productionClose = new ProductionCloseProbe();
+          stage = 22;
         } else if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-host-probe"))) {
           sharedHost = new SharedGraphicHostProbe();
           stage = 12;
@@ -204,6 +210,12 @@ public final class NativeProbe {
         REPORT.add("productionViewport", observations);
         REPORT.addProperty("passed", true);
         finish(mc, null);
+      } else if (stage == 22) {
+        var observations = productionClose.tick(mc);
+        if (observations == null) return;
+        REPORT.add("productionClose", observations);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);
         if (scene != null) {
@@ -257,6 +269,7 @@ public final class NativeProbe {
           REPORT.add("productionDiscard", productionShutdown.observations());
         if (productionViewport != null)
           REPORT.add("productionViewport", productionViewport.observations());
+        if (productionClose != null) REPORT.add("productionClose", productionClose.observations());
         if (ui != null && !REPORT.has("nativeWidgets")) {
           REPORT.add("nativeWidgets", ui.observations());
           REPORT.addProperty("nativeWidgetsComplete", false);

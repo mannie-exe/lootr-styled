@@ -1441,7 +1441,7 @@ final class UiProbe {
           "Document actions changed its owner, destination, file or resources");
   }
 
-  private static boolean hasButton(Screen root, String caption) {
+  static boolean hasButton(Screen root, String caption) {
     return children(root).stream()
         .filter(Button.class::isInstance)
         .map(Button.class::cast)
