@@ -189,6 +189,8 @@ final class StyleOperations {
         Component.literal(action.title),
         Component.literal(context(action)),
         () -> {
+          if ((action == Action.RELOAD || action == Action.RETRY) && application.reloading())
+            return Optional.of(Component.literal("Resource reload is running"));
           if (scope.hasActiveOperations())
             return Optional.of(Component.literal("Another resource operation is running"));
           if (action == Action.RETRY && application.last().sourceRevision().isEmpty())

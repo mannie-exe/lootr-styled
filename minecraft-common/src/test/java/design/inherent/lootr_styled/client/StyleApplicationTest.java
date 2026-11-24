@@ -86,15 +86,18 @@ final class StyleApplicationTest {
   @Test
   void aBusyRefusalDoesNotReleaseTheActiveNativeWork() {
     try (var f = new Fixture()) {
+      assertFalse(f.application.reloading());
       var first = f.application.reload(Optional.of("r1"), () -> {}).toCompletableFuture();
       for (int i = 0; i < 2; i++)
         assertEquals(
             StyleApplication.Code.BUSY,
             f.application.reload(Optional.empty(), () -> {}).toCompletableFuture().join().code());
       assertFalse(first.isDone());
+      assertTrue(f.application.reloading());
       assertEquals(1, f.nativeWork.size());
       f.finish(0, "r1");
       assertEquals(StyleApplication.State.APPLIED, first.join().state());
+      assertFalse(f.application.reloading());
     }
   }
 

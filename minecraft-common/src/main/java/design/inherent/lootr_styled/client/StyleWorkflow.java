@@ -22,9 +22,11 @@ import net.minecraft.network.chat.Component;
 /** Retained shared forms plus one owner-bound asynchronous save/reload operation. */
 final class StyleWorkflow implements AutoCloseable {
   private final OperationScope scope;
+  private final StyleApplication application;
   private ClientEditingWorkflow workflow;
 
   StyleWorkflow(Screen parent, ClientForm form, StyleOperations operations, OwnerContext context) {
+    application = operations.application();
     var access = context.access(this::isOpen, this::isOpen);
     scope = new OperationScope(context, access, OperationScope.Limits.STANDARD);
     var save =
@@ -127,7 +129,9 @@ final class StyleWorkflow implements AutoCloseable {
             parent, List.of(form), layout, StyleWorkspace.presentation(form.route()));
   }
 
-  private static void requireSubmission(ClientEditor<?> editor) {
+  private void requireSubmission(ClientEditor<?> editor) {
+    if (application.reloading())
+      throw new PolicyRefusal("resources.busy", "Resource reload is running");
     if (!editor.canSubmit())
       throw new PolicyRefusal(
           "settings.pending", "Finish or correct the current edit before saving");
@@ -137,6 +141,8 @@ final class StyleWorkflow implements AutoCloseable {
     if (!isOpen()) return Optional.of(Component.literal("Settings editor is closed"));
     if (scope.hasActiveOperations())
       return Optional.of(Component.literal("Save and reload is running"));
+    if (application.reloading())
+      return Optional.of(Component.literal("Resource reload is running"));
     var documents = workflow.documents();
     var document = documents.getFirst();
     if (!document.available()) return Optional.of(Component.literal("Settings unavailable"));

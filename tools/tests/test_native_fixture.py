@@ -438,7 +438,7 @@ class NativeFixtureTest(unittest.TestCase):
                         savedRevision='original', sourceRevision='original', generation='restored')
         return dict(requestRetainsPendingWork=True, escapeReturnsWithoutCancellingOwner=True,
                     pendingWorkPreventsWorkspaceClose=True, confirmedSaveAndUnknownApplication=True,
-                    cancellationRequested=True, terminalPendingNoticeCleared=True, retryPreservesSavedFileIdentity=True,
+                    cancellationRequested=True, terminalPendingNoticeCleared=True, pendingReloadActionsBlocked=True, retryPreservesSavedFileIdentity=True,
                     originalSavedValuesRestored=True, nativeReloads=3,
                     pendingCloseNarration='Wait for pending operations before closing.',
                     terminalNarration='Saved; reload not confirmed',
@@ -468,7 +468,7 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.require_production_cancellation(value)
         for key in ('requestRetainsPendingWork', 'escapeReturnsWithoutCancellingOwner',
                     'pendingWorkPreventsWorkspaceClose', 'confirmedSaveAndUnknownApplication',
-                    'cancellationRequested', 'terminalPendingNoticeCleared', 'retryPreservesSavedFileIdentity', 'originalSavedValuesRestored'):
+                    'cancellationRequested', 'terminalPendingNoticeCleared', 'pendingReloadActionsBlocked', 'retryPreservesSavedFileIdentity', 'originalSavedValuesRestored'):
             with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production cancellation'):
                 native_probe.require_production_cancellation({**value, key: False})
         for key, bad in [('nativeReloads', True), ('nativeReloads', 2), ('pendingCloseNarration', ''),

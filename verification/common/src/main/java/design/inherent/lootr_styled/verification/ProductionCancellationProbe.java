@@ -143,6 +143,11 @@ final class ProductionCancellationProbe {
         if (!narration.contains("Wait for pending operations")) return null;
         result.addProperty("pendingCloseNarration", narration);
         if (!capture(mc, "production-effects-cancel-pending")) return null;
+        if (UiProbe.button(root, "Reload resources").active
+            || UiProbe.button(root, "Retry reload").active
+            || UiProbe.button(root, "Save and reload resources").active)
+          throw new IllegalStateException("Pending reload left another reload action enabled");
+        result.addProperty("pendingReloadActionsBlocked", true);
         result.addProperty("escapeReturnsWithoutCancellingOwner", true);
         result.addProperty("pendingWorkPreventsWorkspaceClose", true);
         var attempt = workflow.navigation().open(destination);

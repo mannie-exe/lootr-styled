@@ -509,7 +509,7 @@ def require_production_cancellation(value):
             or any(value.get(key) is not True for key in (
                 'requestRetainsPendingWork', 'escapeReturnsWithoutCancellingOwner',
                 'pendingWorkPreventsWorkspaceClose', 'confirmedSaveAndUnknownApplication',
-                'cancellationRequested', 'terminalPendingNoticeCleared', 'retryPreservesSavedFileIdentity',
+                'cancellationRequested', 'terminalPendingNoticeCleared', 'pendingReloadActionsBlocked', 'retryPreservesSavedFileIdentity',
                 'originalSavedValuesRestored'))
             or not isinstance(value.get('pendingCloseNarration'), str)
             or 'Wait for pending operations' not in value['pendingCloseNarration']

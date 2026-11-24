@@ -110,6 +110,11 @@ public final class StyleApplication {
     return last;
   }
 
+  boolean reloading() {
+    context.requireOwner();
+    return !tail.isDone();
+  }
+
   /** One admitted reload at a time; rejected requests cannot clear the active attempt. */
   CompletionStage<Result> reload(Optional<String> expected, Runnable checkpoint) {
     context.requireOwner();

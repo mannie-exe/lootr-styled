@@ -32,6 +32,8 @@ Keep problems available near the affected control after transient notifications 
 
 Retain the actual result independently of progress notifications or an open result view. A late result must not replace newer edits. Keep resource and operation identities available for inspection.
 
+While a resource reload is pending, disable Reload resources, Retry reload, and Save and reload resources using the same application state. Do not describe an earlier successful reload as the current pending result.
+
 Keep save and reload outcomes, causes, and recovery instructions visible. Mark raw status codes, saved revisions, and resource-generation IDs as technical details; disclosure changes presentation without changing the retained result or starting another effect.
 
 Routine reload results keep the resource trace under technical details. An explicit Inspect resources request presents that trace directly. Export destinations and editing instructions remain ordinary result details. Declare these roles where the result is constructed, without classifying strings by their wording.
