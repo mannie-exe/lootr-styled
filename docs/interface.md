@@ -18,7 +18,7 @@ Document actions stays in the workspace and uses the same document, draft, and h
 
 Review and operation results stay in the settings window. Navigation history restores an earlier view; a task’s return action names its parent, such as Back to settings. Neither should start another effect.
 
-Closing with unsaved changes keeps the decision in the workspace. Keep editing returns to the draft; Discard draft ends the editing session and retains the saved settings. Hiding Profiles retires its graphic, so returning requires an explicit Prepare draft preview request.
+Closing with unsaved changes keeps the decision in the workspace. Review changes opens the guarded review chooser; canceling it retains the original view, and inspection uses the same unsaved draft. Keep editing returns to the draft; Discard draft ends the editing session and retains the saved settings. Hiding Profiles retires its graphic, so returning requires an explicit Prepare draft preview request.
 
 Name immediate operation buttons for their effects. Inspect result opens the retained result without starting that effect again. Use the same field captions in editing and review; keep backend terms, raw identities, and revision details behind Details unless they help explain an actionable state.
 

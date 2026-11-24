@@ -107,12 +107,16 @@ class NativeFixtureTest(unittest.TestCase):
 
     def test_production_close_requires_both_releases_and_unsaved_choice_recovery(self):
         release = dict(released=True, outstandingUses=0, releaseFailed=False, nativeBytes=0, sceneBytes=0)
-        value = dict(sameRootDecision=True, keepEditingRetainsDraft=True, noAutomaticPreparation=True,
+        value = dict(sameRootDecision=True, reviewChooserKeepsProfilesContext=True,
+                     closeReviewCapturesSameDraft=True, reviewReturnRetainsOwner=True,
+                     keepEditingRetainsDraft=True, noAutomaticPreparation=True,
                      discardClosesOwner=True, freshOwnerUsesSavedChoice=True, settingsUnchanged=True,
                      resourceGenerationUnchanged=True, explicitPreparations=2,
                      releasedNativeBytes=0, releasedSceneBytes=0, releases=[release, release])
         native_probe.require_production_close({'productionClose': value})
         for key, bad in [('sameRootDecision', False), ('freshOwnerUsesSavedChoice', False),
+                         ('reviewChooserKeepsProfilesContext', False), ('closeReviewCapturesSameDraft', False),
+                         ('reviewReturnRetainsOwner', False),
                          ('releasedNativeBytes', 1), ('explicitPreparations', 3),
                          ('releases', [release]), ('releases', [release, {**release, 'releaseFailed': True}])]:
             with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production close'):

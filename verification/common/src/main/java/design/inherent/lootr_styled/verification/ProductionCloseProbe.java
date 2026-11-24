@@ -2,6 +2,7 @@ package design.inherent.lootr_styled.verification;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import design.inherent.lootr_styled.client.ClientRuntime;
 import design.inherent.lootr_styled.client.NativeUi;
 import design.inherent.lootr_styled.client.StylePreferences;
@@ -11,6 +12,7 @@ import design.inherent.reform.definition.FieldPath;
 import design.inherent.reform.edit.DraftEdit;
 import design.inherent.reform.edit.DraftNode;
 import design.inherent.reform.edit.DraftRevision;
+import design.inherent.reform.minecraft.client.ClientDestination;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
 import design.inherent.reform.minecraft.client.ClientGraphicHost;
@@ -35,6 +37,13 @@ final class ProductionCloseProbe {
     READY_CAPTURE,
     DECISION,
     DECISION_CAPTURE,
+    REVIEW_CHOOSER_CANCEL,
+    REVIEW_CANCELLED,
+    REVIEW_DECISION,
+    REVIEW_CHOOSER_SELECT,
+    REVIEW_CAPTURED,
+    REVIEW_RETURNED,
+    KEEP_DECISION,
     KEPT,
     READY_AGAIN,
     DECISION_AGAIN,
@@ -61,6 +70,8 @@ final class ProductionCloseProbe {
   private CompletableFuture<?> editing, reopening;
   private CompletableFuture<RenderLifetime.State> release;
   private DraftRevision dirtyRevision;
+  private ClientDestination profilesOrigin;
+  private CompletableFuture<?> returning;
   private Phase phase = Phase.OPEN;
   private long drawMark;
   private int ticks, preparations;
@@ -150,18 +161,84 @@ final class ProductionCloseProbe {
       }
       case DECISION_CAPTURE -> {
         if (!captured) return null;
-        activate("Keep editing");
+        profilesOrigin = workflow.navigation().current().orElseThrow();
         drawMark = GraphicDrawAudit.state().rendered();
+        activate("Review changes");
+        next(Phase.REVIEW_CHOOSER_CANCEL);
+      }
+      case REVIEW_CHOOSER_CANCEL -> {
+        if (!UiProbe.hasButton(root, "Inspect Appearance")) return null;
+        requireProfilesOrigin();
+        activate("Back to settings");
+        next(Phase.REVIEW_CANCELLED);
+      }
+      case REVIEW_CANCELLED -> {
+        if (!UiProbe.hasButton(root, "Prepare draft preview")
+            || UiProbe.hasButton(root, "Inspect Appearance")) return null;
+        requireProfilesOrigin();
+        requireIdleGraphic();
+        result.addProperty("reviewChooserKeepsProfilesContext", true);
+        activate("Done");
+        next(Phase.REVIEW_DECISION);
+      }
+      case REVIEW_DECISION -> {
+        if (!decision()) return null;
+        activate("Review changes");
+        next(Phase.REVIEW_CHOOSER_SELECT);
+      }
+      case REVIEW_CHOOSER_SELECT -> {
+        if (!UiProbe.hasButton(root, "Inspect Appearance")) return null;
+        requireProfilesOrigin();
+        activate("Inspect Appearance");
+        next(Phase.REVIEW_CAPTURED);
+      }
+      case REVIEW_CAPTURED -> {
+        if (!(workflow.navigation().current().orElse(null) instanceof ClientDestination.Inspection)
+            || workflow.inspection().flatMap(value -> value.reviewedInput()).isEmpty()) return null;
+        var review = workflow.inspection().orElseThrow().reviewedInput().orElseThrow();
+        var models =
+            review.entries().stream()
+                .filter(value -> value.path().equals(MODELS))
+                .findFirst()
+                .orElseThrow();
+        if (NativeUi.current() != root
+            || !review.target().equals(dirtyRevision)
+            || !JsonParser.parseString(models.draft()).getAsString().equals(changedModels)
+            || !JsonParser.parseString(models.baseline())
+                .getAsString()
+                .equals(saved.models().toString()))
+          throw new IllegalStateException(
+              "Close review did not capture the actual unsaved Models choice");
+        requireIdleGraphic();
+        result.addProperty("closeReviewCapturesSameDraft", true);
+        returning =
+            WorkflowReveal.view(
+                workflow,
+                StyleSettingsStore.DEFINITION,
+                DestinationId.parse("lootr_styled:profiles_page"));
+        next(Phase.REVIEW_RETURNED);
+      }
+      case REVIEW_RETURNED -> {
+        if (!returning.isDone()) return null;
+        if (returning.join() != editor)
+          throw new IllegalStateException("Close review returned a different editor");
+        if (!UiProbe.hasButton(root, "Prepare draft preview")) return null;
+        requireProfilesOrigin();
+        requireIdleGraphic();
+        result.addProperty("reviewReturnRetainsOwner", true);
+        activate("Done");
+        next(Phase.KEEP_DECISION);
+      }
+      case KEEP_DECISION -> {
+        if (!decision()) return null;
+        activate("Keep editing");
         next(Phase.KEPT);
       }
       case KEPT -> {
         if (UiProbe.hasButton(root, "Keep editing")
             || !UiProbe.hasButton(root, "Prepare draft preview")
             || ticks < 4) return null;
-        if (host.nativeOwnership().bytes() != 0
-            || host.retainedOutput().bytes() != 0
-            || GraphicDrawAudit.state().rendered() != drawMark)
-          throw new IllegalStateException("Keep editing automatically prepared another preview");
+        requireIdleGraphic();
         result.addProperty("keepEditingRetainsDraft", true);
         result.addProperty("noAutomaticPreparation", true);
         if (!prepare()) return null;
@@ -215,6 +292,20 @@ final class ProductionCloseProbe {
       }
     }
     return null;
+  }
+
+  private void requireProfilesOrigin() {
+    if (NativeUi.current() != root
+        || !workflow.navigation().current().filter(profilesOrigin::equals).isPresent())
+      throw new IllegalStateException("The review chooser changed the original Profiles context");
+  }
+
+  private void requireIdleGraphic() {
+    if (host.nativeOwnership().bytes() != 0
+        || host.retainedOutput().bytes() != 0
+        || GraphicDrawAudit.state().rendered() != drawMark)
+      throw new IllegalStateException(
+          "Returning from close or review automatically prepared a preview");
   }
 
   private boolean prepare() {

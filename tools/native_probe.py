@@ -229,6 +229,7 @@ def require_production_close(data):
     releases = value.get('releases') if isinstance(value, dict) else None
     if (not isinstance(value, dict)
             or any(value.get(key) is not True for key in ('sameRootDecision',
+                'reviewChooserKeepsProfilesContext', 'closeReviewCapturesSameDraft', 'reviewReturnRetainsOwner',
                 'keepEditingRetainsDraft', 'noAutomaticPreparation', 'discardClosesOwner',
                 'freshOwnerUsesSavedChoice', 'settingsUnchanged', 'resourceGenerationUnchanged'))
             or type(value.get('explicitPreparations')) is not int
@@ -241,7 +242,7 @@ def require_production_close(data):
                    or any(type(row.get(key)) is not int or row[key] != 0
                           for key in ('outstandingUses', 'nativeBytes', 'sceneBytes'))
                    for row in releases)):
-        raise RuntimeError('Production close/keep/discard did not preserve its draft and release graphics')
+        raise RuntimeError('Production close/review/keep/discard did not preserve its draft and release graphics')
 
 
 def require_production_viewport(data):
