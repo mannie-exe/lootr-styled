@@ -71,7 +71,8 @@ final class UiProbe {
       RESULT_FORWARD = 219,
       RESULT_INSPECT_LINK = 220,
       RESULT_RESTORE = 221,
-      RESTORE_RESULT_BACK = 222;
+      RESTORE_RESULT_BACK = 222,
+      MENU_RETIRED = 223;
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
   private static final FieldPath ARTWORK = FieldPath.ROOT.field("artwork");
   private final Screen parent;
@@ -104,7 +105,11 @@ final class UiProbe {
   private byte[] reviewSavedBytes;
   private java.util.UUID reviewGeneration;
   private design.inherent.reform.operation.DocumentReview retainedReview;
-  private ClientDestination operationOrigin, operationDestination;
+  private ClientDestination operationOrigin, operationDestination, documentMenuOrigin;
+  private Object documentMenuActions;
+  private DraftRevision documentMenuRevision, menuUndoRevision;
+  private java.util.UUID documentMenuGeneration;
+  private Button retiredDefaults;
   private int profileVariant = 1;
   private final com.google.gson.JsonArray profileVariants = new com.google.gson.JsonArray();
   private static final List<String> PROFILE_SUBJECTS =
@@ -834,27 +839,41 @@ final class UiProbe {
         stage = 201;
       }
       case 201 -> {
+        documentMenuOrigin = workflow.navigation().current().orElseThrow();
+        documentMenuActions = editor.actions();
+        documentMenuRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        documentMenuGeneration = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
         NativeBindings.press(button(root, "Document actions…"));
         mountTicks = 0;
         stage = 102;
       }
       case 102 -> {
-        if (!NativeUi.current().getClass().getSimpleName().equals("DocumentActionsScreen"))
-          throw new IllegalStateException("Document actions did not open the shared auxiliary");
-        if (++mountTicks < 4) return null;
+        if (NativeUi.current() != root || !hasButton(root, "Defaults")) {
+          if (++mountTicks > 120)
+            throw new IllegalStateException("Document actions did not mount in the original root");
+          return null;
+        }
+        assertDocumentMenuOwner();
+        if (!documentMenuRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow())))
+          throw new IllegalStateException("Opening Document actions edited the draft");
+        retiredDefaults = button(root, "Defaults");
+        result.addProperty("documentActionsUseOriginalRootAndNoHistoryVisit", true);
         captured = false;
         NativeWorld.screenshot(mc, "reform-document-actions", () -> captured = true);
         stage = 103;
       }
       case 103 -> {
         if (!captured) return null;
-        NativeBindings.press(button(NativeUi.current(), "Defaults"));
+        NativeBindings.press(retiredDefaults);
         mountTicks = 0;
         stage = 104;
       }
       case 104 -> {
-        if (NativeUi.current() != root || workflow.documents().getFirst().busy()) return null;
+        if (NativeUi.current() != root
+            || workflow.documents().getFirst().busy()
+            || hasButton(root, "Defaults")) return null;
         if (++mountTicks < 4) return null;
+        assertDocumentMenuOwner();
         assertModel(ClientSettings.DEFAULTS.models().toString());
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Document Defaults saved the draft");
@@ -863,23 +882,39 @@ final class UiProbe {
         stage = 105;
       }
       case 105 -> {
-        if (!NativeUi.current().getClass().getSimpleName().equals("DocumentActionsScreen")) {
+        if (NativeUi.current() != root || !hasButton(root, "Undo")) {
           if (++mountTicks > 120)
-            throw new IllegalStateException("Document actions did not reopen after Defaults");
+            throw new IllegalStateException("Document actions did not reopen in the same root");
           return null;
         }
-        var undo = button(NativeUi.current(), "Undo");
+        assertDocumentMenuOwner();
+        var undo = button(root, "Undo");
         if (!undo.active)
           throw new IllegalStateException("Defaults lost the retained undo history");
         NativeBindings.press(undo);
         stage = 106;
       }
       case 106 -> {
-        if (NativeUi.current() != root || workflow.documents().getFirst().busy()) return null;
+        if (NativeUi.current() != root
+            || workflow.documents().getFirst().busy()
+            || hasButton(root, "Undo")) return null;
+        assertDocumentMenuOwner();
         assertModel("missing:kept");
         if (!java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Document Undo saved the draft");
         result.addProperty("documentActionsDefaultsUndoSameDraft", true);
+        menuUndoRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        NativeBindings.press(retiredDefaults);
+        mountTicks = 0;
+        stage = MENU_RETIRED;
+      }
+      case MENU_RETIRED -> {
+        if (++mountTicks < 4 || workflow.documents().getFirst().busy()) return null;
+        assertDocumentMenuOwner();
+        assertModel("missing:kept");
+        if (!menuUndoRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow())))
+          throw new IllegalStateException("A retired Defaults callback edited the current draft");
+        result.addProperty("retiredDocumentActionDoesNotReplay", true);
         pending =
             edit(
                 FieldPath.ROOT,
@@ -1070,7 +1105,7 @@ final class UiProbe {
       }
       case REVIEW_CAPTURE -> {
         if (!captured) return null;
-        NativeBindings.press(back(root));
+        NativeBindings.press(returnToParent(root));
         mountTicks = 0;
         stage = REVIEW_BACK;
       }
@@ -1108,7 +1143,7 @@ final class UiProbe {
                 .equals(reviewGeneration))
           throw new IllegalStateException("Typed inspection return lost its root/capture/source");
         result.addProperty("reviewCachedCaptureSurvivesBackAndTypedReturn", true);
-        NativeBindings.press(back(root));
+        NativeBindings.press(returnToParent(root));
         mountTicks = 0;
         stage = REVIEW_FINAL_BACK;
       }
@@ -1205,7 +1240,7 @@ final class UiProbe {
         unchangedOperation();
         result.addProperty("effectNamedActionAndInspectionSeparated", true);
         result.addProperty("operationsUseOriginalRoot", NativeUi.current() == root);
-        NativeBindings.press(back(root));
+        NativeBindings.press(returnToParent(root));
         mountTicks = 0;
         stage = RESULT_RESTORE;
       }
@@ -1242,7 +1277,7 @@ final class UiProbe {
         var saved = ClientSettings.parse(Files.readAllBytes(settingsFile));
         if (!saved.equals(original) || !applied() || !operationDone()) return null;
         timings.addProperty("repeatedSaveAndReload", elapsed(actionAt));
-        NativeBindings.press(back(root));
+        NativeBindings.press(returnToParent(root));
         mountTicks = 0;
         stage = RESTORE_RESULT_BACK;
       }
@@ -1395,11 +1430,37 @@ final class UiProbe {
     return control;
   }
 
-  private static Button back(Screen root) {
+  private void assertDocumentMenuOwner() throws Exception {
+    if (workflow.editor(StyleSettingsStore.DEFINITION) != editor
+        || editor.actions() != documentMenuActions
+        || !workflow.navigation().current().filter(documentMenuOrigin::equals).isPresent()
+        || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile))
+        || !documentMenuGeneration.equals(
+            PreviewProbeAccess.generation(PreviewProbeAccess.activePack())))
+      throw new IllegalStateException(
+          "Document actions changed its owner, destination, file or resources");
+  }
+
+  private static boolean hasButton(Screen root, String caption) {
     return children(root).stream()
         .filter(Button.class::isInstance)
         .map(Button.class::cast)
-        .filter(value -> value.active && value.getMessage().getString().equals("Back"))
+        .anyMatch(value -> value.getMessage().getString().equals(caption));
+  }
+
+  private static Button returnToParent(Screen root) {
+    return children(root).stream()
+        .filter(Button.class::isInstance)
+        .map(Button.class::cast)
+        .filter(
+            value ->
+                value.active
+                    && Set.of(
+                            "Back to settings",
+                            "Back to inspection",
+                            "Back to conflict review",
+                            "Back to workspace")
+                        .contains(value.getMessage().getString()))
         .max(java.util.Comparator.comparingInt(Button::getY))
         .orElseThrow();
   }
