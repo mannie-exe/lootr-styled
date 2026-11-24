@@ -204,6 +204,13 @@ final class UiProbe {
         if (!profileRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
             || !profileCandidate().equals(original))
           throw new IllegalStateException("Profile inspection changed the draft");
+        if (!requestedNarration(root, "Models").contains("Draft value: Default")
+            || !requestedNarration(root, "Artwork").contains("Draft value: Default")) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Profiles did not narrate its actual Default titles");
+          return null;
+        }
+        result.addProperty("profileRequestedDefaultTitles", true);
         result.addProperty("profileInspectionDoesNotStage", true);
         NativeBindings.press(button(root, "Use for Models"));
         mountTicks = 0;
@@ -217,6 +224,13 @@ final class UiProbe {
         }
         if (!profileCandidate().artwork().equals(original.artwork()))
           throw new IllegalStateException("Choosing Models also changed Artwork");
+        if (!requestedNarration(root, "Models").contains("Draft value: Vanilla (Inherited)")
+            || !requestedNarration(root, "Artwork").contains("Draft value: Default")) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Independent requested titles did not update");
+          return null;
+        }
+        result.addProperty("profileRequestedTitlesRemainIndependent", true);
         NativeBindings.press(button(root, "Use for Artwork"));
         mountTicks = 0;
         stage = PROFILE_ARTWORK;
@@ -230,6 +244,13 @@ final class UiProbe {
         if (!profileCandidate().models().equals(ClientSettings.VANILLA)
             || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Profile field choices saved or lost a selection");
+        if (!requestedNarration(root, "Models").contains("Draft value: Vanilla (Inherited)")
+            || !requestedNarration(root, "Artwork").contains("Draft value: Vanilla (Inherited)")) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Profiles did not retain both inherited titles");
+          return null;
+        }
+        result.addProperty("profileRequestedTitlesPreserveExactIds", true);
         result.addProperty("profileTaskIndependentChoices", true);
         pending = edit(MODELS, new DraftEdit.SetRaw(original.models().toString()));
         stage = PROFILE_RESTORE_ARTWORK;
@@ -1388,6 +1409,21 @@ final class UiProbe {
       }
     }
     return false;
+  }
+
+  private static String requestedNarration(Screen screen, String field) {
+    for (var child : children(screen)) {
+      if (!(child instanceof design.inherent.reform.minecraft.client.ScrollFrame panel)) continue;
+      for (var control : panel.children()) {
+        if (!(control instanceof AbstractWidget widget)
+            || !widget.getMessage().getString().equals("i")
+            || !NativeBindings.narration(widget).contains("About " + field)) continue;
+        if (!focusControl(screen, widget))
+          throw new IllegalStateException("Requested field information lost native focus");
+        return NativeBindings.narration(panel);
+      }
+    }
+    return "";
   }
 
   static boolean focusedPath(ContainerEventHandler parent, GuiEventListener target) {

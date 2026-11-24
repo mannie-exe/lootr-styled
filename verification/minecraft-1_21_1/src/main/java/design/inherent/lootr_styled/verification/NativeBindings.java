@@ -50,7 +50,7 @@ final class NativeBindings {
     return screen.keyPressed(key, 0, 0);
   }
 
-  static String narration(net.minecraft.client.gui.components.AbstractWidget widget) {
+  static String narration(net.minecraft.client.gui.narration.NarratableEntry widget) {
     var collector = new net.minecraft.client.gui.narration.ScreenNarrationCollector();
     collector.update(widget::updateNarration);
     return collector.collectNarrationText(true);
