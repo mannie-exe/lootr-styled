@@ -13,9 +13,10 @@ import design.inherent.lootr_styled.profile.ProfileCodec;
 import design.inherent.reform.definition.FieldPath;
 import design.inherent.reform.edit.DraftEdit;
 import design.inherent.reform.edit.DraftRevision;
+import design.inherent.reform.minecraft.client.ClientDestination;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
-import design.inherent.reform.minecraft.client.OperationScreen;
+import design.inherent.reform.minecraft.client.NavigationAttempt;
 import design.inherent.reform.operation.DocumentActions;
 import design.inherent.reform.operation.OperationDescriptor.EntryPoint;
 import java.nio.file.Files;
@@ -61,7 +62,16 @@ final class UiProbe {
       ENTER_SETTINGS = -7;
   private static final int HOME_DIRTY = 210, RETURN_DIRTY = 211;
   private static final int INSPECT_SAVED_RESULT = 212;
-  private static final int REVIEW_DRAFT = 213, REVIEW_CAPTURE = 214, REVIEW_BACK = 215;
+  private static final int REVIEW_DRAFT = 213,
+      REVIEW_CAPTURE = 214,
+      REVIEW_BACK = 215,
+      REVIEW_RETURNED = 216,
+      REVIEW_FINAL_BACK = 217,
+      RESULT_BACK = 218,
+      RESULT_FORWARD = 219,
+      RESULT_INSPECT_LINK = 220,
+      RESULT_RESTORE = 221,
+      RESTORE_RESULT_BACK = 222;
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
   private static final FieldPath ARTWORK = FieldPath.ROOT.field("artwork");
   private final Screen parent;
@@ -93,6 +103,8 @@ final class UiProbe {
   private DraftRevision reviewRevision;
   private byte[] reviewSavedBytes;
   private java.util.UUID reviewGeneration;
+  private design.inherent.reform.operation.DocumentReview retainedReview;
+  private ClientDestination operationOrigin, operationDestination;
   private int profileVariant = 1;
   private final com.google.gson.JsonArray profileVariants = new com.google.gson.JsonArray();
   private static final List<String> PROFILE_SUBJECTS =
@@ -131,6 +143,8 @@ final class UiProbe {
       return null;
     }
     Screen root = workflow.screen();
+    if (stage >= REVIEW_DRAFT || stage == INSPECT_SAVED_RESULT || stage >= 3 && stage <= 7)
+      observeResultNavigation(root);
     switch (stage) {
       case HOME_ENTRY -> {
         if (++mountTicks < 4) return null;
@@ -981,13 +995,17 @@ final class UiProbe {
         stage = REVIEW_DRAFT;
       }
       case REVIEW_DRAFT -> {
-        if (!(NativeUi.current()
-                instanceof design.inherent.reform.minecraft.client.ReviewScreen<?> review)
-            || review.reviewedInput().isEmpty()) {
+        var review = workflow.inspection();
+        if (NativeUi.current() != root
+            || !(workflow.navigation().current().orElse(null)
+                instanceof ClientDestination.Inspection)
+            || review.flatMap(value -> value.reviewedInput()).isEmpty()) {
           if (++mountTicks > 200)
             throw new IllegalStateException("Review did not capture the retained draft");
           return null;
         }
+        retainedReview = review.orElseThrow().reviewedInput().orElseThrow();
+        result.addProperty("reviewUsesOriginalRoot", true);
         var visual =
             List.of(
                 FieldPath.ROOT.field("enabled"),
@@ -997,17 +1015,19 @@ final class UiProbe {
         if (!editor.form().fieldOrder().equals(visual))
           throw new IllegalStateException(
               "The form field order differs from its actual composition");
-        var capturedOrder =
-            review.reviewedInput().orElseThrow().entries().stream()
-                .map(value -> value.path())
-                .toList();
+        var capturedOrder = retainedReview.entries().stream().map(value -> value.path()).toList();
         var facts = new JsonObject();
         facts.addProperty("captureOrder", capturedOrder.toString());
         facts.addProperty("formOrder", visual.toString());
         var buttons =
-            children(review).stream()
+            children(root).stream()
                 .filter(Button.class::isInstance)
                 .map(Button.class::cast)
+                .filter(
+                    value ->
+                        !(value
+                            instanceof
+                            design.inherent.reform.minecraft.client.NativeNavigationButton))
                 .filter(
                     value ->
                         Set.of("Enabled", "Fresh Objects", "Models", "Artwork")
@@ -1050,25 +1070,61 @@ final class UiProbe {
       }
       case REVIEW_CAPTURE -> {
         if (!captured) return null;
-        NativeUi.current().onClose();
+        NativeBindings.press(back(root));
         mountTicks = 0;
         stage = REVIEW_BACK;
       }
       case REVIEW_BACK -> {
-        if (NativeUi.current() != root) {
+        if (NativeUi.current() != root
+            || workflow.navigation().current().orElse(null)
+                instanceof ClientDestination.Inspection) {
           if (++mountTicks > 200)
-            throw new IllegalStateException("Review Back lost its parent workflow");
+            throw new IllegalStateException("Review Back lost its original root destination");
           return null;
         }
         if (!reviewRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
             || !java.util.Arrays.equals(reviewSavedBytes, Files.readAllBytes(settingsFile)))
           throw new IllegalStateException("Review Back changed its retained draft or file");
+        pending =
+            workflow
+                .navigation()
+                .open(new ClientDestination.Inspection(StyleSettingsStore.DEFINITION.id()))
+                .completion()
+                .thenAccept(
+                    value -> {
+                      if (value.outcome() != NavigationAttempt.Outcome.REVEALED)
+                        throw new IllegalStateException("Typed inspection return failed: " + value);
+                    })
+                .toCompletableFuture();
+        stage = REVIEW_RETURNED;
+      }
+      case REVIEW_RETURNED -> {
+        if (NativeUi.current() != root
+            || workflow.inspection().flatMap(value -> value.reviewedInput()).orElseThrow()
+                != retainedReview
+            || !reviewRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
+            || !java.util.Arrays.equals(reviewSavedBytes, Files.readAllBytes(settingsFile))
+            || !PreviewProbeAccess.generation(PreviewProbeAccess.activePack())
+                .equals(reviewGeneration))
+          throw new IllegalStateException("Typed inspection return lost its root/capture/source");
+        result.addProperty("reviewCachedCaptureSurvivesBackAndTypedReturn", true);
+        NativeBindings.press(back(root));
+        mountTicks = 0;
+        stage = REVIEW_FINAL_BACK;
+      }
+      case REVIEW_FINAL_BACK -> {
+        if (workflow.navigation().current().orElse(null) instanceof ClientDestination.Inspection) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Review did not return to editing");
+          return null;
+        }
         result.addProperty("reviewRetainsVisualOrderAndDraft", true);
         stage = 3;
       }
       case 3 -> {
         if (!editor.canSubmit()) return null;
         actionAt = System.nanoTime();
+        operationOrigin = workflow.navigation().current().orElseThrow();
         NativeBindings.press(button(root, "Save and reload resources"));
         stage++;
       }
@@ -1079,13 +1135,46 @@ final class UiProbe {
             || !applied()
             || !operationDone()) return null;
         timings.addProperty("firstSaveAndReload", elapsed(actionAt));
-        if (!(NativeUi.current() instanceof OperationScreen<?>))
-          throw new IllegalStateException("Combined action did not use the shared result screen");
+        if (NativeUi.current() != root)
+          throw new IllegalStateException("Combined action replaced the original root");
+        operationDestination = workflow.navigation().current().orElseThrow();
         inspectedOperation =
-            ((OperationScreen<?>) NativeUi.current()).observedOperation().orElseThrow().id();
+            workflow.operationInspection().orElseThrow().observedOperation().orElseThrow().id();
         inspectedGeneration = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
         inspectedSavedBytes = Files.readAllBytes(settingsFile);
-        NativeUi.current().onClose();
+        NativeBindings.press(historyButton(root, "Back"));
+        mountTicks = 0;
+        stage = RESULT_BACK;
+      }
+      case RESULT_BACK -> {
+        if (!workflow.navigation().current().filter(operationOrigin::equals).isPresent()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Result Back lost its exact origin");
+          return null;
+        }
+        NativeBindings.press(historyButton(root, "Forward"));
+        mountTicks = 0;
+        stage = RESULT_FORWARD;
+      }
+      case RESULT_FORWARD -> {
+        if (!workflow.navigation().current().filter(operationDestination::equals).isPresent()
+            || !operationDone()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Forward did not restore the same result");
+          return null;
+        }
+        unchangedOperation();
+        result.addProperty("operationBackForwardPreservesExactHandleAndOrigin", true);
+        NativeBindings.press(historyButton(root, "Back"));
+        mountTicks = 0;
+        stage = RESULT_INSPECT_LINK;
+      }
+      case RESULT_INSPECT_LINK -> {
+        if (!workflow.navigation().current().filter(operationOrigin::equals).isPresent()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Second Back inserted an unseen visit");
+          return null;
+        }
         if (NativeUi.current() != root)
           throw new IllegalStateException("Result Back lost the retained workflow");
         if (!button(root, "Save and reload resources")
@@ -1108,21 +1197,24 @@ final class UiProbe {
         stage = INSPECT_SAVED_RESULT;
       }
       case INSPECT_SAVED_RESULT -> {
-        if (!(NativeUi.current() instanceof OperationScreen<?> screen)) {
+        if (!operationDone()) {
           if (++mountTicks > 200)
             throw new IllegalStateException("Inspect result did not open its retained operation");
           return null;
         }
-        if (!screen.observedOperation().orElseThrow().id().equals(inspectedOperation)
-            || !PreviewProbeAccess.generation(PreviewProbeAccess.activePack())
-                .equals(inspectedGeneration)
-            || !java.util.Arrays.equals(inspectedSavedBytes, Files.readAllBytes(settingsFile)))
-          throw new IllegalStateException(
-              "Inspect result restarted the effect or changed saved/effective state");
+        unchangedOperation();
         result.addProperty("effectNamedActionAndInspectionSeparated", true);
-        screen.onClose();
-        if (NativeUi.current() != root)
-          throw new IllegalStateException("Inspection Back lost its retained workflow");
+        result.addProperty("operationsUseOriginalRoot", NativeUi.current() == root);
+        NativeBindings.press(back(root));
+        mountTicks = 0;
+        stage = RESULT_RESTORE;
+      }
+      case RESULT_RESTORE -> {
+        if (!workflow.navigation().current().filter(operationOrigin::equals).isPresent()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Inspection Back lost its origin");
+          return null;
+        }
         pending =
             edit(
                 FieldPath.ROOT,
@@ -1142,6 +1234,7 @@ final class UiProbe {
       case 5 -> {
         if (!editor.canSubmit()) return null;
         actionAt = System.nanoTime();
+        operationOrigin = workflow.navigation().current().orElseThrow();
         NativeBindings.press(button(root, "Save and reload resources"));
         stage++;
       }
@@ -1149,7 +1242,16 @@ final class UiProbe {
         var saved = ClientSettings.parse(Files.readAllBytes(settingsFile));
         if (!saved.equals(original) || !applied() || !operationDone()) return null;
         timings.addProperty("repeatedSaveAndReload", elapsed(actionAt));
-        NativeUi.current().onClose();
+        NativeBindings.press(back(root));
+        mountTicks = 0;
+        stage = RESTORE_RESULT_BACK;
+      }
+      case RESTORE_RESULT_BACK -> {
+        if (!workflow.navigation().current().filter(operationOrigin::equals).isPresent()) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Restoration result lost its origin");
+          return null;
+        }
         try (var files = Files.list(ClientRuntime.configuration().root())) {
           existing = files.collect(java.util.stream.Collectors.toSet());
         }
@@ -1193,10 +1295,8 @@ final class UiProbe {
         }
         if (!Files.isRegularFile(copy.resolve("SOURCES.json")))
           throw new IllegalStateException("Export lost provenance");
-        if (!(NativeUi.current() instanceof OperationScreen<?>))
-          throw new IllegalStateException("Export did not use shared operation UI");
-        NativeUi.current().onClose();
-        if (NativeUi.current() != root) throw new IllegalStateException("Export lost parent/draft");
+        if (NativeUi.current() != root || workflow.operationInspection().isEmpty())
+          throw new IllegalStateException("Export did not retain the shared root/operation");
         if (!ClientSettings.parse(Files.readAllBytes(settingsFile)).equals(original))
           throw new IllegalStateException("Export changed settings");
         workflow.close();
@@ -1222,15 +1322,86 @@ final class UiProbe {
         && result.sourceRevision().equals(java.util.Optional.of(current.revision()));
   }
 
-  private static boolean operationDone() {
-    return NativeUi.current() instanceof OperationScreen<?> screen
-        && screen
-            .observedOperation()
+  private boolean operationDone() {
+    return NativeUi.current() == workflow.screen()
+        && (workflow.navigation().current().orElse(null)
+                instanceof ClientDestination.OperationResult
+            || workflow.navigation().current().orElse(null)
+                instanceof ClientDestination.DocumentOperation)
+        && workflow
+            .operationInspection()
+            .flatMap(value -> value.observedOperation())
             .filter(
                 state ->
                     state.state()
                         == design.inherent.reform.operation.OperationSnapshot.State.COMPLETED)
             .isPresent();
+  }
+
+  private void unchangedOperation() throws Exception {
+    if (!workflow
+            .operationInspection()
+            .orElseThrow()
+            .observedOperation()
+            .orElseThrow()
+            .id()
+            .equals(inspectedOperation)
+        || !PreviewProbeAccess.generation(PreviewProbeAccess.activePack())
+            .equals(inspectedGeneration)
+        || !java.util.Arrays.equals(inspectedSavedBytes, Files.readAllBytes(settingsFile)))
+      throw new IllegalStateException(
+          "Result navigation restarted an effect or changed its source");
+  }
+
+  private void observeResultNavigation(Screen root) {
+    var facts = new JsonObject();
+    facts.addProperty("stage", stage);
+    facts.addProperty(
+        "current", workflow.navigation().current().map(Object::toString).orElse("none"));
+    facts.addProperty("inspectionVisible", workflow.inspection().isPresent());
+    workflow
+        .operationInspection()
+        .flatMap(value -> value.observedOperation())
+        .ifPresent(
+            value -> {
+              facts.addProperty("operation", value.id().toString());
+              facts.addProperty("state", value.state().toString());
+            });
+    var controls = new com.google.gson.JsonArray();
+    for (var child : children(root)) {
+      if (child instanceof Button button
+          && Set.of("Back", "Forward").contains(button.getMessage().getString())) {
+        var row = new JsonObject();
+        row.addProperty("label", button.getMessage().getString());
+        row.addProperty("x", button.getX());
+        row.addProperty("y", button.getY());
+        row.addProperty("active", button.active);
+        controls.add(row);
+      }
+    }
+    facts.add("controls", controls);
+    result.add("lastResultNavigation", facts);
+  }
+
+  private static Button historyButton(Screen root, String caption) {
+    var control =
+        children(root).stream()
+            .filter(Button.class::isInstance)
+            .map(Button.class::cast)
+            .filter(value -> value.getMessage().getString().equals(caption))
+            .min(java.util.Comparator.comparingInt(Button::getY))
+            .orElseThrow();
+    if (!control.active) throw new IllegalStateException("History " + caption + " is disabled");
+    return control;
+  }
+
+  private static Button back(Screen root) {
+    return children(root).stream()
+        .filter(Button.class::isInstance)
+        .map(Button.class::cast)
+        .filter(value -> value.active && value.getMessage().getString().equals("Back"))
+        .max(java.util.Comparator.comparingInt(Button::getY))
+        .orElseThrow();
   }
 
   private static double elapsed(long start) {

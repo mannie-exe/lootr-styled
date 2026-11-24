@@ -31,13 +31,13 @@ The pinned EMF 3.3.12/ETF 7.2.7/Fresh Objects 2.1.2 inputs and their hashes are 
 
 ## Development settings interface
 
-The re:form 0.4 migration is incomplete. The current engineering inputs are recorded in [the pin manifest](../gradle/reform.json); historical reports retain their original inputs. The four-target production-task baseline below uses Lootr: Styled development candidate 17 with re:form development candidate 33. The current meta-screen adoption, candidate 19 with re:form candidate 38, has a bounded NeoForge 1.21.1 check. Candidate 18/re:form 35 retains its separate camera and window-resize evidence. Final combined acceptance remains open.
+The re:form 0.4 migration is incomplete. The current engineering inputs are recorded in [the pin manifest](../gradle/reform.json); historical reports retain their original inputs. The four-target production-task baseline below uses Lootr: Styled development candidate 17 with re:form development candidate 33. The current meta-view adoption, candidate 20 with re:form candidate 46, has bounded NeoForge 1.21.1 and Fabric 26.3 checks. Candidate 18/re:form 35 retains its separate camera and window-resize evidence. Final combined acceptance remains open.
 
-### Chooser, review, and operation screens
+### Chooser, review, and operation views
 
-The NeoForge 1.21.1 meta-screen check selects Vanilla (Inherited) by its friendly title, verifies its resolved reference ID, and stages it through the existing service. Requested Models and Artwork values use their cached friendly titles in native narration; staging one updates its title while preserving the other field and both exact resource IDs. The actual review index follows the form's displayed field order while the captured entries retain schema order. Review and Back preserve the retained draft, saved bytes, and published resource generation.
+The two meta-view checks select Vanilla (Inherited) by its friendly title, verify its resolved reference ID, and stage it through the existing service. Requested Models and Artwork values use their cached friendly titles in native narration; staging one updates its title while preserving the other field and both exact resource IDs. The actual review index follows the form's displayed field order while the captured entries retain schema order. Review stays in the original workflow window. Back and an identified typed return retain the same capture, draft, saved bytes, and published resource generation.
 
-The immediate Save and reload resources button has its effect name. Its separate Inspect result control opens the same operation ID without another write or resource generation. The remaining settings and export checks complete, restore the saved values, and exit normally. This is one packaged client check, rather than a new four-target or full-pack qualification.
+The immediate Save and reload resources button has its effect name. Its separate Inspect result control opens the same operation ID in that window without another write or resource generation. Native history Back/Forward restores the exact result and origin; it is tested separately from the task footer’s parent-return action. The remaining settings and export checks complete in both clients, restore the saved values, and exit normally. These are two packaged client checks at GUI scale 2, rather than a new four-target, narrow-layout, or full-pack qualification.
 
 ### Production Profiles task
 

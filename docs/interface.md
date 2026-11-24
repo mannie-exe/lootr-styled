@@ -16,6 +16,8 @@ Show preview reveals and focuses the existing viewport without preparing a new s
 
 Document actions opens a shared view of the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Save and reload resources and profile exports remain separate guarded operations.
 
+Review and operation results stay in the settings window. Navigation history restores an earlier view; a task’s return action returns to its parent. Neither should start another effect.
+
 Name immediate operation buttons for their effects. Inspect result opens the retained result without starting that effect again. Use the same field captions in editing and review; keep backend terms, raw identities, and revision details behind Details unless they help explain an actionable state.
 
 Report routine outcomes briefly, such as Saved or Reloaded. Keep errors specific and provide a recovery action. Put paths, resource decisions, and diagnostic detail behind Details rather than opening a report after every successful action. Distinguish a draft reset, a saved setting, a resource reload, and an exported editing copy.
