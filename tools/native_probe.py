@@ -19,6 +19,7 @@ TARGETS = ('fabric-1_21_1', 'neoforge-1_21_1', 'fabric-26_3', 'neoforge-26_3')
 PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST', 'BARREL')
                          for looted in (False, True) for opened in ((False, True) if c == 'BARREL' else (False,)))
 CAPTURES = (
+    'production-viewport-narrow', 'production-viewport-returned',
     'reform-review',
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
@@ -56,9 +57,9 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False):
-    if sum((graphics_only, preview_host, scene, production_shutdown)) > 1:
-        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, or --scene')
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False):
+    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport)) > 1:
+        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, or --scene')
     if expected_private_sprites is not None and (local_profile is None or not 0 <= expected_private_sprites <= 128):
         raise ValueError('An explicit private-sprite count requires a local profile and range 0..128')
     library = reform_dependency(target, reform_repository)
@@ -149,6 +150,11 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         production_marker.write_text('Production task remains live through normal renderer shutdown\n')
     else:
         production_marker.unlink(missing_ok=True)
+    viewport_marker = fixture / '.lootr-styled-production-viewport'
+    if production_viewport:
+        viewport_marker.write_text('Real production camera controls and native OS window resize only\n')
+    else:
+        viewport_marker.unlink(missing_ok=True)
     graphics_marker = fixture / '.lootr-styled-graphic-probe'
     if graphics_only:
         graphics_marker.write_text('Isolated domain draw only; excludes editor and integrated scene qualification\n')
@@ -210,6 +216,19 @@ def require_production_discard(data):
             or any(type(value.get(key)) is not int or value[key] < 1
                    for key in ('pendingUsesAtDiscard', 'nativeBytesAtDiscard', 'sceneBytesAtDiscard'))):
         raise RuntimeError('Production discard did not retire its submitted preview and reopen a fresh owner')
+
+
+def require_production_viewport(data):
+    value = data.get('productionViewport')
+    if (not isinstance(value, dict)
+            or any(value.get(key) is not True for key in ('cameraControlsReuseGraphic',
+                'realWindowReflowRetainsSceneAndInput', 'settingsUnchanged',
+                'resourceGenerationUnchanged', 'releaseCompleted'))
+            or any(type(value.get(key)) is not int or value[key] != 0
+                   for key in ('releasedNativeBytes', 'releasedSceneBytes'))
+            or [row.get('phase') for row in value.get('frames', [])]
+                   != ['prepared', 'rotated', 'zoomed', 'reset', 'narrow', 'returned']):
+        raise RuntimeError('Production camera/window checks did not complete with actual release')
 
 
 def require_preview_combinations(data, fixture):
@@ -334,6 +353,7 @@ def main():
     parser.add_argument('--run', action='store_true', help='Launch a GUI after external desktop coordination')
     parser.add_argument('--preview-host', action='store_true', help='Qualify the actual retained provider/worker host with a test-mounted shared widget')
     parser.add_argument('--production-shutdown', action='store_true', help='Check preview discard, recovery, and normal shutdown after settings checks')
+    parser.add_argument('--production-viewport', action='store_true', help='Only check production camera controls, real window resizing, and retirement')
     parser.add_argument('--graphics-only', action='store_true', help='Only draw frozen domain meshes in the shared viewport; excludes editor and world checks')
     parser.add_argument('--scene', action='store_true', help='Create and render a disposable native container world')
     parser.add_argument('--gui-scale', type=int, choices=range(5), default=2, help='Native GUI scale for this disposable fixture (0 is Auto)')
@@ -341,7 +361,7 @@ def main():
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport)
     if not args.run:
         print(json.dumps({'prepared': str(fixture.relative_to(ROOT)), 'artifact': product.name, 'sha256': digest(product)}))
         return
@@ -369,7 +389,8 @@ def main():
     if (result != 0 or data is None or data.get('passed') is not True
             or data.get('artifactSha256') != digest(product)
             or ('isolatedGraphic' in data) != args.graphics_only
-            or ('sharedGraphicHost' in data) != args.preview_host):
+            or ('sharedGraphicHost' in data) != args.preview_host
+            or ('productionViewport' in data) != args.production_viewport):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
     if args.preview_host or args.production_shutdown:
         require_renderer_shutdown(data, fixture, product, args.target)
@@ -377,6 +398,8 @@ def main():
         raise RuntimeError('Shutdown did not observe the registered production preview')
     if args.production_shutdown:
         require_production_discard(data)
+    if args.production_viewport:
+        require_production_viewport(data)
     if args.preview_host:
         require_preview_combinations(data, fixture)
         require_preview_authority(data)
@@ -384,7 +407,7 @@ def main():
         require_preview_cleanup_modes(data)
         require_preview_review(data)
         require_preview_selection_states(data, fixture)
-    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
+    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 
 if __name__ == '__main__':

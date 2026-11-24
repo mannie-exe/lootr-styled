@@ -11,7 +11,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class GraphicDrawMixin {
   @Inject(method = "draw", at = @At("RETURN"), remap = false)
   private void lootrStyled$drawResult(
+      design.inherent.reform.minecraft.client.FormCanvas canvas,
+      int x,
+      int y,
+      int width,
+      int height,
+      design.inherent.reform.presentation.graphics.GraphicCamera camera,
       CallbackInfoReturnable<ClientMeshGraphic.DrawOutcome> result) {
-    GraphicDrawAudit.observed((ClientMeshGraphic) (Object) this, result.getReturnValue());
+    GraphicDrawAudit.observed(
+        (ClientMeshGraphic) (Object) this, result.getReturnValue(), camera, width, height);
   }
 }

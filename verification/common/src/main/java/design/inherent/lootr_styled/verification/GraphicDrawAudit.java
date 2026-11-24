@@ -7,6 +7,18 @@ public final class GraphicDrawAudit {
   private static long rendered, waiting, empty;
   private static Runnable nextRendered;
   private static java.util.function.Consumer<ClientMeshGraphic> nextGraphic;
+  private static Sample last;
+
+  public record Sample(
+      java.lang.ref.WeakReference<ClientMeshGraphic> graphic,
+      design.inherent.reform.presentation.graphics.GraphicCamera camera,
+      int width,
+      int height,
+      long sequence) {}
+
+  static Sample lastRendered() {
+    return java.util.Objects.requireNonNull(last, "No rendered graphic");
+  }
 
   private GraphicDrawAudit() {}
 
@@ -26,13 +38,20 @@ public final class GraphicDrawAudit {
     nextGraphic = java.util.Objects.requireNonNull(action);
   }
 
-  public static void observed(ClientMeshGraphic graphic, ClientMeshGraphic.DrawOutcome outcome) {
+  public static void observed(
+      ClientMeshGraphic graphic,
+      ClientMeshGraphic.DrawOutcome outcome,
+      design.inherent.reform.presentation.graphics.GraphicCamera camera,
+      int width,
+      int height) {
     switch (outcome) {
       case RENDERED -> rendered++;
       case WAITING -> waiting++;
       case EMPTY -> empty++;
     }
     if (outcome == ClientMeshGraphic.DrawOutcome.RENDERED) {
+      last =
+          new Sample(new java.lang.ref.WeakReference<>(graphic), camera, width, height, rendered);
       var action = nextRendered;
       nextRendered = null;
       var observation = nextGraphic;

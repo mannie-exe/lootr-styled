@@ -88,11 +88,22 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertTrue(production.is_file())
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(production.exists())
+        viewport = self.fixture / '.lootr-styled-production-viewport'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_viewport=True)
+        self.assertTrue(viewport.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(viewport.exists())
 
     def test_production_shutdown_cannot_replace_another_selected_scope(self):
         for scope in ('scene', 'graphics_only', 'preview_host'):
             with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
                 native_probe.prepare('neoforge-1_21_1', 'native', production_shutdown=True, **{scope: True})
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+
+    def test_production_viewport_cannot_replace_another_selected_scope(self):
+        for scope in ('scene', 'graphics_only', 'preview_host', 'production_shutdown'):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
+                native_probe.prepare('neoforge-1_21_1', 'native', production_viewport=True, **{scope: True})
         self.assertEqual('Preserve running client input', self.settings.read_text())
 
     def test_conflicting_graphics_and_world_scopes_preserve_existing_evidence(self):
@@ -155,6 +166,18 @@ class NativeFixtureTest(unittest.TestCase):
                          ('pendingUsesAtDiscard', 0), ('releaseCompleted', False)]:
             with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production discard'):
                 native_probe.require_production_discard({'rendererShutdown': {'productionDiscard': {**value, key: bad}}})
+
+    def test_production_viewport_requires_complete_controls_and_release(self):
+        value = dict(cameraControlsReuseGraphic=True, realWindowReflowRetainsSceneAndInput=True,
+                     settingsUnchanged=True, resourceGenerationUnchanged=True, releaseCompleted=True,
+                     releasedNativeBytes=0, releasedSceneBytes=0,
+                     frames=[{'phase': phase} for phase in ('prepared', 'rotated', 'zoomed', 'reset', 'narrow', 'returned')])
+        native_probe.require_production_viewport({'productionViewport': value})
+        for key, bad in [('releaseCompleted', False), ('releasedNativeBytes', 1),
+                         ('resourceGenerationUnchanged', False), ('frames', []),
+                         ('cameraControlsReuseGraphic', False)]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production camera/window'):
+                native_probe.require_production_viewport({'productionViewport': {**value, key: bad}})
 
     def test_preview_shutdown_receipt_is_read_after_the_process_exits(self):
         product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'

@@ -1390,7 +1390,7 @@ final class UiProbe {
     return false;
   }
 
-  private static boolean focusedPath(ContainerEventHandler parent, GuiEventListener target) {
+  static boolean focusedPath(ContainerEventHandler parent, GuiEventListener target) {
     var current = parent.getFocused();
     return current == target && current.isFocused()
         || current instanceof ContainerEventHandler nested && focusedPath(nested, target);
@@ -1429,7 +1429,7 @@ final class UiProbe {
         .orElseThrow(() -> new IllegalStateException("The production preview subject is missing"));
   }
 
-  private static List<GuiEventListener> children(Screen screen) {
+  static List<GuiEventListener> children(Screen screen) {
     var output = new ArrayList<GuiEventListener>();
     var pending = new ArrayList<GuiEventListener>(screen.children());
     var seen =
@@ -1444,7 +1444,7 @@ final class UiProbe {
     return output;
   }
 
-  private static Button button(Screen screen, String label) {
+  static Button button(Screen screen, String label) {
     return children(screen).stream()
         .filter(Button.class::isInstance)
         .map(Button.class::cast)

@@ -17,6 +17,21 @@ import net.minecraft.resources.Identifier;
 final class NativeBindings {
   private NativeBindings() {}
 
+  static int[] windowSize(Minecraft mc) {
+    try (var stack = org.lwjgl.system.MemoryStack.stackPush()) {
+      var width = stack.mallocInt(1);
+      var height = stack.mallocInt(1);
+      if (!org.lwjgl.sdl.SDLVideo.SDL_GetWindowSize(mc.getWindow().handle(), width, height))
+        throw new IllegalStateException("Native SDL window size is unavailable");
+      return new int[] {width.get(0), height.get(0)};
+    }
+  }
+
+  static void resizeWindow(Minecraft mc, int width, int height) {
+    if (!org.lwjgl.sdl.SDLVideo.SDL_SetWindowSize(mc.getWindow().handle(), width, height))
+      throw new IllegalStateException("Native SDL window resize was refused");
+  }
+
   static byte[] resource(Minecraft mc, String id) throws java.io.IOException {
     try (var input =
         mc.getResourceManager()

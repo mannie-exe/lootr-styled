@@ -17,6 +17,16 @@ import net.minecraft.resources.ResourceLocation;
 final class NativeBindings {
   private NativeBindings() {}
 
+  static int[] windowSize(Minecraft mc) {
+    int[] width = new int[1], height = new int[1];
+    org.lwjgl.glfw.GLFW.glfwGetWindowSize(mc.getWindow().getWindow(), width, height);
+    return new int[] {width[0], height[0]};
+  }
+
+  static void resizeWindow(Minecraft mc, int width, int height) {
+    org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.getWindow().getWindow(), width, height);
+  }
+
   static byte[] resource(Minecraft mc, String id) throws java.io.IOException {
     try (var input =
         mc.getResourceManager()
