@@ -315,6 +315,7 @@ class NativeFixtureTest(unittest.TestCase):
                      routineTraceTechnical=True, resourceInspectionKeepsTraceVisible=True,
                      injectedFailures=1, failedSaveReload=failed, retryReload=retry,
                      resourceInspection=inspection)
+        value['cancellation'] = self.cancellation_facts()
         native_probe.require_production_effects({'productionEffects': value})
         for key, bad in [('saveOnlyDoesNotReload', False), ('injectedFailures', True),
                          ('originalSavedValuesRestored', False),
@@ -336,6 +337,42 @@ class NativeFixtureTest(unittest.TestCase):
                     {**inspection, 'generation': 'other'}]:
             with self.subTest(inspection=bad), self.assertRaisesRegex(RuntimeError, 'Production effects'):
                 native_probe.require_production_effects({'productionEffects': {**value, 'resourceInspection': bad}})
+
+    @staticmethod
+    def cancellation_facts():
+        cancelled = dict(operation='lootr_styled:save_reload', hasPersistenceReceipt=True,
+                         persistence='SAVED', application='UNKNOWN', code='CANCELLED',
+                         savedRevision='cancel-save', sourceRevision='cancel-save', handle='cancel')
+        retry = dict(operation='lootr_styled:retry', hasPersistenceReceipt=False, application='APPLIED',
+                     sourceRevision='cancel-save', handle='retry', generation='confirmed')
+        restored = dict(operation='lootr_styled:save_reload', hasPersistenceReceipt=True, persistence='SAVED', application='APPLIED',
+                        savedRevision='original', sourceRevision='original', generation='restored')
+        return dict(requestRetainsPendingWork=True, escapeReturnsWithoutCancellingOwner=True,
+                    pendingWorkPreventsWorkspaceClose=True, confirmedSaveAndUnknownApplication=True,
+                    cancellationRequested=True, retryPreservesSavedFileIdentity=True,
+                    originalSavedValuesRestored=True, nativeReloads=3,
+                    pendingCloseNarration='Wait for pending operations before closing.',
+                    publishedGenerationAfterCancellation='unconfirmed', cancelledSaveReload=cancelled,
+                    retryAfterCancellation=retry, restoredSaveReload=restored)
+
+    def test_production_cancellation_requires_saved_receipt_uncertainty_and_real_retry(self):
+        value = self.cancellation_facts()
+        native_probe.require_production_cancellation(value)
+        for key in ('requestRetainsPendingWork', 'escapeReturnsWithoutCancellingOwner',
+                    'pendingWorkPreventsWorkspaceClose', 'confirmedSaveAndUnknownApplication',
+                    'cancellationRequested', 'retryPreservesSavedFileIdentity', 'originalSavedValuesRestored'):
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production cancellation'):
+                native_probe.require_production_cancellation({**value, key: False})
+        for key, bad in [('nativeReloads', True), ('nativeReloads', 2), ('pendingCloseNarration', ''),
+                         ('cancelledSaveReload', {**value['cancelledSaveReload'], 'hasPersistenceReceipt': False}),
+                         ('cancelledSaveReload', {**value['cancelledSaveReload'], 'application': 'APPLIED'}),
+                         ('cancelledSaveReload', {**value['cancelledSaveReload'], 'savedRevision': 'other'}),
+                         ('retryAfterCancellation', {**value['retryAfterCancellation'], 'hasPersistenceReceipt': True}),
+                         ('retryAfterCancellation', {**value['retryAfterCancellation'], 'handle': 'cancel'}),
+                         ('retryAfterCancellation', {**value['retryAfterCancellation'], 'generation': 'unconfirmed'}),
+                         ('restoredSaveReload', {**value['restoredSaveReload'], 'application': 'UNKNOWN'})]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production cancellation'):
+                native_probe.require_production_cancellation({**value, key: bad})
 
     def test_production_close_requires_both_releases_and_unsaved_choice_recovery(self):
         release = dict(released=True, outstandingUses=0, releaseFailed=False, nativeBytes=0, sceneBytes=0)

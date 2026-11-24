@@ -50,6 +50,11 @@ final class NativeBindings {
     return screen.keyPressed(key, 0, 0);
   }
 
+  static boolean escape(net.minecraft.client.gui.screens.Screen screen) {
+    int key = com.mojang.blaze3d.platform.InputConstants.getKey("key.keyboard.escape").getValue();
+    return screen.keyPressed(key, 0, 0);
+  }
+
   static String narration(net.minecraft.client.gui.narration.NarratableEntry widget) {
     var collector = new net.minecraft.client.gui.narration.ScreenNarrationCollector();
     collector.update(widget::updateNarration);

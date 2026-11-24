@@ -40,6 +40,7 @@ final class ProductionEffectsProbe {
     RESOURCES_READY,
     RESOURCES_RESULT,
     RESOURCES_CAPTURE,
+    CANCELLATION,
     CLOSED
   }
 
@@ -62,6 +63,7 @@ final class ProductionEffectsProbe {
   private Phase phase = Phase.OPEN;
   private int ticks, unobscuredTicks;
   private boolean captured, captureRequested;
+  private ProductionCancellationProbe cancellation;
 
   ProductionEffectsProbe() throws Exception {
     parent = NativeUi.current();
@@ -78,7 +80,7 @@ final class ProductionEffectsProbe {
   }
 
   JsonObject tick(Minecraft mc) throws Exception {
-    if (++ticks > 400)
+    if (++ticks > 400 && phase != Phase.CANCELLATION)
       throw new IllegalStateException("Production effects timed out: " + phase + ": " + result);
     if (!admission.isDone()) return null;
     admission.join();
@@ -261,6 +263,13 @@ final class ProductionEffectsProbe {
       }
       case RESOURCES_CAPTURE -> {
         if (!capture(mc, "production-effects-resources")) return null;
+        cancellation = new ProductionCancellationProbe(workflow, editor);
+        next(Phase.CANCELLATION);
+      }
+      case CANCELLATION -> {
+        var facts = cancellation.tick(mc);
+        if (facts == null) return null;
+        result.add("cancellation", facts);
         press("Done");
         next(Phase.CLOSED);
       }
@@ -373,10 +382,11 @@ final class ProductionEffectsProbe {
   }
 
   String progress() {
-    return phase.toString();
+    return phase + (cancellation == null ? "" : ":" + cancellation.progress());
   }
 
   JsonObject observations() {
+    if (cancellation != null) result.add("cancellation", cancellation.observations());
     return result.deepCopy();
   }
 }

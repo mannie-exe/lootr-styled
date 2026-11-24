@@ -20,7 +20,8 @@ PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST',
                          for looted in (False, True) for opened in ((False, True) if c == 'BARREL' else (False,)))
 EFFECT_CAPTURES = ('production-effects-failed', 'production-effects-retried',
                    'production-effects-failed-technical', 'production-effects-failed-hidden',
-                   'production-effects-retried-technical', 'production-effects-resources')
+                   'production-effects-retried-technical', 'production-effects-resources',
+                   'production-effects-cancel-pending', 'production-effects-cancelled')
 CAPTURES = (
     'production-close-ready', 'production-close-decision',
     *EFFECT_CAPTURES,
@@ -173,7 +174,7 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         close_marker.unlink(missing_ok=True)
     effects_marker = fixture / '.lootr-styled-production-effects'
     if production_effects:
-        effects_marker.write_text('Actual save-only, one failed reload, no-write retry and restoration\n')
+        effects_marker.write_text('Actual save/failure/cancellation, pending close, no-write retries and restoration\n')
     else:
         effects_marker.unlink(missing_ok=True)
     document_marker = fixture / '.lootr-styled-production-document'
@@ -446,6 +447,45 @@ def require_production_effects(data):
             or inspection.get('sourceRevision') != retry['sourceRevision']
             or inspection.get('generation') != retry['generation']):
         raise RuntimeError('Production effects changed trace visibility or resource inspection facts')
+    require_production_cancellation(value.get('cancellation'))
+
+
+def require_production_cancellation(value):
+    if (not isinstance(value, dict)
+            or any(value.get(key) is not True for key in (
+                'requestRetainsPendingWork', 'escapeReturnsWithoutCancellingOwner',
+                'pendingWorkPreventsWorkspaceClose', 'confirmedSaveAndUnknownApplication',
+                'cancellationRequested', 'retryPreservesSavedFileIdentity',
+                'originalSavedValuesRestored'))
+            or not isinstance(value.get('pendingCloseNarration'), str)
+            or 'Wait for pending operations' not in value['pendingCloseNarration']
+            or type(value.get('nativeReloads')) is not int or value['nativeReloads'] != 3):
+        raise RuntimeError('Production cancellation lost pending work, close guards, or restoration')
+    cancelled = value.get('cancelledSaveReload')
+    retry = value.get('retryAfterCancellation')
+    restored = value.get('restoredSaveReload')
+    if (any(not isinstance(row, dict) for row in (cancelled, retry, restored))
+            or cancelled.get('operation') != 'lootr_styled:save_reload'
+            or cancelled.get('hasPersistenceReceipt') is not True
+            or cancelled.get('persistence') != 'SAVED'
+            or cancelled.get('application') != 'UNKNOWN' or cancelled.get('code') != 'CANCELLED'
+            or not cancelled.get('savedRevision')
+            or cancelled['savedRevision'] != cancelled.get('sourceRevision')
+            or retry.get('operation') != 'lootr_styled:retry'
+            or retry.get('hasPersistenceReceipt') is not False
+            or retry.get('application') != 'APPLIED'
+            or retry.get('sourceRevision') != cancelled['savedRevision']
+            or not value.get('publishedGenerationAfterCancellation') or not retry.get('generation')
+            or retry['generation'] == value['publishedGenerationAfterCancellation']
+            or not cancelled.get('handle') or not retry.get('handle')
+            or cancelled['handle'] == retry['handle']
+            or restored.get('operation') != 'lootr_styled:save_reload'
+            or restored.get('hasPersistenceReceipt') is not True
+            or restored.get('persistence') != 'SAVED' or restored.get('application') != 'APPLIED'
+            or not restored.get('savedRevision')
+            or restored['savedRevision'] != restored.get('sourceRevision')
+            or not restored.get('generation') or restored['generation'] == retry['generation']):
+        raise RuntimeError('Production cancellation lost confirmed persistence or uncertain/retried application')
 
 
 def require_production_close(data):
@@ -651,7 +691,7 @@ def main():
     parser.add_argument('--production-locale', action='store_true', help='Check invalid native input across real language/font reload and restoration')
     parser.add_argument('--production-operation', action='store_true', help='Check running reload/disclosure through actual window reflow, then one real reload')
     parser.add_argument('--production-chooser', action='store_true', help='Check actual profile search/inspection across real window reflow without choosing')
-    parser.add_argument('--production-effects', action='store_true', help='Check actual save-only, failed reload after save, and no-write retry')
+    parser.add_argument('--production-effects', action='store_true', help='Check saved receipts through failed/cancelled reloads, pending close, and no-write retry')
     parser.add_argument('--production-close', action='store_true', help='Only check dirty production preview close, Keep editing, discard, and actual retirement')
     parser.add_argument('--production-viewport', action='store_true', help='Only check production camera controls, real window resizing, and retirement')
     parser.add_argument('--graphics-only', action='store_true', help='Only draw frozen domain meshes in the shared viewport; excludes editor and world checks')
