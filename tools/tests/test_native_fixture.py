@@ -105,6 +105,28 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
 
+    def test_production_document_scope_and_complete_guarded_result(self):
+        for scope in ('scene', 'graphics_only', 'preview_host', 'production_shutdown',
+                      'production_viewport', 'production_close', 'production_effects'):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
+                native_probe.prepare('neoforge-1_21_1', 'native', production_document=True, **{scope: True})
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+        marker = self.fixture / '.lootr-styled-production-document'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_document=True)
+        self.assertTrue(marker.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+        keys = ('conflictSameOwnerRoot', 'comparedModelsAndArtwork', 'resolutionDoesNotSave',
+                'importNoImplicitPreview', 'importValueFormatDistinctFromNativeFile',
+                'staleImportTargetRefused', 'wholeDraftInvalidImportRetained',
+                'undoRestoresCompleteDraft', 'originalSavedValuesRestored',
+                'resourceGenerationUnchanged', 'closedCleanly')
+        value = dict.fromkeys(keys, True)
+        native_probe.require_production_document({'productionDocument': value})
+        for key in keys:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production document'):
+                native_probe.require_production_document({'productionDocument': {**value, key: False}})
+
     def test_production_effects_scope_preserves_inputs_and_clears_its_marker(self):
         for scope in ('scene', 'graphics_only', 'preview_host', 'production_shutdown', 'production_viewport', 'production_close'):
             with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
