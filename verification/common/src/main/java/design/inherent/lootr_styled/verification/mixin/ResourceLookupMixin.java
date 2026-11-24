@@ -1,6 +1,7 @@
 package design.inherent.lootr_styled.verification.mixin;
 
 import design.inherent.lootr_styled.verification.ResourceLookupAudit;
+import design.inherent.lootr_styled.verification.UiCostAudit;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -21,5 +22,12 @@ abstract class ResourceLookupMixin {
       at = @At("HEAD"))
   private void lootrStyled$observeLookup(CallbackInfoReturnable<?> callback) {
     ResourceLookupAudit.observed();
+  }
+
+  @Inject(
+      method = {"listPacks", "getNamespaces"},
+      at = @At("HEAD"))
+  private void lootrStyled$observeMetadata(CallbackInfoReturnable<?> callback) {
+    UiCostAudit.metadataRead();
   }
 }

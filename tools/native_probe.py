@@ -482,6 +482,48 @@ def require_production_viewport(data):
         raise RuntimeError('Production camera/window checks did not complete with actual release')
 
 
+def require_production_cost(data):
+    value = data.get('productionViewport', {}).get('cost')
+    if (not isinstance(value, dict) or value.get('acceptedInputCharacters') != 256
+            or value.get('explicitPreparations') != 4
+            or any(value.get(k) is not True for k in ('noImplicitPreparationDuringInputSearch',
+                'noAutomaticPreparationOnReturn', 'noUnexplainedTrackedRetention',
+                'retirementAfterEveryCycle', 'sameOwnerDraftAndSource'))
+            or any(type(value.get(k)) is not int or value[k] < 0 for k in (
+                'nativeExtremeInputCallNanos','nativeOrdinaryInputCallNanos','nativeQueryInputCallNanos',
+                'nativeSearchActionCallNanos','searchToFilteredChoiceObservedNanos'))
+            or any(type(value.get(k)) is not int or value[k] <= 0 for k in (
+                'nativeBudgetBytes','outputBudgetBytes','resourceBudget'))):
+        raise RuntimeError('Production costs lack actual bounded input/search/preparation facts')
+    times, rows, paints = value.get('prepareToFirstDrawObservedNanos'), value.get('cycles'), value.get('uiCallbacks')
+    phases = ['accepted-extreme-id','ordinary-id-restoration','profile-search','preview-cycle-1',
+              'returned-profile-1','preview-cycle-2','returned-profile-2','preview-cycle-3',
+              'returned-profile-3','preview-cycle-4']
+    if (not isinstance(times,list) or len(times)!=4 or any(type(t) is not int or t<0 for t in times)
+            or not isinstance(rows,list) or len(rows)!=4 or any(not isinstance(r,dict) for r in rows)
+            or not isinstance(paints,list) or len(paints)!=len(phases) or any(not isinstance(p,dict) for p in paints)
+            or [p.get('phase') for p in paints]!=phases):
+        raise RuntimeError('Production costs have incomplete actual phases or repeated cycles')
+    for i,row in enumerate(rows,1):
+        if (row.get('cycle')!=i or row.get('providerEntries')!=i or row.get('released') is not True
+                or any(type(row.get(k)) is not int or row[k]!=0 for k in ('releasedNativeBytes',
+                    'releasedSceneBytes','releasedNativeResources','releasedSceneResources','outstandingUses'))
+                or any(type(row.get(k)) is not int or row[k]<=0 for k in ('nativePeakBytes','scenePeakBytes',
+                    'nativePeakResources','scenePeakResources','drawWidth','drawHeight'))
+                or row['nativePeakBytes']>value['nativeBudgetBytes'] or row['scenePeakBytes']>value['outputBudgetBytes']
+                or max(row['nativePeakResources'],row['scenePeakResources'])>value['resourceBudget']):
+            raise RuntimeError('Production costs retained allocations or exceeded declared bounds')
+    for paint in paints:
+        metrics=[paint.get(k) for k in ('callbackWallMinNanos','callbackWallMedianNanos','callbackWallP95Nanos','callbackWallMaxNanos')]
+        if (type(paint.get('samples')) is not int or not 8<=paint['samples']<=256
+                or any(type(n) is not int or n<0 for n in metrics) or metrics!=sorted(metrics)
+                or paint.get('providerEntriesInCallback')!=0 or paint.get('resourceContentLookupsInCallback')!=0
+                or any(type(paint.get(k)) is not int or paint[k]<0 for k in (
+                    'resourceManagerCallsInCallback','packMetadataReadsInCallback','resourceContentLookupsInCallback'))
+                or paint['resourceManagerCallsInCallback'] != paint['packMetadataReadsInCallback'] + paint['resourceContentLookupsInCallback']):
+            raise RuntimeError('Production costs lack bounded UI callback samples without preparation/lookups')
+
+
 def require_preview_combinations(data, fixture):
     path = fixture / 'lootr-styled-combinations-report.json'
     result = data.get('previewCombinations')
@@ -695,6 +737,7 @@ def main():
         require_production_close(data)
     if args.production_viewport:
         require_production_viewport(data)
+        require_production_cost(data)
     if args.preview_host:
         require_preview_combinations(data, fixture)
         require_preview_authority(data)

@@ -10,7 +10,9 @@
     "RendererShutdownMixin",
     "NativeCleanupFaultMixin",
     "NativeReloadFaultMixin",
-    "StyleOutcomeAccessor"
+    "StyleOutcomeAccessor",
+    "UiCostMixin",
+    "ProviderCostMixin"
   ],
   "injectors": {
     "defaultRequire": 1

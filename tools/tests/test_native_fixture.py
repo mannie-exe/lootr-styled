@@ -439,6 +439,35 @@ class NativeFixtureTest(unittest.TestCase):
             with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production camera/window'):
                 native_probe.require_production_viewport({'productionViewport': {**value, key: bad}})
 
+    def test_production_cost_requires_real_callbacks_and_every_released_cycle(self):
+        phases=['accepted-extreme-id','ordinary-id-restoration','profile-search','preview-cycle-1',
+                'returned-profile-1','preview-cycle-2','returned-profile-2','preview-cycle-3',
+                'returned-profile-3','preview-cycle-4']
+        value=dict(acceptedInputCharacters=256,explicitPreparations=4,noImplicitPreparationDuringInputSearch=True,
+                   noAutomaticPreparationOnReturn=True,noUnexplainedTrackedRetention=True,retirementAfterEveryCycle=True,
+                   sameOwnerDraftAndSource=True,nativeExtremeInputCallNanos=1,nativeOrdinaryInputCallNanos=2,
+                   nativeQueryInputCallNanos=3,nativeSearchActionCallNanos=4,searchToFilteredChoiceObservedNanos=10,
+                   nativeBudgetBytes=1000,outputBudgetBytes=1000,resourceBudget=10,prepareToFirstDrawObservedNanos=[1,2,3,4],
+                   cycles=[dict(cycle=i,providerEntries=i,released=True,outstandingUses=0,releasedNativeBytes=0,
+                                releasedSceneBytes=0,releasedNativeResources=0,releasedSceneResources=0,
+                                nativePeakBytes=128,scenePeakBytes=64,nativePeakResources=3,scenePeakResources=2,
+                                drawWidth=220,drawHeight=160) for i in range(1,5)],
+                   uiCallbacks=[dict(phase=p,samples=8,callbackWallMinNanos=1,callbackWallMedianNanos=2,
+                                     callbackWallP95Nanos=3,callbackWallMaxNanos=4,
+                                     providerEntriesInCallback=0,resourceManagerCallsInCallback=0,packMetadataReadsInCallback=0,resourceContentLookupsInCallback=0) for p in phases])
+        native_probe.require_production_cost({'productionViewport':{'cost':value}})
+        for location,key,bad in [('cycles','releasedNativeBytes',1),('cycles','releasedSceneResources',1),
+                                 ('cycles','providerEntries',8),('cycles','nativePeakBytes',1001),
+                                 ('uiCallbacks','providerEntriesInCallback',1),('uiCallbacks','resourceContentLookupsInCallback',1),
+                                 ('uiCallbacks','samples',0),('uiCallbacks','callbackWallMedianNanos',10)]:
+            altered=copy.deepcopy(value);altered[location][0][key]=bad
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production costs'):
+                native_probe.require_production_cost({'productionViewport':{'cost':altered}})
+        for key,bad in [('acceptedInputCharacters',255),('cycles',[]),('prepareToFirstDrawObservedNanos',[]),
+                        ('nativeExtremeInputCallNanos','guessed'),('noAutomaticPreparationOnReturn',False)]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production costs'):
+                native_probe.require_production_cost({'productionViewport':{'cost':{**value,key:bad}}})
+
     def test_preview_shutdown_receipt_is_read_after_the_process_exits(self):
         product = self.root / 'build/distributions/lootr-styled-1.21.1-neoforge-fixture.jar'
         released = {'passed': True, 'releaseCompleted': True, 'released': True,

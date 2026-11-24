@@ -7,11 +7,15 @@ import design.inherent.lootr_styled.client.NativeUi;
 import design.inherent.lootr_styled.client.StylePreferences;
 import design.inherent.lootr_styled.client.StyleSettingsStore;
 import design.inherent.lootr_styled.profile.ClientSettings;
+import design.inherent.reform.definition.FieldPath;
+import design.inherent.reform.edit.DraftNode;
 import design.inherent.reform.edit.DraftRevision;
+import design.inherent.reform.minecraft.client.ClientDestination;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
 import design.inherent.reform.minecraft.client.ClientGraphicHost;
 import design.inherent.reform.minecraft.client.ClientMeshGraphic;
+import design.inherent.reform.minecraft.client.NavigationAttempt;
 import design.inherent.reform.minecraft.client.ScrollFrame;
 import design.inherent.reform.presentation.DestinationId;
 import design.inherent.reform.presentation.graphics.GraphicCamera;
@@ -31,7 +35,13 @@ import net.minecraft.client.gui.screens.Screen;
 /** Real task controls and OS window events, with metadata-only native draw observations. */
 final class ProductionViewportProbe {
   private enum Phase {
+    INPUT_OPEN,
+    INPUT_MANUAL,
+    INPUT_LONG,
+    INPUT_RESTORE,
     OPEN,
+    SEARCH,
+    SEARCH_PAINT,
     READY,
     ROTATED,
     ZOOMED,
@@ -42,19 +52,29 @@ final class ProductionViewportProbe {
     RETURNED,
     RETURNED_DRAW,
     RETURNED_IMAGE,
+    HOME_RELEASE,
+    REOPEN,
+    REOPEN_PAINT,
+    REPEAT_READY,
+    REPEAT_CAMERA,
     RELEASE
   }
 
-  private Phase phase = Phase.OPEN;
+  private static final int CYCLES = 4;
+  private static final FieldPath MODELS = FieldPath.ROOT.field("models");
+  private static final String EXTREME_ID = "fixture:" + "a".repeat(248);
+  private Phase phase = Phase.INPUT_OPEN;
   private final ClientEditingWorkflow workflow;
   private final ClientGraphicHost host;
   private final Screen parent;
   private final Path settings;
   private final byte[] original;
+  private final java.nio.file.attribute.BasicFileAttributes attributes;
   private final java.util.UUID resourceGeneration;
   private final int[] originalWindow;
   private final int originalWidth, originalHeight;
   private final CompletableFuture<?> admission;
+  private CompletableFuture<?> pending;
   private ClientEditor<ClientSettings> editor;
   private EditBox query;
   private DraftRevision revision;
@@ -62,15 +82,24 @@ final class ProductionViewportProbe {
   private WeakReference<ClientMeshGraphic> graphic;
   private CompletableFuture<RenderLifetime.State> released;
   private long sequence, sceneBytes;
+  private final long initialPreparations = UiCostAudit.preparations();
+  private long prepareAt, searchAt;
+  private int cycle;
+  private boolean retainingViewport;
   private int ticks;
   private boolean captured;
   private final JsonObject result = new JsonObject();
   private final JsonArray frames = new JsonArray();
+  private final JsonObject cost = new JsonObject();
+  private final JsonArray paints = new JsonArray(),
+      cycles = new JsonArray(),
+      preparationTimes = new JsonArray();
 
   ProductionViewportProbe(Minecraft mc) throws Exception {
     parent = NativeUi.current();
     settings = ClientRuntime.configuration().root().resolve("settings.json");
     original = Files.readAllBytes(settings);
+    attributes = Files.readAttributes(settings, java.nio.file.attribute.BasicFileAttributes.class);
     resourceGeneration = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
     originalWindow = NativeBindings.windowSize(mc);
     workflow = StylePreferences.open(parent);
@@ -83,12 +112,16 @@ final class ProductionViewportProbe {
                 16L * 1024 * 1024, 32L * 1024 * 1024, 16L * 1024 * 1024, 256, 128L * 1024 * 1024),
             1);
     admission =
-        WorkflowReveal.view(
-                workflow,
-                StyleSettingsStore.DEFINITION,
-                DestinationId.parse("lootr_styled:profiles_page"))
+        WorkflowReveal.field(workflow, StyleSettingsStore.DEFINITION, MODELS)
             .thenAccept(value -> editor = value);
     result.add("frames", frames);
+    result.add("cost", cost);
+    cost.add("uiCallbacks", paints);
+    cost.add("cycles", cycles);
+    cost.add("prepareToFirstDrawObservedNanos", preparationTimes);
+    cost.addProperty("nativeBudgetBytes", host.limits().nativeBytes());
+    cost.addProperty("outputBudgetBytes", host.limits().outputBytes());
+    cost.addProperty("resourceBudget", host.limits().resources());
   }
 
   JsonObject tick(Minecraft mc) throws Exception {
@@ -97,9 +130,65 @@ final class ProductionViewportProbe {
     if (!admission.isDone()) return null;
     admission.join();
     var root = phase == Phase.RELEASE ? null : workflow.screen();
-    if (phase != Phase.RELEASE && phase != Phase.OPEN) unchanged();
+    if (phase != Phase.RELEASE) sourceUnchanged();
+    if (retainingViewport) unchanged();
     switch (phase) {
+      case INPUT_OPEN -> {
+        if (!editor.canSubmit() || editor.form().fieldControl(MODELS).isEmpty()) return null;
+        var disclosure = UiProbe.manualIdButton(root, "Edit ID");
+        if (!disclosure.active) return null;
+        NativeBindings.press(disclosure);
+        next(Phase.INPUT_MANUAL);
+      }
+      case INPUT_MANUAL -> {
+        if (!(editor.form().fieldControl(MODELS).orElse(null) instanceof EditBox input)
+            || !input.active) return null;
+        UiCostAudit.watch(root, "accepted-extreme-id");
+        long at = System.nanoTime();
+        input.setValue(EXTREME_ID);
+        cost.addProperty("nativeExtremeInputCallNanos", System.nanoTime() - at);
+        next(Phase.INPUT_LONG);
+      }
+      case INPUT_LONG -> {
+        var input = (EditBox) editor.form().fieldControl(MODELS).orElseThrow();
+        if (!input.getValue().equals(EXTREME_ID))
+          throw new IllegalStateException("Native control truncated supported256-character ID");
+        if (!editor.canSubmit()
+            || !((DraftNode.Scalar) editor.view().snapshot().orElseThrow().draft().at(MODELS))
+                .raw()
+                .equals(EXTREME_ID)
+            || UiCostAudit.samples() < 8) return null;
+        finishPaint();
+        cost.addProperty("acceptedInputCharacters", input.getValue().length());
+        UiCostAudit.watch(root, "ordinary-id-restoration");
+        long at = System.nanoTime();
+        input.setValue(ClientSettings.parse(original).models().toString());
+        cost.addProperty("nativeOrdinaryInputCallNanos", System.nanoTime() - at);
+        next(Phase.INPUT_RESTORE);
+      }
+      case INPUT_RESTORE -> {
+        if (!editor.canSubmit()
+            || !editor
+                .view()
+                .snapshot()
+                .orElseThrow()
+                .inspect()
+                .candidate()
+                .orElseThrow()
+                .value()
+                .equals(ClientSettings.parse(original))
+            || UiCostAudit.samples() < 8) return null;
+        finishPaint();
+        pending =
+            WorkflowReveal.view(
+                workflow,
+                StyleSettingsStore.DEFINITION,
+                DestinationId.parse("lootr_styled:profiles_page"));
+        next(Phase.OPEN);
+      }
       case OPEN -> {
+        if (!pending.isDone()) return null;
+        pending.join();
         var prepare =
             UiProbe.children(root).stream()
                 .filter(Button.class::isInstance)
@@ -123,12 +212,35 @@ final class ProductionViewportProbe {
                 .filter(value -> value.getMessage().getString().equals("Search"))
                 .findFirst()
                 .orElseThrow();
+        UiCostAudit.watch(root, "profile-search");
+        long at = System.nanoTime();
         query.setValue("Vanilla");
+        cost.addProperty("nativeQueryInputCallNanos", System.nanoTime() - at);
         query.setCursorPosition(3);
         revision = DraftRevision.of(editor.view().snapshot().orElseThrow());
-        sequence = GraphicDrawAudit.state().rendered();
-        NativeBindings.press(prepare.orElseThrow());
-        NativeBindings.press(UiProbe.button(root, "Show preview"));
+        retainingViewport = true;
+        var search = UiProbe.button(root, "Search");
+        if (!search.active) throw new IllegalStateException("Actual profile search is inactive");
+        searchAt = System.nanoTime();
+        NativeBindings.press(search);
+        cost.addProperty("nativeSearchActionCallNanos", System.nanoTime() - searchAt);
+        next(Phase.SEARCH);
+      }
+      case SEARCH -> {
+        if (UiProbe.hasButton(root, "Default") || !UiProbe.hasButton(root, "Vanilla (Inherited)"))
+          return null;
+        cost.addProperty("searchToFilteredChoiceObservedNanos", System.nanoTime() - searchAt);
+        next(Phase.SEARCH_PAINT);
+      }
+      case SEARCH_PAINT -> {
+        if (UiCostAudit.samples() < 8) return null;
+        finishPaint();
+        if (UiCostAudit.preparations() != initialPreparations
+            || host.nativeOwnership().bytes() != 0
+            || host.retainedOutput().bytes() != 0)
+          throw new IllegalStateException("Input/search prepared an implicit preview");
+        cost.addProperty("noImplicitPreparationDuringInputSearch", true);
+        startPreparation(root);
         next(Phase.READY);
       }
       case READY -> {
@@ -140,6 +252,8 @@ final class ProductionViewportProbe {
         sceneBytes = host.retainedOutput().bytes();
         if (sceneBytes <= 0)
           throw new IllegalStateException("Prepared preview has no retained scene");
+        preparationTimes.add(System.nanoTime() - prepareAt);
+        UiCostAudit.watch(root, "preview-cycle-" + (cycle + 1));
         record(mc, "prepared");
         keyboard(root, "Rotate left");
         next(Phase.ROTATED);
@@ -204,14 +318,128 @@ final class ProductionViewportProbe {
         var actual = graphic.get();
         if (actual == null) throw new IllegalStateException("The live graphic disappeared");
         released = actual.releaseCompletion().toCompletableFuture();
-        workflow.close();
-        NativeUi.open(parent);
-        next(Phase.RELEASE);
+        if (UiCostAudit.samples() < 8) return null;
+        finishPaint();
+        retainingViewport = false;
+        pending = home();
+        next(Phase.HOME_RELEASE);
+      }
+      case HOME_RELEASE -> {
+        if (!pending.isDone()) return null;
+        pending.join();
+        if (!released.isDone()
+            || host.nativeOwnership().bytes() != 0
+            || host.retainedOutput().bytes() != 0
+            || host.nativeOwnership().resources() != 0
+            || host.retainedOutput().resources() != 0) return null;
+        var state = released.join();
+        if (!state.released() || state.outstandingUses() != 0 || state.releaseFailure().isPresent())
+          throw new IllegalStateException("Hidden production preview did not retire");
+        cycle++;
+        if (UiCostAudit.preparations() - initialPreparations != cycle)
+          throw new IllegalStateException("Preparation count diverged from explicit actions");
+        var row = new JsonObject();
+        row.addProperty("cycle", cycle);
+        row.addProperty("providerEntries", UiCostAudit.preparations() - initialPreparations);
+        row.addProperty("releasedNativeBytes", host.nativeOwnership().bytes());
+        row.addProperty("releasedSceneBytes", host.retainedOutput().bytes());
+        row.addProperty("releasedNativeResources", host.nativeOwnership().resources());
+        row.addProperty("releasedSceneResources", host.retainedOutput().resources());
+        row.addProperty("released", state.released());
+        row.addProperty("outstandingUses", state.outstandingUses());
+        row.addProperty("nativePeakBytes", host.nativeOwnership().peakBytes());
+        row.addProperty("scenePeakBytes", host.retainedOutput().peakBytes());
+        row.addProperty("nativePeakResources", host.nativeOwnership().peakResources());
+        row.addProperty("scenePeakResources", host.retainedOutput().peakResources());
+        row.addProperty("drawWidth", GraphicDrawAudit.lastRendered().width());
+        row.addProperty("drawHeight", GraphicDrawAudit.lastRendered().height());
+        cycles.add(row);
+        if (cycle == CYCLES) {
+          if (host.nativeOwnership().peakBytes() > host.limits().nativeBytes()
+              || host.retainedOutput().peakBytes() > host.limits().outputBytes()
+              || host.nativeOwnership().peakResources() > host.limits().resources()
+              || host.retainedOutput().peakResources() > host.limits().resources()
+              || host.releaseFailureCount() != 0)
+            throw new IllegalStateException(
+                "Repeated preview exceeded its declared tracked bounds or failed release");
+          cost.addProperty("explicitPreparations", cycle);
+          cost.addProperty("noUnexplainedTrackedRetention", true);
+          cost.addProperty("retirementAfterEveryCycle", true);
+          cost.addProperty("sameOwnerDraftAndSource", true);
+          workflow.close();
+          NativeUi.open(parent);
+          next(Phase.RELEASE);
+        } else {
+          pending =
+              WorkflowReveal.view(
+                  workflow,
+                  StyleSettingsStore.DEFINITION,
+                  DestinationId.parse("lootr_styled:profiles_page"));
+          next(Phase.REOPEN);
+        }
+      }
+      case REOPEN -> {
+        if (!pending.isDone()) return null;
+        pending.join();
+        if (!UiProbe.hasButton(root, "Prepare draft preview")
+            || !UiProbe.button(root, "Prepare draft preview").active) return null;
+        query =
+            UiProbe.children(root).stream()
+                .filter(EditBox.class::isInstance)
+                .map(EditBox.class::cast)
+                .filter(value -> value.getMessage().getString().equals("Search"))
+                .findFirst()
+                .orElseThrow();
+        if (!query.getValue().equals("Vanilla") || query.getCursorPosition() != 3)
+          throw new IllegalStateException("Repeated route lost actual query/caret");
+        UiCostAudit.watch(root, "returned-profile-" + cycle);
+        next(Phase.REOPEN_PAINT);
+      }
+      case REOPEN_PAINT -> {
+        if (UiCostAudit.samples() < 8) return null;
+        finishPaint();
+        if (UiCostAudit.preparations() - initialPreparations != cycle
+            || host.nativeOwnership().bytes() != 0
+            || host.retainedOutput().bytes() != 0)
+          throw new IllegalStateException(
+              "Returning to Profiles implicitly prepared/retained a preview");
+        cost.addProperty("noAutomaticPreparationOnReturn", true);
+        retainingViewport = true;
+        startPreparation(root);
+        next(Phase.REPEAT_READY);
+      }
+      case REPEAT_READY -> {
+        if (GraphicDrawAudit.state().rendered() <= sequence || host.nativeOwnership().bytes() == 0)
+          return null;
+        var sample = GraphicDrawAudit.lastRendered();
+        if (sample.graphic().get() == graphic.get() || host.retainedOutput().bytes() != sceneBytes)
+          throw new IllegalStateException(
+              "Repeated preparation reused a retired lease or changed unchanged scene footprint");
+        graphic = sample.graphic();
+        camera = sample.camera();
+        preparationTimes.add(System.nanoTime() - prepareAt);
+        UiCostAudit.watch(root, "preview-cycle-" + (cycle + 1));
+        keyboard(root, "Rotate left");
+        next(Phase.REPEAT_CAMERA);
+      }
+      case REPEAT_CAMERA -> {
+        if (!drawn()
+            || GraphicDrawAudit.lastRendered().camera().yaw() == camera.yaw()
+            || UiCostAudit.samples() < 8) return null;
+        finishPaint();
+        var actual = graphic.get();
+        if (actual == null) throw new IllegalStateException("Repeated graphic disappeared");
+        released = actual.releaseCompletion().toCompletableFuture();
+        retainingViewport = false;
+        pending = home();
+        next(Phase.HOME_RELEASE);
       }
       case RELEASE -> {
         if (!released.isDone()
             || host.nativeOwnership().bytes() != 0
-            || host.retainedOutput().bytes() != 0) return null;
+            || host.retainedOutput().bytes() != 0
+            || host.nativeOwnership().resources() != 0
+            || host.retainedOutput().resources() != 0) return null;
         var state = released.join();
         if (!state.released()
             || state.outstandingUses() != 0
@@ -233,6 +461,54 @@ final class ProductionViewportProbe {
       }
     }
     return null;
+  }
+
+  private void startPreparation(Screen root) {
+    prepareAt = System.nanoTime();
+    var button = UiProbe.button(root, "Prepare draft preview");
+    if (!button.active) throw new IllegalStateException("Prepare draft preview inactive");
+    NativeBindings.press(button);
+    NativeBindings.press(UiProbe.button(root, "Show preview"));
+  }
+
+  private CompletableFuture<?> home() {
+    var target = new ClientDestination.Home();
+    var attempt = workflow.navigation().open(target);
+    return attempt
+        .completion()
+        .thenApply(
+            value -> {
+              if (!value.id().equals(attempt.id())
+                  || !value.target().equals(target)
+                  || value.outcome() != NavigationAttempt.Outcome.REVEALED)
+                throw new IllegalStateException(
+                    "Actual Home reveal failed: " + value, value.cause().orElse(null));
+              return value;
+            })
+        .toCompletableFuture();
+  }
+
+  private void finishPaint() {
+    var value = UiCostAudit.finish();
+    paints.add(value);
+    if (value.get("providerEntriesInCallback").getAsLong() != 0
+        || value.get("resourceContentLookupsInCallback").getAsLong() != 0)
+      throw new IllegalStateException(
+          "Observed UI callback performs domain preparation or resource-content lookup: " + value);
+  }
+
+  private void sourceUnchanged() throws Exception {
+    var now = Files.readAttributes(settings, java.nio.file.attribute.BasicFileAttributes.class);
+    if (!Arrays.equals(original, Files.readAllBytes(settings))
+        || !attributes.lastModifiedTime().equals(now.lastModifiedTime())
+        || !java.util.Objects.equals(attributes.fileKey(), now.fileKey())
+        || !resourceGeneration.equals(
+            PreviewProbeAccess.generation(PreviewProbeAccess.activePack()))
+        || workflow.editor(StyleSettingsStore.DEFINITION) != editor
+        || revision != null
+            && !revision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow())))
+      throw new IllegalStateException(
+          "Cost/retention check changed source, generation, owner or draft");
   }
 
   private void next(Phase value) {
@@ -334,6 +610,23 @@ final class ProductionViewportProbe {
   }
 
   JsonObject observations() {
-    return result.deepCopy();
+    var value = result.deepCopy();
+    value.addProperty("phase", phase.toString());
+    value.addProperty("uiSamples", UiCostAudit.samples());
+    value.addProperty("providerEntries", UiCostAudit.preparations() - initialPreparations);
+    value.addProperty("nativeBytes", host.nativeOwnership().bytes());
+    value.addProperty("sceneBytes", host.retainedOutput().bytes());
+    if (editor != null) {
+      value.addProperty("canSubmit", editor.canSubmit());
+      editor
+          .form()
+          .fieldControl(MODELS)
+          .ifPresent(
+              widget -> {
+                if (widget instanceof EditBox input)
+                  value.addProperty("nativeModelsText", input.getValue());
+              });
+    }
+    return value;
   }
 }
