@@ -138,6 +138,34 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
 
+    def test_production_chooser_scope_is_exclusive_and_cleared(self):
+        marker = self.fixture / '.lootr-styled-production-chooser'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_chooser=True)
+        self.assertTrue(marker.is_file())
+        with self.assertRaisesRegex(ValueError, 'Choose one'):
+            native_probe.prepare('neoforge-1_21_1', 'native', production_chooser=True, production_input=True)
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
+    def test_production_chooser_requires_inspection_without_staging(self):
+        def state(phase, size):
+            return dict(phase=phase, window=size, gui=size, query='Vanilla', caret=3, selection='an',
+                        queryFocus=True, inspected='lootr_styled:vanilla',
+                        models='lootr_styled:default', artwork='lootr_styled:default')
+        states = [state('inspected','854x480'), state('narrow','320x240'), state('returned','854x480')]
+        value = dict(searchRemovedDefaultChoice=True, queryAndInspectionSurviveWindowReflow=True,
+                     inspectionDoesNotStage=True, sameDraftAndOwner=True,
+                     sourceFileAndGenerationUnchanged=True, closedCleanly=True,
+                     baselineModels='lootr_styled:default', baselineArtwork='lootr_styled:default', states=states)
+        native_probe.require_production_chooser({'productionChooser': value})
+        for bad in [[], [None]*3, [states[0],{**states[1],'queryFocus':False},states[2]],
+                    [states[0],states[1],{**states[2],'models':'lootr_styled:vanilla'}],
+                    [states[0],{**states[1],'inspected':'lootr_styled:default'},states[2]]]:
+            with self.subTest(states=bad), self.assertRaisesRegex(RuntimeError,'Production chooser'):
+                native_probe.require_production_chooser({'productionChooser': {**value,'states':bad}})
+        with self.assertRaisesRegex(RuntimeError,'Production chooser'):
+            native_probe.require_production_chooser({'productionChooser': {**value,'inspectionDoesNotStage':False}})
+
     def test_production_input_scope_is_exclusive_and_cleared(self):
         marker = self.fixture / '.lootr-styled-production-input'
         native_probe.prepare('neoforge-1_21_1', 'native', production_input=True)
