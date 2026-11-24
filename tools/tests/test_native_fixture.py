@@ -138,6 +138,44 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
 
+    def test_production_operation_scope_is_exclusive_and_cleared(self):
+        marker = self.fixture / '.lootr-styled-production-operation'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_operation=True)
+        self.assertTrue(marker.is_file())
+        with self.assertRaisesRegex(ValueError, 'Choose one'):
+            native_probe.prepare('neoforge-1_21_1', 'native', production_operation=True, production_effects=True)
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
+    def test_production_operation_requires_same_running_handle_and_actual_application(self):
+        def state(phase, size):
+            return dict(phase=phase, window=size, gui=size, handle='original-handle',
+                        operation='lootr_styled:reload', state='RUNNING', holding=True,
+                        requests=1, releases=0, nativeEntryAttempts=0, technicalExpanded=True)
+        value = dict(runningHandleAndDisclosureRetained=True, oneActualReloadAfterRelease=True,
+                     sourceFileUnchanged=True, sameDraftAndOwner=True, closedCleanly=True,
+                     savedRevision='saved', oldGeneration='old',
+                     states=[state('running','854x480'),state('narrow','320x240'),state('returned','854x480')],
+                     completedReload=dict(handle='original-handle',operation='lootr_styled:reload',
+                                          hasPersistenceReceipt=False,application='APPLIED',
+                                          sourceRevision='saved',generation='new'))
+        native_probe.require_production_operation({'productionOperation': value})
+        for key, replacement in [('handle','replacement'),('state','COMPLETED'),('holding',False),
+                                 ('nativeEntryAttempts',1),('technicalExpanded',False),('window','854x480')]:
+            bad = copy.deepcopy(value)
+            bad['states'][1][key] = replacement
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError,'Production operation'):
+                native_probe.require_production_operation({'productionOperation':bad})
+        for key, replacement in [('handle','replacement'),('hasPersistenceReceipt',True),
+                                 ('application','FAILED'),('sourceRevision','different'),('generation','old')]:
+            bad = copy.deepcopy(value)
+            bad['completedReload'][key] = replacement
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError,'Production operation'):
+                native_probe.require_production_operation({'productionOperation':bad})
+        for states in [[],[None]*3]:
+            with self.assertRaisesRegex(RuntimeError,'Production operation'):
+                native_probe.require_production_operation({'productionOperation':{**value,'states':states}})
+
     def test_production_chooser_scope_is_exclusive_and_cleared(self):
         marker = self.fixture / '.lootr-styled-production-chooser'
         native_probe.prepare('neoforge-1_21_1', 'native', production_chooser=True)

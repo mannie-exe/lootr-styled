@@ -25,6 +25,7 @@ public final class NativeProbe {
   private static ProductionDocumentProbe productionDocument;
   private static ProductionInputProbe productionInput;
   private static ProductionChooserProbe productionChooser;
+  private static ProductionOperationProbe productionOperation;
   private static PreviewCombinationProbe combinations;
   private static PreviewAuthorityProbe authority;
   private static PreviewCleanupFailureProbe cleanupFailure;
@@ -60,6 +61,7 @@ public final class NativeProbe {
       if (productionDocument != null) progress += ":document=" + productionDocument.progress();
       if (productionInput != null) progress += ":input=" + productionInput.progress();
       if (productionChooser != null) progress += ":chooser=" + productionChooser.progress();
+      if (productionOperation != null) progress += ":operation=" + productionOperation.progress();
       if (!lastProgress.equals(progress)) {
         Files.writeString(
             mc.gameDirectory.toPath().resolve("lootr-styled-probe-state.txt"), progress + "\n");
@@ -122,7 +124,11 @@ public final class NativeProbe {
       } else if (stage == 1 && reloaded) {
         snapshots.add(NativeBindings.capture(mc, mode));
         REPORT.add("snapshots", snapshots);
-        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-chooser"))) {
+        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-operation"))) {
+          productionOperation = new ProductionOperationProbe(mc);
+          stage = 27;
+        } else if (Files.exists(
+            mc.gameDirectory.toPath().resolve(".lootr-styled-production-chooser"))) {
           productionChooser = new ProductionChooserProbe(mc);
           stage = 26;
         } else if (Files.exists(
@@ -264,6 +270,12 @@ public final class NativeProbe {
         REPORT.add("productionChooser", observations);
         REPORT.addProperty("passed", true);
         finish(mc, null);
+      } else if (stage == 27) {
+        var observations = productionOperation.tick(mc);
+        if (observations == null) return;
+        REPORT.add("productionOperation", observations);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
       } else if (stage == 2) {
         var scene = SceneProbe.tick(mc);
         if (scene != null) {
@@ -313,6 +325,9 @@ public final class NativeProbe {
     terminal = true;
     try {
       if (error != null) {
+        if (productionOperation != null)
+          REPORT.add("productionOperation", productionOperation.observations());
+        ReloadGate.abort();
         if (productionShutdown != null)
           REPORT.add("productionDiscard", productionShutdown.observations());
         if (productionViewport != null)
