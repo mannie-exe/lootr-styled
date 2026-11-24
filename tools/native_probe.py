@@ -26,6 +26,7 @@ CAPTURES = (
     *EFFECT_CAPTURES,
     'production-document-conflict', 'production-document-import',
     'production-viewport-narrow', 'production-viewport-returned',
+    'production-input-narrow', 'production-input-returned',
     'reform-review',
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
@@ -63,9 +64,9 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False):
-    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document)) > 1:
-        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, or --scene')
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False):
+    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input)) > 1:
+        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, or --scene')
     if expected_private_sprites is not None and (local_profile is None or not 0 <= expected_private_sprites <= 128):
         raise ValueError('An explicit private-sprite count requires a local profile and range 0..128')
     library = reform_dependency(target, reform_repository)
@@ -176,6 +177,11 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         document_marker.write_text('Actual retained source conflict and imported whole draft/Stage/Undo only\n')
     else:
         document_marker.unlink(missing_ok=True)
+    input_marker = fixture / '.lootr-styled-production-input'
+    if production_input:
+        input_marker.write_text('Actual invalid native input, valid sibling and real window reflow without persistence\n')
+    else:
+        input_marker.unlink(missing_ok=True)
     graphics_marker = fixture / '.lootr-styled-graphic-probe'
     if graphics_only:
         graphics_marker.write_text('Isolated domain draw only; excludes editor and integrated scene qualification\n')
@@ -248,6 +254,36 @@ def require_production_document(data):
                 'wholeDraftInvalidImportRetained', 'undoRestoresCompleteDraft',
                 'originalSavedValuesRestored', 'resourceGenerationUnchanged', 'closedCleanly'))):
         raise RuntimeError('Production document conflict/import did not retain complete guarded draft/source')
+
+
+def require_production_input(data):
+    value = data.get('productionInput')
+    if (not isinstance(value, dict) or any(value.get(key) is not True for key in (
+            'invalidInputReflowKeepsWholeDraft', 'invalidInputReflowKeepsCaretSelectionFocus',
+            'repairRestoresOriginalValuesWithoutSaving', 'settingsUnchanged',
+            'resourceGenerationUnchanged', 'sameOwnerUntilClose', 'closedCleanly'))):
+        raise RuntimeError('Production input did not retain and repair the actual guarded draft')
+    states = value.get('states')
+    draft = value.get('invalidWholeDraft')
+    baseline = value.get('baselineWholeDraft')
+    if (not isinstance(states, list) or len(states) != 3
+            or not isinstance(draft, dict) or set(draft) != {'enabled', 'models', 'artwork', 'freshObjects'}
+            or draft.get('models') != 'bad id'
+            or not isinstance(baseline, dict) or set(baseline) != set(draft)
+            or baseline.get('enabled') not in ('true', 'false')
+            or draft.get('enabled') != ('false' if baseline['enabled'] == 'true' else 'true')
+            or any(draft[k] != baseline[k] for k in ('artwork', 'freshObjects'))
+            or value.get('restoredWholeDraft') != baseline
+            or [s.get('phase') for s in states if isinstance(s, dict)] != ['invalid', 'narrow', 'returned']
+            or any(s.get('draft') != draft or s.get('canSubmit') is not False
+                   or s.get('text') != 'bad id' or s.get('caret') != 3
+                   or s.get('selection') != 'ad' or s.get('modelFocus') is not True for s in states)
+            or states[1].get('window') != '320x240'
+            or states[0].get('window') != states[2].get('window')
+            or states[0].get('gui') != states[2].get('gui')
+            or type(value.get('editToInvalidGuardNanos')) is not int
+            or value['editToInvalidGuardNanos'] < 0):
+        raise RuntimeError('Production input lost actual window, draft, caret or selection evidence')
 
 
 def require_effect_captures(fixture):
@@ -453,6 +489,7 @@ def main():
     parser.add_argument('--preview-host', action='store_true', help='Qualify the actual retained provider/worker host with a test-mounted shared widget')
     parser.add_argument('--production-shutdown', action='store_true', help='Check preview discard, recovery, and normal shutdown after settings checks')
     parser.add_argument('--production-document', action='store_true', help='Check real source conflicts, native imported value JSON, Stage and Undo')
+    parser.add_argument('--production-input', action='store_true', help='Check invalid native text and a valid sibling across actual window reflow')
     parser.add_argument('--production-effects', action='store_true', help='Check actual save-only, failed reload after save, and no-write retry')
     parser.add_argument('--production-close', action='store_true', help='Only check dirty production preview close, Keep editing, discard, and actual retirement')
     parser.add_argument('--production-viewport', action='store_true', help='Only check production camera controls, real window resizing, and retirement')
@@ -463,7 +500,7 @@ def main():
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input)
     if not args.run:
         print(json.dumps({'prepared': str(fixture.relative_to(ROOT)), 'artifact': product.name, 'sha256': digest(product)}))
         return
@@ -495,7 +532,8 @@ def main():
             or ('productionViewport' in data) != args.production_viewport
             or ('productionClose' in data) != args.production_close
             or ('productionEffects' in data) != args.production_effects
-            or ('productionDocument' in data) != args.production_document):
+            or ('productionDocument' in data) != args.production_document
+            or ('productionInput' in data) != args.production_input):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
     if args.preview_host or args.production_shutdown:
         require_renderer_shutdown(data, fixture, product, args.target)
@@ -505,6 +543,11 @@ def main():
         require_production_discard(data)
     if args.production_document:
         require_production_document(data)
+    if args.production_input:
+        require_production_input(data)
+        for name in ('production-input-narrow', 'production-input-returned'):
+            if not (fixture / (name + '.png')).is_file():
+                raise RuntimeError(f'Production input capture missing: {name}')
     if args.production_effects:
         require_production_effects(data)
         require_effect_captures(fixture)
@@ -519,7 +562,7 @@ def main():
         require_preview_cleanup_modes(data)
         require_preview_review(data)
         require_preview_selection_states(data, fixture)
-    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
+    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 
 if __name__ == '__main__':

@@ -1,0 +1,326 @@
+package design.inherent.lootr_styled.verification;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import design.inherent.lootr_styled.client.ClientRuntime;
+import design.inherent.lootr_styled.client.NativeUi;
+import design.inherent.lootr_styled.client.StylePreferences;
+import design.inherent.lootr_styled.client.StyleSettingsStore;
+import design.inherent.lootr_styled.profile.ClientSettings;
+import design.inherent.reform.definition.FieldPath;
+import design.inherent.reform.edit.DraftNode;
+import design.inherent.reform.edit.DraftRevision;
+import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
+import design.inherent.reform.minecraft.client.ClientEditor;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+
+/**
+ * Actual native invalid input and a valid sibling across real window events, without persistence.
+ */
+final class ProductionInputProbe {
+  private enum Phase {
+    OPEN,
+    SIBLING,
+    FIELD,
+    MANUAL,
+    INVALID,
+    NARROW,
+    NARROW_IMAGE,
+    RETURNED,
+    RETURNED_IMAGE,
+    REPAIR,
+    RESTORE,
+    CLOSED
+  }
+
+  private static final FieldPath MODELS = FieldPath.ROOT.field("models");
+  private static final FieldPath ENABLED = FieldPath.ROOT.field("enabled");
+  private final Screen parent, root;
+  private final ClientEditingWorkflow workflow;
+  private final CompletableFuture<?> admission;
+  private final Path settings;
+  private final byte[] originalBytes;
+  private final java.nio.file.attribute.BasicFileAttributes originalAttributes;
+  private final ClientSettings original;
+  private final UUID generation;
+  private final int[] window;
+  private final int width, height;
+  private final JsonObject result = new JsonObject();
+  private final JsonArray states = new JsonArray();
+  private ClientEditor<ClientSettings> editor;
+  private CompletableFuture<?> pending;
+  private DraftRevision invalidRevision;
+  private JsonObject invalidDraft;
+  private Phase phase = Phase.OPEN;
+  private int ticks, captureTicks;
+  private boolean captureRequested, captured;
+  private long editStarted;
+
+  ProductionInputProbe(Minecraft mc) throws Exception {
+    parent = NativeUi.current();
+    settings = ClientRuntime.configuration().root().resolve("settings.json");
+    originalBytes = Files.readAllBytes(settings);
+    originalAttributes =
+        Files.readAttributes(settings, java.nio.file.attribute.BasicFileAttributes.class);
+    original = ClientSettings.parse(originalBytes);
+    generation = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
+    window = NativeBindings.windowSize(mc);
+    workflow = StylePreferences.open(parent);
+    root = workflow.screen();
+    NativeUi.open(root);
+    width = root.width;
+    height = root.height;
+    admission =
+        WorkflowReveal.field(workflow, StyleSettingsStore.DEFINITION, ENABLED)
+            .thenAccept(value -> editor = value);
+    result.add("states", states);
+  }
+
+  JsonObject tick(Minecraft mc) throws Exception {
+    if (++ticks > 300)
+      throw new IllegalStateException("Native input timed out: " + phase + ": " + observations());
+    if (!admission.isDone()) return null;
+    admission.join();
+    unchanged();
+    switch (phase) {
+      case OPEN -> {
+        if (editor.form().fieldControl(ENABLED).isEmpty() || !editor.canSubmit()) return null;
+        result.add("baselineWholeDraft", draft());
+        toggleEnabled();
+        next(Phase.SIBLING);
+      }
+      case SIBLING -> {
+        if (!editor.canSubmit() || raw(ENABLED).equals(Boolean.toString(original.enabled())))
+          return null;
+        pending = WorkflowReveal.field(workflow, StyleSettingsStore.DEFINITION, MODELS);
+        next(Phase.FIELD);
+      }
+      case FIELD -> {
+        if (!pending.isDone()) return null;
+        pending.join();
+        var manual = UiProbe.manualIdButton(root, "Edit ID");
+        if (!manual.active) return null;
+        NativeBindings.press(manual);
+        next(Phase.MANUAL);
+      }
+      case MANUAL -> {
+        if (!(editor.form().fieldControl(MODELS).orElse(null) instanceof EditBox input)
+            || !input.active) return null;
+        if (!UiProbe.focusControl(root, input))
+          throw new IllegalStateException("Cannot focus actual Models input");
+        input.setValue("bad id");
+        editStarted = System.nanoTime();
+        next(Phase.INVALID);
+      }
+      case INVALID -> {
+        if (editor.canSubmit() || busy()) return null;
+        if (!raw(MODELS).equals("bad id")) return null;
+        if (UiProbe.button(root, "Save settings").active) return null;
+        var input = (EditBox) editor.form().fieldControl(MODELS).orElseThrow();
+        if (!UiProbe.focusedPath(root, input))
+          throw new IllegalStateException("Native invalid edit lost focus");
+        input.setCursorPosition(3);
+        input.setHighlightPos(1);
+        invalidRevision = DraftRevision.of(editor.view().snapshot().orElseThrow());
+        invalidDraft = draft();
+        assertInput();
+        result.addProperty("editToInvalidGuardNanos", System.nanoTime() - editStarted);
+        result.add("invalidWholeDraft", invalidDraft.deepCopy());
+        state(mc, "invalid");
+        NativeBindings.resizeWindow(mc, 320, 240);
+        next(Phase.NARROW);
+      }
+      case NARROW -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), new int[] {320, 240})
+            || root.width == width && root.height == height) return null;
+        assertRetained();
+        state(mc, "narrow");
+        next(Phase.NARROW_IMAGE);
+      }
+      case NARROW_IMAGE -> {
+        if (!capture(mc, "production-input-narrow")) return null;
+        assertRetained();
+        NativeBindings.resizeWindow(mc, window[0], window[1]);
+        next(Phase.RETURNED);
+      }
+      case RETURNED -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), window)
+            || root.width != width
+            || root.height != height) return null;
+        assertRetained();
+        state(mc, "returned");
+        next(Phase.RETURNED_IMAGE);
+      }
+      case RETURNED_IMAGE -> {
+        if (!capture(mc, "production-input-returned")) return null;
+        assertRetained();
+        result.addProperty("invalidInputReflowKeepsWholeDraft", true);
+        result.addProperty("invalidInputReflowKeepsCaretSelectionFocus", true);
+        ((EditBox) editor.form().fieldControl(MODELS).orElseThrow())
+            .setValue(original.models().toString());
+        next(Phase.REPAIR);
+      }
+      case REPAIR -> {
+        if (!editor.canSubmit() || busy() || !raw(MODELS).equals(original.models().toString()))
+          return null;
+        toggleEnabled();
+        next(Phase.RESTORE);
+      }
+      case RESTORE -> {
+        if (!editor.canSubmit()
+            || busy()
+            || !editor
+                .view()
+                .snapshot()
+                .orElseThrow()
+                .inspect()
+                .candidate()
+                .orElseThrow()
+                .value()
+                .equals(original)) return null;
+        result.addProperty("repairRestoresOriginalValuesWithoutSaving", true);
+        result.add("restoredWholeDraft", draft());
+        if (!UiProbe.button(root, "Done").active) return null;
+        NativeBindings.press(UiProbe.button(root, "Done"));
+        next(Phase.CLOSED);
+      }
+      case CLOSED -> {
+        if (UiProbe.hasButton(root, "Discard draft")
+            && workflow.isOpen()
+            && UiProbe.button(root, "Discard draft").active) {
+          NativeBindings.press(UiProbe.button(root, "Discard draft"));
+          return null;
+        }
+        if (workflow.isOpen() || editor.isOpen() || NativeUi.current() != parent) return null;
+        result.addProperty("settingsUnchanged", true);
+        result.addProperty("resourceGenerationUnchanged", true);
+        result.addProperty("sameOwnerUntilClose", true);
+        result.addProperty("closedCleanly", true);
+        return result;
+      }
+    }
+    return null;
+  }
+
+  private void assertInput() {
+    if (!(editor.form().fieldControl(MODELS).orElse(null) instanceof EditBox input)
+        || !input.getValue().equals("bad id")
+        || input.getCursorPosition() != 3
+        || !input.getHighlighted().equals("ad")
+        || !UiProbe.focusedPath(root, input)
+        || raw(ENABLED).equals(Boolean.toString(original.enabled()))
+        || editor.canSubmit()
+        || UiProbe.button(root, "Save settings").active)
+      throw new IllegalStateException(
+          "Invalid Models input, sibling or native guard was lost: " + observations());
+  }
+
+  private void assertRetained() {
+    assertInput();
+    if (!invalidRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
+        || !invalidDraft.equals(draft()))
+      throw new IllegalStateException("Reflow changed the complete draft");
+  }
+
+  private void unchanged() throws Exception {
+    var attributes =
+        Files.readAttributes(settings, java.nio.file.attribute.BasicFileAttributes.class);
+    if (!Arrays.equals(originalBytes, Files.readAllBytes(settings))
+        || !originalAttributes.lastModifiedTime().equals(attributes.lastModifiedTime())
+        || !java.util.Objects.equals(originalAttributes.fileKey(), attributes.fileKey())
+        || !generation.equals(PreviewProbeAccess.generation(PreviewProbeAccess.activePack()))
+        || workflow.isOpen() && workflow.editor(StyleSettingsStore.DEFINITION) != editor)
+      throw new IllegalStateException(
+          "Input check changed file, resource generation or editor identity");
+  }
+
+  private void toggleEnabled() {
+    var control =
+        UiProbe.children(root).stream()
+            .filter(CycleButton.class::isInstance)
+            .map(CycleButton.class::cast)
+            .filter(value -> NativeBindings.narration(value).startsWith("Enabled: "))
+            .findFirst()
+            .orElseThrow();
+    if (!control.active) throw new IllegalStateException("Enabled control is inactive");
+    NativeBindings.press(control);
+  }
+
+  private boolean busy() {
+    return workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::busy);
+  }
+
+  private String raw(FieldPath path) {
+    return ((DraftNode.Scalar) editor.view().snapshot().orElseThrow().draft().at(path)).raw();
+  }
+
+  private JsonObject draft() {
+    var value = new JsonObject();
+    for (String key : new String[] {"enabled", "models", "artwork", "freshObjects"})
+      value.addProperty(key, raw(FieldPath.ROOT.field(key)));
+    return value;
+  }
+
+  private void state(Minecraft mc, String name) {
+    var value = observations();
+    value.addProperty("phase", name);
+    var size = NativeBindings.windowSize(mc);
+    value.addProperty("window", size[0] + "x" + size[1]);
+    value.addProperty("gui", root.width + "x" + root.height);
+    states.add(value);
+  }
+
+  private boolean capture(Minecraft mc, String name) throws Exception {
+    if (!NativeBindings.unobscured(mc)) {
+      captureTicks = 0;
+      return false;
+    }
+    if (++captureTicks < 4) return false;
+    if (!captureRequested) {
+      captureRequested = true;
+      NativeWorld.screenshot(mc, name, () -> captured = true);
+    }
+    return captured;
+  }
+
+  private void next(Phase value) {
+    phase = value;
+    ticks = 0;
+    captureTicks = 0;
+    captureRequested = false;
+    captured = false;
+  }
+
+  String progress() {
+    return phase.toString();
+  }
+
+  JsonObject observations() {
+    var value = new JsonObject();
+    if (editor == null || !editor.isOpen()) return value;
+    value.add("draft", draft());
+    value.addProperty("canSubmit", editor.canSubmit());
+    editor
+        .form()
+        .fieldControl(MODELS)
+        .ifPresent(
+            control -> {
+              value.addProperty("modelControl", control.getClass().getSimpleName());
+              value.addProperty("modelFocus", UiProbe.focusedPath(root, control));
+              if (control instanceof EditBox input) {
+                value.addProperty("text", input.getValue());
+                value.addProperty("caret", input.getCursorPosition());
+                value.addProperty("selection", input.getHighlighted());
+              }
+            });
+    return value;
+  }
+}

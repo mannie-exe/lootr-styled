@@ -138,6 +138,37 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
 
+    def test_production_input_scope_is_exclusive_and_cleared(self):
+        marker = self.fixture / '.lootr-styled-production-input'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_input=True)
+        self.assertTrue(marker.is_file())
+        with self.assertRaisesRegex(ValueError, 'Choose one'):
+            native_probe.prepare('neoforge-1_21_1', 'native', production_input=True, production_effects=True)
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
+    def test_production_input_requires_complete_retained_native_state(self):
+        draft = dict(enabled='false', models='bad id', artwork='lootr_styled:default', freshObjects='AUTO')
+        baseline = {**draft, 'enabled': 'true', 'models': 'lootr_styled:default'}
+        def state(phase, window, gui):
+            return dict(phase=phase, window=window, gui=gui, draft=draft, canSubmit=False,
+                        text='bad id', caret=3, selection='ad', modelFocus=True)
+        states = [state('invalid', '854x480', '854x480'), state('narrow', '320x240', '320x240'),
+                  state('returned', '854x480', '854x480')]
+        value = dict(invalidInputReflowKeepsWholeDraft=True, invalidInputReflowKeepsCaretSelectionFocus=True,
+                     repairRestoresOriginalValuesWithoutSaving=True, settingsUnchanged=True,
+                     resourceGenerationUnchanged=True, sameOwnerUntilClose=True, closedCleanly=True,
+                     invalidWholeDraft=draft, baselineWholeDraft=baseline, restoredWholeDraft=baseline,
+                     states=states, editToInvalidGuardNanos=1000)
+        native_probe.require_production_input({'productionInput': value})
+        for bad in [[], [None]*3, [states[0], {**states[1], 'caret': 6}, states[2]],
+                    [states[0], {**states[1], 'modelFocus': False}, states[2]],
+                    [states[0], states[1], {**states[2], 'draft': {**draft, 'enabled': 'true'}}]]:
+            with self.subTest(states=bad), self.assertRaisesRegex(RuntimeError, 'Production input'):
+                native_probe.require_production_input({'productionInput': {**value, 'states': bad}})
+        with self.assertRaisesRegex(RuntimeError, 'Production input'):
+            native_probe.require_production_input({'productionInput': {**value, 'closedCleanly': False}})
+
     def test_production_effects_requires_each_capture_to_complete(self):
         # File presence is a completion gate, not image-content or rendering certification.
         for name in native_probe.EFFECT_CAPTURES:

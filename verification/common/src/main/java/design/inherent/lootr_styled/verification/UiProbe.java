@@ -1664,7 +1664,7 @@ final class UiProbe {
         || current instanceof ContainerEventHandler nested && focusedPath(nested, target);
   }
 
-  private static Button manualIdButton(Screen screen, String label) {
+  static Button manualIdButton(Screen screen, String label) {
     return children(screen).stream()
         .filter(Button.class::isInstance)
         .map(Button.class::cast)

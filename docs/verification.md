@@ -41,6 +41,12 @@ The immediate Save and reload resources button has its effect name. Its separate
 
 Document actions also stays in that window. Opening it retains the editor, edit service, current destination, draft revision, file bytes, and resource generation. Defaults and Undo use the original whole-document callbacks without saving. Invoking the dismissed menu’s old Defaults callback after Undo leaves the restored draft unchanged. Task footers use context-specific return labels; history Back/Forward remains separate.
 
+### Invalid native input and reflow
+
+The frozen candidate 26/re:form 63 artifacts also pass a separate input check on NeoForge 1.21.1 at GUI scale 2 and Fabric 26.3 at scale 4. A native Enabled edit remains alongside a malformed Models ID through an actual 320×240 window resize and return. The complete four-field draft, invalid text, caret, selection, focus, and disabled Save action remain intact. Explicit native repair restores the original values without saving. File bytes, modification time, reported file identity, and resource generation remain unchanged, and both clients exit normally. Captures show the inline error and selected text after return.
+
+This is an admitted invalid draft value, not a rejected native edit outside the actor. The reported edit-to-guard duration starts after the native setter returns and includes client ticks and observer work; it is not an input-latency or rendering benchmark. Chooser reflow, active operations, language changes, and complete accessibility acceptance remain separate checks.
+
 ### Saving and failed reloads
 
 Candidate 24/re:form 59 passes native save-only, failed application, and retry checks on NeoForge 1.21.1 at GUI scale 2 and Fabric 26.3 at scale 4. The actual Enabled control stages each change. Save settings changes the file without reloading. One verification-only failed future at Styled’s native reload boundary follows a confirmed save; the retained result contains both Saved persistence and Failed application. Retry reload uses that saved revision, has no persistence receipt, preserves file bytes, modification time, and reported file identity, and publishes a new matching generation. The original saved values and owner remain, and both clients close normally.

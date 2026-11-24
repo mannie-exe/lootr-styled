@@ -1,6 +1,7 @@
 package design.inherent.lootr_styled.verification;
 
 import design.inherent.reform.definition.DocumentDefinition;
+import design.inherent.reform.definition.FieldPath;
 import design.inherent.reform.minecraft.client.ClientDestination;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
@@ -20,6 +21,11 @@ final class WorkflowReveal {
   static <T> CompletableFuture<ClientEditor<T>> view(
       ClientEditingWorkflow workflow, DocumentDefinition<T> definition, DestinationId destination) {
     return reveal(workflow, definition, new ClientDestination.View(destination));
+  }
+
+  static <T> CompletableFuture<ClientEditor<T>> field(
+      ClientEditingWorkflow workflow, DocumentDefinition<T> definition, FieldPath path) {
+    return reveal(workflow, definition, new ClientDestination.Field(definition.id(), path));
   }
 
   private static <T> CompletableFuture<ClientEditor<T>> reveal(
