@@ -12,6 +12,7 @@ import design.inherent.reform.minecraft.client.ClientDestination;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
 import design.inherent.reform.operation.OperationSnapshot;
+import design.inherent.reform.presentation.DestinationId;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -36,6 +37,9 @@ final class ProductionEffectsProbe {
     RETRIED_RESULT,
     RETRIED_CAPTURE,
     RETRIED_TECHNICAL_CAPTURE,
+    RESOURCES_READY,
+    RESOURCES_RESULT,
+    RESOURCES_CAPTURE,
     CLOSED
   }
 
@@ -179,6 +183,9 @@ final class ProductionEffectsProbe {
         unchangedSavedFile();
         if (snapshot.id().equals(failedHandle)
             || facts.get("hasPersistenceReceipt").getAsBoolean()
+            || !facts.get("technicalDetails").getAsBoolean()
+            || facts.get("detailCount").getAsInt() == 0
+            || !facts.get("matchesCurrentResourceTrace").getAsBoolean()
             || !facts.get("application").getAsString().equals("APPLIED")
             || !savedRevision.equals(facts.get("sourceRevision").getAsString())
             || oldGeneration.equals(generation())
@@ -190,6 +197,7 @@ final class ProductionEffectsProbe {
         result.add("retryReload", facts);
         appliedGeneration = generation();
         result.addProperty("retryUsesSavedRevisionWithoutPersistence", true);
+        result.addProperty("routineTraceTechnical", true);
         result.addProperty("retryPreservesSavedFileIdentity", true);
         captured = false;
         next(Phase.RETRIED_CAPTURE);
@@ -222,6 +230,37 @@ final class ProductionEffectsProbe {
             "sameOwnerAndRoot",
             workflow.editor(StyleSettingsStore.DEFINITION) == editor && NativeUi.current() == root);
         result.addProperty("injectedFailures", ReloadFault.failures());
+        pending =
+            WorkflowReveal.view(
+                workflow,
+                StyleSettingsStore.DEFINITION,
+                DestinationId.parse("lootr_styled:profiles_page"));
+        next(Phase.RESOURCES_READY);
+      }
+      case RESOURCES_READY -> {
+        if (!ready() || !UiProbe.hasButton(root, "Inspect resources")) return null;
+        press("Inspect resources");
+        next(Phase.RESOURCES_RESULT);
+      }
+      case RESOURCES_RESULT -> {
+        var snapshot = operation();
+        if (snapshot == null) return null;
+        var facts = EffectProbeFacts.describe(snapshot);
+        unchangedSavedFile();
+        if (!facts.get("operation").getAsString().equals("lootr_styled:details")
+            || facts.get("technicalDetails").getAsBoolean()
+            || facts.get("detailCount").getAsInt() == 0
+            || !facts.get("matchesCurrentResourceTrace").getAsBoolean()
+            || facts.get("hasPersistenceReceipt").getAsBoolean()
+            || !appliedGeneration.equals(generation())
+            || ReloadFault.calls() != initialReloadCalls + 2)
+          throw new IllegalStateException("Resource inspection changed or hid the actual trace");
+        result.add("resourceInspection", facts);
+        result.addProperty("resourceInspectionKeepsTraceVisible", true);
+        next(Phase.RESOURCES_CAPTURE);
+      }
+      case RESOURCES_CAPTURE -> {
+        if (!capture(mc, "production-effects-resources")) return null;
         press("Done");
         next(Phase.CLOSED);
       }

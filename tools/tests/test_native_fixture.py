@@ -158,18 +158,25 @@ class NativeFixtureTest(unittest.TestCase):
                       code='NATIVE_FAILURE', savedRevision='saved', sourceRevision='saved', handle='first',
                       operation='lootr_styled:save_reload')
         retry = dict(hasPersistenceReceipt=False, application='APPLIED', sourceRevision='saved',
-                     generation='new', handle='second', operation='lootr_styled:retry')
+                     generation='new', handle='second', operation='lootr_styled:retry',
+                     technicalDetails=True, detailCount=12, matchesCurrentResourceTrace=True)
+        inspection = dict(hasPersistenceReceipt=False, sourceRevision='saved', generation='new',
+                          operation='lootr_styled:details', technicalDetails=False, detailCount=12,
+                          matchesCurrentResourceTrace=True)
         value = dict(saveOnlyDoesNotReload=True, confirmedSaveSurvivesFailedReload=True,
                      retryUsesSavedRevisionWithoutPersistence=True, retryPreservesSavedFileIdentity=True,
                      originalSavedValuesRestored=True, sameOwnerAndRoot=True, closedCleanly=True,
                      failedDisclosurePreservesHandleFileAndEffects=True,
                      retryDisclosurePreservesHandleFileAndEffects=True,
-                     injectedFailures=1, failedSaveReload=failed, retryReload=retry)
+                     routineTraceTechnical=True, resourceInspectionKeepsTraceVisible=True,
+                     injectedFailures=1, failedSaveReload=failed, retryReload=retry,
+                     resourceInspection=inspection)
         native_probe.require_production_effects({'productionEffects': value})
         for key, bad in [('saveOnlyDoesNotReload', False), ('injectedFailures', True),
                          ('originalSavedValuesRestored', False),
                          ('failedDisclosurePreservesHandleFileAndEffects', False),
                          ('retryDisclosurePreservesHandleFileAndEffects', False),
+                         ('routineTraceTechnical', False), ('resourceInspectionKeepsTraceVisible', False),
                          ('failedSaveReload', []),
                          ('failedSaveReload', {**failed, 'persistence': 'UNKNOWN'}),
                          ('retryReload', {**retry, 'sourceRevision': 'different'}),
@@ -178,6 +185,13 @@ class NativeFixtureTest(unittest.TestCase):
                          ('retryReload', {**retry, 'operation': 'lootr_styled:save_reload'})]:
             with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production effects'):
                 native_probe.require_production_effects({'productionEffects': {**value, key: bad}})
+        for bad in [None, [], {**inspection, 'technicalDetails': True},
+                    {**inspection, 'matchesCurrentResourceTrace': False},
+                    {**inspection, 'detailCount': True},
+                    {**inspection, 'hasPersistenceReceipt': True},
+                    {**inspection, 'generation': 'other'}]:
+            with self.subTest(inspection=bad), self.assertRaisesRegex(RuntimeError, 'Production effects'):
+                native_probe.require_production_effects({'productionEffects': {**value, 'resourceInspection': bad}})
 
     def test_production_close_requires_both_releases_and_unsaved_choice_recovery(self):
         release = dict(released=True, outstandingUses=0, releaseFailed=False, nativeBytes=0, sceneBytes=0)

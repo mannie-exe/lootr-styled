@@ -41,13 +41,27 @@ final class StyleOperations {
       String summary,
       Optional<CommitReceipt<?>> persistence,
       Optional<StyleApplication.Result> application,
-      List<String> details) {
+      List<String> details,
+      boolean technicalDetails) {
+    Outcome(
+        String summary,
+        Optional<CommitReceipt<?>> persistence,
+        Optional<StyleApplication.Result> application,
+        List<String> details) {
+      this(summary, persistence, application, details, false);
+    }
+
     Outcome {
       details = List.copyOf(details);
     }
 
     static Outcome of(StyleApplication.Result result) {
-      return new Outcome(result.message(), Optional.empty(), Optional.of(result), result.details());
+      return application(result.message(), Optional.empty(), result);
+    }
+
+    static Outcome application(
+        String summary, Optional<CommitReceipt<?>> persistence, StyleApplication.Result result) {
+      return new Outcome(summary, persistence, Optional.of(result), result.details(), true);
     }
   }
 
@@ -258,7 +272,10 @@ final class StyleOperations {
                                   Component.literal(generation.toString()))));
             });
     for (String line : outcome.details())
-      details.add(new OperationScreen.Detail(Component.empty(), Component.literal(line)));
+      details.add(
+          outcome.technicalDetails()
+              ? OperationScreen.Detail.technical(Component.empty(), Component.literal(line))
+              : new OperationScreen.Detail(Component.empty(), Component.literal(line)));
     return new OperationScreen.Outcome(Component.literal(outcome.summary()), details);
   }
 }

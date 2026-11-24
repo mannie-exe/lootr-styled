@@ -20,7 +20,7 @@ PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST',
                          for looted in (False, True) for opened in ((False, True) if c == 'BARREL' else (False,)))
 EFFECT_CAPTURES = ('production-effects-failed', 'production-effects-retried',
                    'production-effects-failed-technical', 'production-effects-failed-hidden',
-                   'production-effects-retried-technical')
+                   'production-effects-retried-technical', 'production-effects-resources')
 CAPTURES = (
     'production-close-ready', 'production-close-decision',
     *EFFECT_CAPTURES,
@@ -265,6 +265,7 @@ def require_production_effects(data):
                 'retryPreservesSavedFileIdentity', 'originalSavedValuesRestored',
                 'failedDisclosurePreservesHandleFileAndEffects',
                 'retryDisclosurePreservesHandleFileAndEffects',
+                'routineTraceTechnical', 'resourceInspectionKeepsTraceVisible',
                 'sameOwnerAndRoot', 'closedCleanly'))
             or type(value.get('injectedFailures')) is not int or value['injectedFailures'] != 1):
         raise RuntimeError('Production effects did not retain the save, retry and restored owner')
@@ -280,6 +281,19 @@ def require_production_effects(data):
             or retry.get('operation') != 'lootr_styled:retry'
             or retry.get('handle') == failed.get('handle')):
         raise RuntimeError('Production effects lost confirmed persistence or matching retry facts')
+    inspection = value.get('resourceInspection')
+    if (not isinstance(inspection, dict)
+            or retry.get('technicalDetails') is not True
+            or type(retry.get('detailCount')) is not int or retry['detailCount'] <= 0
+            or retry.get('matchesCurrentResourceTrace') is not True
+            or inspection.get('technicalDetails') is not False
+            or type(inspection.get('detailCount')) is not int or inspection['detailCount'] <= 0
+            or inspection.get('matchesCurrentResourceTrace') is not True
+            or inspection.get('hasPersistenceReceipt') is not False
+            or inspection.get('operation') != 'lootr_styled:details'
+            or inspection.get('sourceRevision') != retry['sourceRevision']
+            or inspection.get('generation') != retry['generation']):
+        raise RuntimeError('Production effects changed trace visibility or resource inspection facts')
 
 
 def require_production_close(data):

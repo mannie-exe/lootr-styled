@@ -34,6 +34,8 @@ Retain the actual result independently of progress notifications or an open resu
 
 Keep save and reload outcomes, causes, and recovery instructions visible. Mark raw status codes, saved revisions, and resource-generation IDs as technical details; disclosure changes presentation without changing the retained result or starting another effect.
 
+Routine reload results keep the resource trace under technical details. An explicit Inspect resources request presents that trace directly. Export destinations and editing instructions remain ordinary result details. Declare these roles where the result is constructed, without classifying strings by their wording.
+
 Say each thing once. Remove filler, marketing claims, dramatic fragments, repeated caveats, and implementation-first explanations. Prefer complete, direct sentences in prose. Use ordinary punctuation rather than em-dash asides. Keep essential limits and source information available without making them the normal path through the interface.
 
 This applies the [inherent.design writing reference](https://github.com/inherent-design/inherent.design/blob/main/packages/docs/knowledge/process-notes/prose-and-communication-reference.md) to a Minecraft settings screen.

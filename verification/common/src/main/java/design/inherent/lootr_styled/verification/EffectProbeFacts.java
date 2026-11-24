@@ -15,6 +15,13 @@ public final class EffectProbeFacts {
     facts.addProperty("operation", snapshot.operation().toString());
     facts.addProperty("handle", snapshot.id().toString());
     facts.addProperty("summary", result.lootrStyled$summary());
+    facts.addProperty("technicalDetails", result.lootrStyled$technicalDetails());
+    facts.addProperty("detailCount", result.lootrStyled$details().size());
+    facts.addProperty(
+        "matchesCurrentResourceTrace",
+        result
+            .lootrStyled$details()
+            .equals(design.inherent.lootr_styled.client.ClientRuntime.status()));
     facts.addProperty("hasPersistenceReceipt", result.lootrStyled$persistence().isPresent());
     result
         .lootrStyled$persistence()

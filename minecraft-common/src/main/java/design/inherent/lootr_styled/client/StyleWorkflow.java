@@ -78,13 +78,12 @@ final class StyleWorkflow implements AutoCloseable {
                                       .reload(saved.savedRevision(), execution::checkpoint)
                                       .thenApply(
                                           applied ->
-                                              new StyleOperations.Outcome(
+                                              StyleOperations.Outcome.application(
                                                   applied.state() == StyleApplication.State.APPLIED
                                                       ? "Saved and reloaded"
                                                       : "Saved; reload not confirmed",
                                                   Optional.of(saved),
-                                                  Optional.of(applied),
-                                                  applied.details()));
+                                                  applied));
                                 })
                             .thenCompose(stage -> stage)));
     scope.freeze();
