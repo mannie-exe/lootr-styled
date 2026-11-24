@@ -105,6 +105,39 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertFalse(marker.exists())
 
+    def test_production_effects_scope_preserves_inputs_and_clears_its_marker(self):
+        for scope in ('scene', 'graphics_only', 'preview_host', 'production_shutdown', 'production_viewport', 'production_close'):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
+                native_probe.prepare('neoforge-1_21_1', 'native', production_effects=True, **{scope: True})
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+        marker = self.fixture / '.lootr-styled-production-effects'
+        native_probe.prepare('neoforge-1_21_1', 'native', production_effects=True)
+        self.assertTrue(marker.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
+    def test_production_effects_requires_persistence_then_a_distinct_no_write_retry(self):
+        failed = dict(hasPersistenceReceipt=True, persistence='SAVED', application='FAILED',
+                      code='NATIVE_FAILURE', savedRevision='saved', sourceRevision='saved', handle='first',
+                      operation='lootr_styled:save_reload')
+        retry = dict(hasPersistenceReceipt=False, application='APPLIED', sourceRevision='saved',
+                     generation='new', handle='second', operation='lootr_styled:retry')
+        value = dict(saveOnlyDoesNotReload=True, confirmedSaveSurvivesFailedReload=True,
+                     retryUsesSavedRevisionWithoutPersistence=True, retryPreservesSavedFileIdentity=True,
+                     originalSavedValuesRestored=True, sameOwnerAndRoot=True, closedCleanly=True,
+                     injectedFailures=1, failedSaveReload=failed, retryReload=retry)
+        native_probe.require_production_effects({'productionEffects': value})
+        for key, bad in [('saveOnlyDoesNotReload', False), ('injectedFailures', True),
+                         ('originalSavedValuesRestored', False),
+                         ('failedSaveReload', []),
+                         ('failedSaveReload', {**failed, 'persistence': 'UNKNOWN'}),
+                         ('retryReload', {**retry, 'sourceRevision': 'different'}),
+                         ('retryReload', {**retry, 'hasPersistenceReceipt': True}),
+                         ('retryReload', {**retry, 'handle': 'first'}),
+                         ('retryReload', {**retry, 'operation': 'lootr_styled:save_reload'})]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production effects'):
+                native_probe.require_production_effects({'productionEffects': {**value, key: bad}})
+
     def test_production_close_requires_both_releases_and_unsaved_choice_recovery(self):
         release = dict(released=True, outstandingUses=0, releaseFailed=False, nativeBytes=0, sceneBytes=0)
         value = dict(sameRootDecision=True, reviewChooserKeepsProfilesContext=True,
