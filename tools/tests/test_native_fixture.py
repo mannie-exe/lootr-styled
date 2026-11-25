@@ -365,6 +365,26 @@ class NativeFixtureTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser':stale}, choice)
 
+    def test_fresh_captions_require_native_cycle_and_canonical_review(self):
+        modes = ['AUTO', 'ON', 'OFF', 'AUTO']
+        labels = dict(AUTO='Auto', ON='On', OFF='Off')
+        value = dict(freshKeyboardCyclePreservesSource=True, reviewFreshCanonical='AUTO',
+                     reviewFreshCaption='Auto', freshChoiceCaptions=[
+                         dict(canonical=mode,caption=labels[mode],narration='Fresh Objects: '+labels[mode])
+                         for mode in modes])
+        native_probe.require_fresh_captions(dict(nativeWidgets=value))
+        for key,replacement in [('freshKeyboardCyclePreservesSource',False),
+                                ('reviewFreshCanonical','ON'),('reviewFreshCaption','AUTO')]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Fresh Objects'):
+                native_probe.require_fresh_captions(dict(nativeWidgets={**value,key:replacement}))
+        for key,replacement in [('canonical','ON'),('caption','AUTO'),('narration','raw ON')]:
+            bad = copy.deepcopy(value)
+            bad['freshChoiceCaptions'][0][key] = replacement
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Fresh Objects'):
+                native_probe.require_fresh_captions(dict(nativeWidgets=bad))
+        with self.assertRaisesRegex(RuntimeError,'Fresh Objects'):
+            native_probe.require_fresh_captions(dict(nativeWidgets={**value,'freshChoiceCaptions':[]}))
+
     def test_production_failure_is_explicit_and_keeps_saved_defaults(self):
         with self.assertRaisesRegex(ValueError, 'requires a local tint profile'):
             native_probe.prepare('neoforge-1_21_1','native',production_failure=True)
@@ -389,10 +409,13 @@ class NativeFixtureTest(unittest.TestCase):
                      explicitRecoveryDrawAndRelease=True,sourceFileAndGenerationUnchanged=True,
                      closedCleanly=True,failureState='REFUSED',
                      failureCodes=['lootr_styled.preview.tint_unavailable'],requests=2,
+                     expectedFailureMessage='Unresolved tint; choose another model.',
+                     failureFeedback='Preview refused. Unresolved tint; choose another model.',
                      nativeBytes=0,nativeResources=0,sceneBytes=0,sceneResources=0)
         native_probe.require_production_failure({'productionFailure':value})
         for key,replacement in [('failureState','READY'),('failureCodes',['preview.prepare_failed']),
                                 ('requests',1),('nativeBytes',1),('sceneResources',1),
+                                ('failureFeedback','Preview request refused'),('expectedFailureMessage',''),
                                 ('readableFailureCause',False),('failedDraftRetained',False),
                                 ('explicitRecoveryDrawAndRelease',False)]:
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production preview failure'):

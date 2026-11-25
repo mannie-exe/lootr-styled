@@ -242,6 +242,26 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     return fixture, product, command
 
 
+def require_fresh_captions(data):
+    value = data.get('nativeWidgets', {})
+    rows = value.get('freshChoiceCaptions')
+    modes = ['AUTO', 'ON', 'OFF']
+    labels = dict(AUTO='Auto', ON='On', OFF='Off')
+    if (not isinstance(rows, list) or len(rows) != 4
+            or any(not isinstance(row, dict) for row in rows)
+            or rows[0].get('canonical') not in modes):
+        raise RuntimeError('Fresh Objects caption evidence is missing')
+    start = modes.index(rows[0]['canonical'])
+    if (value.get('freshKeyboardCyclePreservesSource') is not True
+            or any(row.get('canonical') != modes[(start + i) % 3]
+                   or row.get('caption') != labels[modes[(start + i) % 3]]
+                   or labels[modes[(start + i) % 3]] not in row.get('narration', '')
+                   for i,row in enumerate(rows))
+            or value.get('reviewFreshCanonical') != rows[0]['canonical']
+            or value.get('reviewFreshCaption') != labels[rows[0]['canonical']]):
+        raise RuntimeError('Fresh Objects captions changed canonical edits, review or source state')
+
+
 def require_renderer_shutdown(data, fixture, product, target):
     path = fixture / 'lootr-styled-shutdown-report.json'
     record = json.loads(path.read_text()) if path.is_file() else None
@@ -391,6 +411,8 @@ def require_production_failure(data):
             or value.get('failureState') != 'REFUSED'
             or 'lootr_styled.preview.tint_unavailable' not in value.get('failureCodes', [])
             or value.get('requests') != 2
+            or not value.get('expectedFailureMessage')
+            or value['expectedFailureMessage'] not in value.get('failureFeedback', '')
             or any(type(value.get(k)) is not int or value[k] != 0 for k in (
                 'nativeBytes', 'nativeResources', 'sceneBytes', 'sceneResources'))):
         raise RuntimeError('Production preview failure lost its domain cause, draft, recovery or release')
@@ -887,6 +909,8 @@ def main():
             or ('productionLocale' in data) != args.production_locale):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
     require_runtime_artifacts(data, fixture)
+    if data.get('nativeWidgetsComplete') is True:
+        require_fresh_captions(data)
     if args.preview_host or args.production_shutdown:
         require_renderer_shutdown(data, fixture, product, args.target)
     if args.production_shutdown and data['rendererShutdown'].get('productionTask') is not True:

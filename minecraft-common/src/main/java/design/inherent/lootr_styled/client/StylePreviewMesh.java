@@ -101,7 +101,7 @@ record StylePreviewMesh(
       if (face.tintIndex() != -1)
         throw new PolicyRefusal(
             "lootr_styled.preview.tint_unavailable",
-            "This barrel needs a native tint provider; its color cannot be inferred from the profile");
+            "The preview cannot determine this barrel's tint color. Choose another model.");
       var id =
           DocumentId.parse(
               "lootr_styled:preview/"

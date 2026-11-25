@@ -12,6 +12,7 @@ import design.inherent.reform.definition.RecordType;
 import design.inherent.reform.edit.Candidate;
 import design.inherent.reform.edit.DraftLimits;
 import design.inherent.reform.edit.DraftTree;
+import design.inherent.reform.presentation.ChoiceDisplay;
 import design.inherent.reform.serialization.JsonLimits;
 import design.inherent.reform.storage.OwnedFile;
 import design.inherent.reform.storage.StorageBinding;
@@ -41,7 +42,16 @@ public final class StyleSettingsStore extends TextStore<ClientSettings> {
   private static final FieldKey<ResourceId> MODELS = FieldKey.of("models", PROFILE);
   private static final FieldKey<ResourceId> ARTWORK = FieldKey.of("artwork", PROFILE);
   private static final FieldKey<ClientSettings.Fresh> FRESH =
-      FieldKey.of("freshObjects", ValueTypes.enumeration(ClientSettings.Fresh.class));
+      FieldKey.of(
+          "freshObjects",
+          ValueTypes.choiceDisplay(
+              ValueTypes.enumeration(ClientSettings.Fresh.class),
+              new ChoiceDisplay(
+                  List.of(
+                      new ChoiceDisplay.Caption("AUTO", "lootr_styled.settings.fresh.auto", "Auto"),
+                      new ChoiceDisplay.Caption("ON", "lootr_styled.settings.fresh.on", "On"),
+                      new ChoiceDisplay.Caption(
+                          "OFF", "lootr_styled.settings.fresh.off", "Off")))));
   public static final DocumentDefinition<ClientSettings> DEFINITION =
       new DocumentDefinition<>(
           DocumentId.parse("lootr_styled:settings"),

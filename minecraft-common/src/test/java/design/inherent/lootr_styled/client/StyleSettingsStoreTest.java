@@ -2,15 +2,22 @@ package design.inherent.lootr_styled.client;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.google.gson.JsonPrimitive;
+import com.mojang.serialization.JsonOps;
 import design.inherent.lootr_styled.ResourceId;
 import design.inherent.lootr_styled.profile.ClientSettings;
+import design.inherent.reform.definition.FieldKey;
+import design.inherent.reform.edit.DraftNode;
 import design.inherent.reform.edit.DraftTree;
 import design.inherent.reform.owner.FileOwner;
 import design.inherent.reform.owner.OwnerContext;
+import design.inherent.reform.presentation.ChoicePresentation;
 import design.inherent.reform.storage.OwnedFile;
 import design.inherent.reform.storage.TextStore;
+import design.inherent.reform.value.ValueShape;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,6 +29,61 @@ final class StyleSettingsStoreTest {
     Files.createDirectories(file.getParent());
     Files.writeString(file, text);
     return file;
+  }
+
+  @Test
+  void freshCaptionsPreserveCanonicalFieldsChoicesAndBothJsonRepresentations() throws Exception {
+    var shape = (ValueShape.ObjectValue) StyleSettingsStore.DEFINITION.type().shape();
+    assertEquals(
+        List.of("enabled", "models", "artwork", "freshObjects"),
+        shape.fields().stream().map(FieldKey::id).toList());
+    var fresh = shape.fields().get(3).type();
+    var scalar = (ValueShape.Scalar) fresh.shape();
+    assertEquals(List.of("AUTO", "ON", "OFF"), scalar.choices());
+    assertEquals("lootr_styled:settings", StyleSettingsStore.DEFINITION.id().toString());
+    var labels = List.of("Auto", "On", "Off");
+    for (var mode : ClientSettings.Fresh.values()) {
+      var value = new ClientSettings(true, ClientSettings.DEFAULT, ClientSettings.DEFAULT, mode);
+      var json =
+          StyleSettingsStore.DEFINITION
+              .type()
+              .codec()
+              .encodeStart(JsonOps.INSTANCE, value)
+              .getOrThrow()
+              .getAsJsonObject();
+      assertEquals(mode.name(), json.get("freshObjects").getAsString());
+      assertEquals(
+          List.of("enabled", "models", "artwork", "freshObjects"), List.copyOf(json.keySet()));
+      var caption =
+          ChoicePresentation.caption(fresh, new DraftNode.Scalar(mode.name())).orElseThrow();
+      assertEquals(mode.name(), caption.value());
+      assertEquals(labels.get(mode.ordinal()), caption.fallback());
+      var text = value.toJson();
+      var file = source(text);
+      var store = new StyleSettingsStore(config);
+      var observed = store.read();
+      assertEquals(value, observed.candidate().orElseThrow().value());
+      store.write(observed, observed.candidate().orElseThrow());
+      assertEquals(text, Files.readString(file));
+      assertEquals(value, ClientSettings.parse(Files.readAllBytes(file)));
+    }
+  }
+
+  @Test
+  void friendlyAndUnknownSpellingsRemainInvalidRawInputWithoutCaptionsOrRewrites()
+      throws Exception {
+    var shape = (ValueShape.ObjectValue) StyleSettingsStore.DEFINITION.type().shape();
+    var fresh = shape.fields().get(3).type();
+    for (var raw : List.of("Auto", "On", "Off", "auto", "unknown mode")) {
+      assertTrue(ChoicePresentation.caption(fresh, new DraftNode.Scalar(raw)).isEmpty());
+      assertTrue(fresh.codec().parse(JsonOps.INSTANCE, new JsonPrimitive(raw)).error().isPresent());
+      var text = "{\"format\":1,\"freshObjects\":\"" + raw + "\"}";
+      var file = source(text);
+      var observed = new StyleSettingsStore(config).read();
+      assertNotEquals(TextStore.State.READY, observed.state());
+      assertTrue(observed.candidate().isEmpty());
+      assertEquals(text, Files.readString(file));
+    }
   }
 
   @Test

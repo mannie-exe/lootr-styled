@@ -52,6 +52,7 @@ final class ProductionFailureProbe {
   private final CompletableFuture<?> admission;
   private ClientEditor<ClientSettings> editor;
   private DraftRevision failedRevision;
+  private String expectedFailureMessage;
   private ProductionPreparationAudit.Entry failed, recovery;
   private CompletableFuture<?> navigation;
   private CompletableFuture<design.inherent.reform.presentation.graphics.RenderLifetime.State>
@@ -127,6 +128,13 @@ final class ProductionFailureProbe {
               "Expected real tint refusal: " + outcome, outcome.cause().orElse(null));
         if (!empty()) return null;
         result.addProperty("specificDomainRefusal", true);
+        expectedFailureMessage =
+            outcome.report().issues().stream()
+                .filter(issue -> issue.code().equals("lootr_styled.preview.tint_unavailable"))
+                .map(issue -> issue.fallback())
+                .findFirst()
+                .orElseThrow();
+        result.addProperty("expectedFailureMessage", expectedFailureMessage);
         result.addProperty(
             "failedPreparationLeavesNoGraphic",
             failed
@@ -154,7 +162,7 @@ final class ProductionFailureProbe {
         String feedback = screen + "\n" + widgets;
         result.addProperty("failureFeedback", feedback);
         boolean useful =
-            feedback.contains("native tint provider") && feedback.contains("cannot be inferred");
+            !expectedFailureMessage.isBlank() && feedback.contains(expectedFailureMessage);
         result.addProperty("readableFailureCause", useful);
         // Retain recovery observations even when narration is incomplete. The driver still
         // rejects this case after closure; partial evidence does not become a pass.

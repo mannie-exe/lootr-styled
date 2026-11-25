@@ -72,7 +72,8 @@ final class UiProbe {
       RESULT_INSPECT_LINK = 220,
       RESULT_RESTORE = 221,
       RESTORE_RESULT_BACK = 222,
-      MENU_RETIRED = 223;
+      MENU_RETIRED = 223,
+      REVIEW_FRESH = 224;
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
   private static final FieldPath ARTWORK = FieldPath.ROOT.field("artwork");
   private final Screen parent;
@@ -92,6 +93,11 @@ final class UiProbe {
   private Set<Path> existing;
   private int stage = HOME_ENTRY;
   private int mountTicks;
+  private int freshCaptionStep;
+  private boolean freshCaptionsDone;
+  private ClientSettings freshCaptionBaseline;
+  private java.util.UUID freshCaptionGeneration;
+  private final com.google.gson.JsonArray freshCaptionRows = new com.google.gson.JsonArray();
   private boolean captured;
   private int nativeWidth, nativeHeight;
   private final JsonObject result = new JsonObject();
@@ -612,6 +618,7 @@ final class UiProbe {
         stage = -1;
       }
       case -1 -> {
+        if (!freshCaptions(root)) return null;
         if (++mountTicks < 4) return null;
         var names = List.of("Enabled", "Fresh Objects", "Models", "Artwork");
         var navigation = new com.google.gson.JsonArray();
@@ -1099,6 +1106,40 @@ final class UiProbe {
                 .equals(reviewGeneration))
           throw new IllegalStateException(
               "Review changed the draft, saved file, or effective resources");
+        var freshPath = FieldPath.ROOT.field("freshObjects");
+        var freshEntry =
+            retainedReview.entries().stream()
+                .filter(value -> value.path().equals(freshPath))
+                .findFirst()
+                .orElseThrow();
+        var originalMode = freshCaptionBaseline.fresh();
+        String caption = freshCaption(originalMode);
+        if (!freshEntry.baseline().equals("\"" + originalMode.name() + "\"")
+            || !freshEntry.draft().equals("\"" + originalMode.name() + "\"")
+            || !freshEntry.choiceValues().baseline().orElseThrow().fallback().equals(caption)
+            || !freshEntry.choiceValues().draft().orElseThrow().fallback().equals(caption))
+          throw new IllegalStateException("Captured Fresh Objects labels changed canonical values");
+        result.addProperty("reviewFreshCaption", caption);
+        result.addProperty("reviewFreshCanonical", originalMode.name());
+        NativeBindings.press(
+            buttons.stream()
+                .filter(value -> value.getMessage().getString().equals("Fresh Objects"))
+                .findFirst()
+                .orElseThrow());
+        mountTicks = 0;
+        stage = REVIEW_FRESH;
+      }
+      case REVIEW_FRESH -> {
+        if (!workflow
+            .inspection()
+            .orElseThrow()
+            .selectedField()
+            .equals(java.util.Optional.of(FieldPath.ROOT.field("freshObjects")))) {
+          if (++mountTicks > 200)
+            throw new IllegalStateException("Review did not select the actual Fresh Objects field");
+          return null;
+        }
+        if (++mountTicks < 4) return null;
         captured = false;
         NativeWorld.screenshot(mc, "reform-review", () -> captured = true);
         stage = REVIEW_CAPTURE;
@@ -1544,6 +1585,67 @@ final class UiProbe {
     var settings = ClientSettings.class.cast(inspected.candidate().orElseThrow().value());
     if (!settings.models().toString().equals(id))
       throw new IllegalStateException("Retained draft lost profile identity");
+  }
+
+  private boolean freshCaptions(Screen root) throws Exception {
+    if (freshCaptionsDone) return true;
+    var current = profileCandidate();
+    if (freshCaptionBaseline == null) {
+      freshCaptionBaseline = current;
+      freshCaptionGeneration = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
+    }
+    var modes = ClientSettings.Fresh.values();
+    var expected =
+        modes[(freshCaptionBaseline.fresh().ordinal() + freshCaptionStep) % modes.length];
+    var path = FieldPath.ROOT.field("freshObjects");
+    var control = editor.form().fieldControl(path).orElseThrow();
+    if (editor.busy()
+        || current.fresh() != expected
+        || !control.getMessage().getString().equals(freshCaption(expected))) {
+      if (++mountTicks > 200)
+        throw new IllegalStateException(
+            "Fresh Objects caption or canonical edit did not settle: "
+                + current.fresh()
+                + "/"
+                + control.getMessage().getString());
+      return false;
+    }
+    var unchangedFields =
+        new ClientSettings(
+            current.enabled(), current.models(), current.artwork(), freshCaptionBaseline.fresh());
+    if (!unchangedFields.equals(freshCaptionBaseline)
+        || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile))
+        || !freshCaptionGeneration.equals(
+            PreviewProbeAccess.generation(PreviewProbeAccess.activePack())))
+      throw new IllegalStateException(
+          "Fresh caption editing changed another field, file or resources");
+    var row = new JsonObject();
+    row.addProperty("canonical", current.fresh().name());
+    row.addProperty("caption", control.getMessage().getString());
+    row.addProperty("narration", NativeBindings.narration(control));
+    freshCaptionRows.add(row);
+    if (freshCaptionStep == modes.length) {
+      if (!current.equals(freshCaptionBaseline))
+        throw new IllegalStateException("Fresh caption cycle did not restore the complete draft");
+      result.add("freshChoiceCaptions", freshCaptionRows);
+      result.addProperty("freshKeyboardCyclePreservesSource", true);
+      freshCaptionsDone = true;
+      mountTicks = 0;
+      return true;
+    }
+    if (!editor.form().focusField(path) || !NativeBindings.activateFocused(root))
+      throw new IllegalStateException("Fresh Objects did not accept native keyboard activation");
+    freshCaptionStep++;
+    mountTicks = 0;
+    return false;
+  }
+
+  private static String freshCaption(ClientSettings.Fresh value) {
+    return switch (value) {
+      case AUTO -> "Auto";
+      case ON -> "On";
+      case OFF -> "Off";
+    };
   }
 
   private ClientSettings profileCandidate() {
