@@ -73,7 +73,9 @@ final class UiProbe {
       RESULT_RESTORE = 221,
       RESTORE_RESULT_BACK = 222,
       MENU_RETIRED = 223,
-      REVIEW_FRESH = 224;
+      REVIEW_FRESH = 224,
+      OPERATION_HEADER_WAIT = 225,
+      OPERATION_HEADER_CAPTURED = 226;
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
   private static final FieldPath ARTWORK = FieldPath.ROOT.field("artwork");
   private final Screen parent;
@@ -113,6 +115,7 @@ final class UiProbe {
   private final long openedAt = System.nanoTime();
   private long actionAt, searchAt, exportAt;
   private long profileDraws;
+  private long operationHeaderDraws;
   private java.util.UUID inspectedOperation, inspectedGeneration;
   private byte[] inspectedSavedBytes;
   private DraftRevision reviewRevision;
@@ -1316,8 +1319,30 @@ final class UiProbe {
             throw new IllegalStateException("Inspect result did not open its retained operation");
           return null;
         }
+        operationHeaderDraws = FrameAudit.rootSequence(root);
+        stage = OPERATION_HEADER_WAIT;
+      }
+      case OPERATION_HEADER_WAIT -> {
+        if (!operationDone())
+          throw new IllegalStateException("Operation result changed before its header capture");
+        if (!NativeBindings.unobscured(mc)) return null;
+        long draws = FrameAudit.rootSequence(root);
+        if (draws < 0) return null;
+        if (operationHeaderDraws < 0) {
+          operationHeaderDraws = draws;
+          return null;
+        }
+        if (draws < operationHeaderDraws + 4) return null;
+        captured = false;
+        NativeWorld.screenshot(mc, "reform-operation", () -> captured = true);
+        stage = OPERATION_HEADER_CAPTURED;
+      }
+      case OPERATION_HEADER_CAPTURED -> {
+        if (!captured) return null;
         recordHeader(root, "operation");
         unchangedOperation();
+        result.addProperty(
+            "operationHeaderCaptureDraws", FrameAudit.rootSequence(root) - operationHeaderDraws);
         result.addProperty("effectNamedActionAndInspectionSeparated", true);
         result.addProperty("operationsUseOriginalRoot", NativeUi.current() == root);
         NativeBindings.press(returnToParent(root));

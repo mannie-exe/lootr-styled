@@ -35,7 +35,7 @@ CAPTURES = (
     'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'production-locale-changed', 'production-locale-restored',
-    'reform-review', 'unavailable-home',
+    'reform-review', 'reform-operation', 'unavailable-home',
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
     'reform-production-preview-idle', 'reform-production-preview-drawn',
@@ -328,8 +328,8 @@ def require_unavailable_home(data):
     paint = value.get('paint')
     if (not isinstance(paint, dict) or paint.get('phase') != 'unopened-home'
             or type(paint.get('samples')) is not int or not 8 <= paint['samples'] <= 256
-            or paint.get('otherResourceContentLookupsInCallback') != 0
-            or paint.get('providerEntriesInCallback') != 0):
+            or any(type(paint.get(k)) is not int or paint[k] != 0
+                   for k in ('otherResourceContentLookupsInCallback', 'providerEntriesInCallback'))):
         raise RuntimeError('Unavailable Home lacks actual idle paint evidence')
     _require_native_background(paint, 'Unavailable Home')
 
@@ -1055,6 +1055,10 @@ def main():
         require_header_offers(data)
         require_unopened_home(data)
         require_fresh_captions(data)
+        draws = data['nativeWidgets'].get('operationHeaderCaptureDraws')
+        if (type(draws) is not int or draws < 4
+                or not (fixture / 'reform-operation.png').is_file()):
+            raise RuntimeError('Operation header lacks a retained same-root drawn capture')
     if args.unavailable_home:
         require_unavailable_home(data)
         if not (fixture / 'unavailable-home.png').is_file():

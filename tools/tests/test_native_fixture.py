@@ -511,7 +511,9 @@ class NativeFixtureTest(unittest.TestCase):
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Unavailable Home'):
                 native_probe.require_unavailable_home(dict(unavailableHome={**value,key:replacement}))
         for key,replacement in [('samples',0),('otherResourceContentLookupsInCallback',1),
-                                ('providerEntriesInCallback',1),('resourceContentLookupsInCallback',1)]:
+                                ('otherResourceContentLookupsInCallback',False),
+                                ('providerEntriesInCallback',1),('providerEntriesInCallback',False),
+                                ('resourceContentLookupsInCallback',1)]:
             with self.subTest(paint=key),self.assertRaisesRegex(RuntimeError,'Unavailable Home'):
                 native_probe.require_unavailable_home(dict(unavailableHome={**value,'paint':{**paint,key:replacement}}))
 
