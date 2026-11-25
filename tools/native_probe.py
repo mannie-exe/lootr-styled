@@ -119,7 +119,7 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         (fixture / previous).unlink(missing_ok=True)
     configuration = fixture / 'config/lootr_styled'
     configuration.mkdir(parents=True, exist_ok=True)
-    selected = 'lootr_styled_local:fixture' if local_profile else None
+    selected = 'lootr_styled_local:fixture' if local_profile and not production_chooser else None
     (configuration / 'settings.json').write_text(json.dumps({'format': 1, 'enabled': True, 'models': selected or 'lootr_styled:default', 'artwork': selected or 'lootr_styled:default', 'freshObjects': 'OFF' if mode == 'off' else 'AUTO'}, indent=2) + '\n')
     if local_profile:
         destination = configuration / 'fixture'

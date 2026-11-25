@@ -369,12 +369,16 @@ class NativeFixtureTest(unittest.TestCase):
         profile = self.root / 'private-profile'
         profile.mkdir()
         (profile / 'profile.json').write_text('{"format":1,"title":"Fixture"}')
-        local, _, _ = native_probe.prepare('neoforge-1_21_1', 'native', local_profile=profile)
+        local, _, _ = native_probe.prepare('neoforge-1_21_1', 'native', local_profile=profile,
+                                          production_chooser=True, expected_private_sprites=0)
         self.assertNotEqual(local, self.fixture)
         marker = local / '.lootr-styled-local-profile'
         copied = local / 'config/lootr_styled/fixture'
         self.assertTrue(marker.is_file())
         self.assertTrue(copied.is_dir())
+        settings = json.loads((local / 'config/lootr_styled/settings.json').read_text())
+        self.assertEqual('lootr_styled:default', settings['models'])
+        self.assertEqual('lootr_styled:default', settings['artwork'])
         native_probe.prepare('neoforge-1_21_1', 'native')
         self.assertTrue(marker.is_file())
         self.assertTrue(copied.is_dir())
