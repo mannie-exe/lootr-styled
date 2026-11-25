@@ -291,7 +291,15 @@ final class ProductionChooserProbe {
                 value ->
                     value instanceof EditBox input
                         && input.getMessage().getString().equals("Search settings"))) return null;
+        // Activating Categories deliberately moved native focus. Retained search data must survive;
+        // focus it explicitly before measuring the next wide-layout return.
+        assertNavigation(false);
+        navigationResult.addProperty(
+            "queryFocusedAfterDrawerActivation", UiProbe.focusedPath(root, navigationQuery()));
+        if (!UiProbe.focusControl(root, navigationQuery()))
+          throw new IllegalStateException("Cannot focus search in the actual compact drawer");
         assertNavigation();
+        navigationResult.addProperty("queryExplicitlyRefocusedInDrawer", true);
         navigationResult.addProperty("narrowGui", root.width + "x" + root.height);
         NativeBindings.resizeWindow(mc, window[0], window[1]);
         next(Phase.NAV_RETURNED);
@@ -351,13 +359,17 @@ final class ProductionChooserProbe {
   }
 
   private void assertNavigation() {
+    assertNavigation(true);
+  }
+
+  private void assertNavigation(boolean requireSearchFocus) {
     var query = navigationQuery();
     var state = workflow.navigation().bookmark().navigation().orElseThrow();
     var expected = navigationBookmark.navigation().orElseThrow();
     if (!query.getValue().equals("Models")
         || query.getCursorPosition() != 3
         || !query.getHighlighted().equals("od")
-        || !UiProbe.focusedPath(root, query)
+        || requireSearchFocus && !UiProbe.focusedPath(root, query)
         || !state.filter().equals(expected.filter())
         || state.expandedCount() != expected.expandedCount()
         || !workflow.navigation().current().orElseThrow().equals(navigationBookmark.destination()))
