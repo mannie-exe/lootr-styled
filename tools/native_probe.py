@@ -32,6 +32,7 @@ CAPTURES = (
     'production-input-narrow', 'production-input-returned',
     'production-input-filtered', 'production-input-filtered-defaults',
     'production-chooser-narrow', 'production-chooser-returned',
+    'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'production-locale-changed', 'production-locale-restored',
     'reform-review',
@@ -71,9 +72,11 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False, production_locale=False, production_preparation=False):
-    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation, production_locale, production_preparation)) > 1:
-        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, --production-locale, --production-preparation, or --scene')
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False, production_locale=False, production_preparation=False, production_failure=False):
+    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation, production_locale, production_preparation, production_failure)) > 1:
+        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, --production-locale, --production-preparation, --production-failure, or --scene')
+    if production_failure and not local_profile:
+        raise ValueError('--production-failure requires a local tint profile')
     if expected_private_sprites is not None and (local_profile is None or not 0 <= expected_private_sprites <= 128):
         raise ValueError('An explicit private-sprite count requires a local profile and range 0..128')
     library = reform_dependency(target, reform_repository)
@@ -119,7 +122,7 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         (fixture / previous).unlink(missing_ok=True)
     configuration = fixture / 'config/lootr_styled'
     configuration.mkdir(parents=True, exist_ok=True)
-    selected = 'lootr_styled_local:fixture' if local_profile and not production_chooser else None
+    selected = 'lootr_styled_local:fixture' if local_profile and not (production_chooser or production_failure) else None
     (configuration / 'settings.json').write_text(json.dumps({'format': 1, 'enabled': True, 'models': selected or 'lootr_styled:default', 'artwork': selected or 'lootr_styled:default', 'freshObjects': 'OFF' if mode == 'off' else 'AUTO'}, indent=2) + '\n')
     if local_profile:
         destination = configuration / 'fixture'
@@ -204,6 +207,11 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         chooser_marker.write_text('Actual reference search/inspection and window reflow without selection or persistence\n')
     else:
         chooser_marker.unlink(missing_ok=True)
+    failure_marker = fixture / '.lootr-styled-production-failure'
+    if production_failure:
+        failure_marker.write_text('Actual unsupported tint feedback, retained draft and explicit healthy recovery\n')
+    else:
+        failure_marker.unlink(missing_ok=True)
     operation_marker = fixture / '.lootr-styled-production-operation'
     if production_operation:
         operation_marker.write_text('Actual running reload/disclosure and window reflow, then one native reload without persistence\n')
@@ -372,6 +380,20 @@ def require_production_chooser(data, expected_choice=None):
             or value.get('inspectedTitle') != choice['title'] or value.get('queryText') != choice['query']
             or choice['title'] not in value.get('inspectedChoiceNarration', '')):
         raise RuntimeError('Production chooser lost the declared local title or native narration')
+
+
+def require_production_failure(data):
+    value = data.get('productionFailure')
+    if (not isinstance(value, dict) or any(value.get(k) is not True for k in (
+            'specificDomainRefusal', 'failedPreparationLeavesNoGraphic', 'readableFailureCause',
+            'failedDraftRetained', 'explicitRecoveryDrawAndRelease',
+            'sourceFileAndGenerationUnchanged', 'closedCleanly'))
+            or value.get('failureState') != 'REFUSED'
+            or 'lootr_styled.preview.tint_unavailable' not in value.get('failureCodes', [])
+            or value.get('requests') != 2
+            or any(type(value.get(k)) is not int or value[k] != 0 for k in (
+                'nativeBytes', 'nativeResources', 'sceneBytes', 'sceneResources'))):
+        raise RuntimeError('Production preview failure lost its domain cause, draft, recovery or release')
 
 
 def require_filtered_actions(data):
@@ -806,6 +828,7 @@ def main():
     parser.add_argument('--production-locale', action='store_true', help='Check invalid native input across real language/font reload and restoration')
     parser.add_argument('--production-operation', action='store_true', help='Check running reload/disclosure through actual window reflow, then one real reload')
     parser.add_argument('--production-chooser', action='store_true', help='Check actual profile search/inspection across real window reflow without choosing')
+    parser.add_argument('--production-failure', action='store_true', help='Check actual unsupported tint feedback and explicit healthy preview recovery with an owned local profile')
     parser.add_argument('--production-preparation', action='store_true', help='Check actual task entered-worker cancellation, native reload, hidden return, and late closure')
     parser.add_argument('--production-effects', action='store_true', help='Check saved receipts through failed/cancelled reloads, pending close, and no-write retry')
     parser.add_argument('--production-close', action='store_true', help='Only check dirty production preview close, Keep editing, discard, and actual retirement')
@@ -817,7 +840,7 @@ def main():
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale, args.production_preparation)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale, args.production_preparation, args.production_failure)
     chooser_choice = None
     if args.production_chooser and args.local_profile:
         title = json.loads((args.local_profile / 'profile.json').read_text())['title']
@@ -859,6 +882,7 @@ def main():
             or ('productionDocument' in data) != args.production_document
             or ('productionInput' in data) != args.production_input
             or ('productionChooser' in data) != args.production_chooser
+            or ('productionFailure' in data) != args.production_failure
             or ('productionOperation' in data) != args.production_operation
             or ('productionLocale' in data) != args.production_locale):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
@@ -894,6 +918,10 @@ def main():
         for name in ('production-chooser-narrow', 'production-chooser-returned'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production chooser capture missing: {name}')
+    if args.production_failure:
+        require_production_failure(data)
+        if not (fixture / 'production-failure-tint.png').is_file():
+            raise RuntimeError('Production preview failure capture missing')
     if args.production_preparation:
         require_production_preparation(data)
     if args.production_effects:
@@ -911,7 +939,7 @@ def main():
         require_preview_cleanup_modes(data)
         require_preview_review(data)
         require_preview_selection_states(data, fixture)
-    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-preparation' if args.production_preparation else 'production-locale' if args.production_locale else 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
+    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-failure' if args.production_failure else 'production-preparation' if args.production_preparation else 'production-locale' if args.production_locale else 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
 
 
 if __name__ == '__main__':

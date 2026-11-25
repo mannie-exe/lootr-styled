@@ -25,6 +25,7 @@ public final class NativeProbe {
   private static ProductionDocumentProbe productionDocument;
   private static ProductionInputProbe productionInput;
   private static ProductionChooserProbe productionChooser;
+  private static ProductionFailureProbe productionFailure;
   private static ProductionOperationProbe productionOperation;
   private static ProductionLocaleProbe productionLocale;
   private static ProductionPreparationProbe productionPreparation;
@@ -63,6 +64,7 @@ public final class NativeProbe {
       if (productionDocument != null) progress += ":document=" + productionDocument.progress();
       if (productionInput != null) progress += ":input=" + productionInput.progress();
       if (productionChooser != null) progress += ":chooser=" + productionChooser.progress();
+      if (productionFailure != null) progress += ":failure=" + productionFailure.progress();
       if (productionOperation != null) progress += ":operation=" + productionOperation.progress();
       if (productionPreparation != null)
         progress += ":preparation=" + productionPreparation.progress();
@@ -132,7 +134,11 @@ public final class NativeProbe {
       } else if (stage == 1 && reloaded) {
         snapshots.add(NativeBindings.capture(mc, mode));
         REPORT.add("snapshots", snapshots);
-        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-locale"))) {
+        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-failure"))) {
+          productionFailure = new ProductionFailureProbe(mc);
+          stage = 30;
+        } else if (Files.exists(
+            mc.gameDirectory.toPath().resolve(".lootr-styled-production-locale"))) {
           productionLocale = new ProductionLocaleProbe(mc);
           stage = 28;
         } else if (Files.exists(
@@ -250,6 +256,12 @@ public final class NativeProbe {
         rendererShutdown.tick(mc);
       } else if (stage == 20) {
         productionShutdown.tick(mc);
+      } else if (stage == 30) {
+        var observations = productionFailure.tick(mc);
+        if (observations == null) return;
+        REPORT.add("productionFailure", observations);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
       } else if (stage == 21) {
         var observations = productionViewport.tick(mc);
         if (observations == null) return;
@@ -373,6 +385,8 @@ public final class NativeProbe {
         if (productionInput != null) REPORT.add("productionInput", productionInput.observations());
         if (productionChooser != null)
           REPORT.add("productionChooser", productionChooser.observations());
+        if (productionFailure != null)
+          REPORT.add("productionFailure", productionFailure.observations());
         if (ui != null && !REPORT.has("nativeWidgets")) {
           REPORT.add("nativeWidgets", ui.observations());
           REPORT.addProperty("nativeWidgetsComplete", false);

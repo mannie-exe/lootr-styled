@@ -365,6 +365,39 @@ class NativeFixtureTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser':stale}, choice)
 
+    def test_production_failure_is_explicit_and_keeps_saved_defaults(self):
+        with self.assertRaisesRegex(ValueError, 'requires a local tint profile'):
+            native_probe.prepare('neoforge-1_21_1','native',production_failure=True)
+        profile = self.root / 'tint-profile'
+        profile.mkdir()
+        (profile / 'profile.json').write_text('{"format":1,"title":"Tinted preview fixture"}')
+        local, _, _ = native_probe.prepare('neoforge-1_21_1','native',local_profile=profile,
+                                          production_failure=True,expected_private_sprites=0)
+        self.assertTrue((local / '.lootr-styled-production-failure').is_file())
+        settings = json.loads((local / 'config/lootr_styled/settings.json').read_text())
+        self.assertEqual('lootr_styled:default',settings['models'])
+        self.assertEqual('lootr_styled:default',settings['artwork'])
+        with self.assertRaisesRegex(ValueError,'Choose one'):
+            native_probe.prepare('neoforge-1_21_1','native',local_profile=profile,
+                                 production_failure=True,production_chooser=True)
+        native_probe.prepare('neoforge-1_21_1','native',local_profile=profile)
+        self.assertFalse((local / '.lootr-styled-production-failure').exists())
+
+    def test_production_failure_requires_specific_cause_and_explicit_recovery(self):
+        value = dict(specificDomainRefusal=True,failedPreparationLeavesNoGraphic=True,
+                     readableFailureCause=True,failedDraftRetained=True,
+                     explicitRecoveryDrawAndRelease=True,sourceFileAndGenerationUnchanged=True,
+                     closedCleanly=True,failureState='REFUSED',
+                     failureCodes=['lootr_styled.preview.tint_unavailable'],requests=2,
+                     nativeBytes=0,nativeResources=0,sceneBytes=0,sceneResources=0)
+        native_probe.require_production_failure({'productionFailure':value})
+        for key,replacement in [('failureState','READY'),('failureCodes',['preview.prepare_failed']),
+                                ('requests',1),('nativeBytes',1),('sceneResources',1),
+                                ('readableFailureCause',False),('failedDraftRetained',False),
+                                ('explicitRecoveryDrawAndRelease',False)]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production preview failure'):
+                native_probe.require_production_failure({'productionFailure':{**value,key:replacement}})
+
     def test_local_and_standard_fixture_inputs_stay_isolated(self):
         profile = self.root / 'private-profile'
         profile.mkdir()
