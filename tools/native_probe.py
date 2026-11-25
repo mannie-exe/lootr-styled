@@ -33,7 +33,7 @@ CAPTURES = (
     'production-input-filtered', 'production-input-filtered-defaults',
     'production-input-filtered-redo', 'production-input-filtered-reloaded',
     'production-chooser-narrow', 'production-chooser-returned',
-    'production-chooser-missing-narrow', 'production-chooser-missing-returned',
+    'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow',
     'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'production-locale-changed', 'production-locale-restored',
@@ -494,6 +494,9 @@ def require_production_chooser(data, expected_choice=None):
             or value.get('inspectedTitle') != choice['title'] or value.get('queryText') != choice['query']
             or choice['title'] not in value.get('inspectedChoiceNarration', '')):
         raise RuntimeError('Production chooser lost the declared local title or native narration')
+    if (value.get('inspectionSameCaptureAcrossWindowReflow') is not True
+            or value.get('inspectionNativeFieldCycle') != ['Enabled', 'Fresh Objects', 'Models', 'Artwork', 'Enabled']):
+        raise RuntimeError('Production chooser lost native focused inspection order or retained capture')
     require_unresolved_chooser(value, choice)
     require_workspace_navigation(value.get('workspaceNavigation'))
     require_single_location_narration(value.get('workspaceNavigation'))
@@ -1130,7 +1133,7 @@ def main():
     if args.production_chooser:
         require_production_chooser(data, chooser_choice)
         for name in ('production-chooser-narrow', 'production-chooser-returned',
-                     'production-chooser-missing-narrow', 'production-chooser-missing-returned'):
+                     'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production chooser capture missing: {name}')
     if args.production_failure:

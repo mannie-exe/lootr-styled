@@ -344,6 +344,8 @@ class NativeFixtureTest(unittest.TestCase):
                      baselineModels='lootr_styled:default', baselineArtwork='lootr_styled:default', states=states,
                      workspaceNavigation=self.workspace_navigation(),
                      unresolvedManualIdSurvivesWindowReflow=True,
+                     inspectionSameCaptureAcrossWindowReflow=True,
+                     inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
                      unresolvedStates=self.unresolved_chooser())
         native_probe.require_production_chooser({'productionChooser': value})
         for bad in [[], [None]*3, [states[0],{**states[1],'queryFocus':False},states[2]],
@@ -353,6 +355,10 @@ class NativeFixtureTest(unittest.TestCase):
                 native_probe.require_production_chooser({'productionChooser': {**value,'states':bad}})
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser': {**value,'inspectionDoesNotStage':False}})
+        for key,replacement in [('inspectionSameCaptureAcrossWindowReflow',False),
+                                ('inspectionNativeFieldCycle',['Enabled','Models','Artwork','Fresh Objects','Enabled'])]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'focused inspection'):
+                native_probe.require_production_chooser({'productionChooser':{**value,key:replacement}})
 
     def test_production_chooser_matches_authored_long_title_and_narration(self):
         title = ('Woodland containers with alternating polished trim and dark oak panels ' * 3)[:160]
@@ -369,6 +375,8 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectedChoiceNarration='Button ' + title, workspaceNavigation=self.workspace_navigation(),
                      states=[state('inspected','854x480'), state('narrow','320x240'),
                              state('returned','854x480')], unresolvedManualIdSurvivesWindowReflow=True,
+                     inspectionSameCaptureAcrossWindowReflow=True,
+                     inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
                      unresolvedStates=self.unresolved_chooser(choice['query'],choice['id']))
         native_probe.require_production_chooser({'productionChooser': value}, choice)
         for key, replacement in [('inspectedTitle', title[:-1]), ('inspectedId','lootr_styled:default'),

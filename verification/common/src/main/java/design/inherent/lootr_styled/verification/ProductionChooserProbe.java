@@ -46,6 +46,12 @@ final class ProductionChooserProbe {
     MISSING_RETURNED,
     MISSING_RETURNED_IMAGE,
     BACK,
+    REVIEW,
+    REVIEW_NARROW,
+    REVIEW_CYCLE,
+    REVIEW_IMAGE,
+    REVIEW_RETURNED,
+    REVIEW_BACK,
     NAV_ORIGIN,
     NAV_QUERY,
     NAV_CHANGED,
@@ -65,6 +71,14 @@ final class ProductionChooserProbe {
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
   private static final String MISSING_ID = "missing:preview_fixture";
   private static final String MISSING_REASON = "Reference is not present in this complete index";
+  private static final List<String> FIELD_NAMES =
+      List.of("Enabled", "Fresh Objects", "Models", "Artwork");
+  private static final List<FieldPath> FIELD_PATHS =
+      List.of(
+          FieldPath.ROOT.field("enabled"),
+          FieldPath.ROOT.field("freshObjects"),
+          MODELS,
+          FieldPath.ROOT.field("artwork"));
   private final Screen parent, root;
   private final ClientEditingWorkflow workflow;
   private final CompletableFuture<?> admission;
@@ -93,6 +107,9 @@ final class ProductionChooserProbe {
   private final List<ClientDestination> upDestinations = new ArrayList<>();
   private final JsonArray ancestorVisits = new JsonArray();
   private int ancestorIndex;
+  private int inspectionWidth, inspectionHeight, inspectionStep;
+  private design.inherent.reform.operation.DocumentReview inspectionCapture;
+  private final JsonArray inspectionCycle = new JsonArray();
   private Screen ancestorMenu;
   private String locationNarration;
   private JsonObject ancestorVisit;
@@ -263,6 +280,85 @@ final class ProductionChooserProbe {
       }
       case BACK -> {
         if (NativeUi.current() != root || !editor.canSubmit()) return null;
+        unchangedDraft();
+        NativeBindings.press(UiProbe.button(root, "Review changes…"));
+        next(Phase.REVIEW);
+      }
+      case REVIEW -> {
+        var review = workflow.inspection().orElse(null);
+        if (review == null || review.reviewedInput().isEmpty()) return null;
+        if (inspectionCapture == null) inspectionCapture = review.reviewedInput().orElseThrow();
+        assertInspection();
+        if (!review.selectedField().equals(java.util.Optional.of(FIELD_PATHS.getFirst()))) {
+          var index =
+              UiProbe.children(root).stream()
+                  .filter(Button.class::isInstance)
+                  .map(Button.class::cast)
+                  .filter(
+                      value ->
+                          !(value
+                              instanceof
+                              design.inherent.reform.minecraft.client.NativeNavigationButton))
+                  .filter(value -> value.getMessage().getString().equals(FIELD_NAMES.getFirst()))
+                  .findFirst();
+          if (index.isPresent()) NativeBindings.press(index.orElseThrow());
+          else advanceInspectionCycle();
+          return null;
+        }
+        inspectionWidth = root.width;
+        inspectionHeight = root.height;
+        NativeBindings.resizeWindow(mc, 320, 240);
+        next(Phase.REVIEW_NARROW);
+      }
+      case REVIEW_NARROW -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), new int[] {320, 240})
+            || root.width == inspectionWidth && root.height == inspectionHeight) return null;
+        assertInspection();
+        next(Phase.REVIEW_CYCLE);
+      }
+      case REVIEW_CYCLE -> {
+        assertInspection();
+        int index = inspectionStep % FIELD_PATHS.size();
+        if (!workflow
+            .inspection()
+            .orElseThrow()
+            .selectedField()
+            .equals(java.util.Optional.of(FIELD_PATHS.get(index)))) return null;
+        var cycle = inspectionCycleControl();
+        if (!cycle.getMessage().getString().equals(FIELD_NAMES.get(index)))
+          throw new IllegalStateException("Focused inspection caption differs from selected field");
+        inspectionCycle.add(cycle.getMessage().getString());
+        if (inspectionStep++ == FIELD_PATHS.size()) {
+          result.add("inspectionNativeFieldCycle", inspectionCycle);
+          next(Phase.REVIEW_IMAGE);
+        } else {
+          advanceInspectionCycle();
+          next(Phase.REVIEW_CYCLE);
+        }
+      }
+      case REVIEW_IMAGE -> {
+        if (!capture(mc, "production-inspection-narrow")) return null;
+        assertInspection();
+        NativeBindings.resizeWindow(mc, window[0], window[1]);
+        next(Phase.REVIEW_RETURNED);
+      }
+      case REVIEW_RETURNED -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), window)
+            || root.width != inspectionWidth
+            || root.height != inspectionHeight) return null;
+        assertInspection();
+        if (!workflow
+            .inspection()
+            .orElseThrow()
+            .selectedField()
+            .equals(java.util.Optional.of(FIELD_PATHS.getFirst())))
+          throw new IllegalStateException("Inspection reflow lost the selected native field");
+        result.addProperty("inspectionSameCaptureAcrossWindowReflow", true);
+        NativeBindings.press(UiProbe.button(root, "Back to settings"));
+        next(Phase.REVIEW_BACK);
+      }
+      case REVIEW_BACK -> {
+        if (workflow.inspection().isPresent() || !editor.canSubmit()) return null;
         unchangedDraft();
         navigationReveal = WorkflowReveal.field(workflow, StyleSettingsStore.DEFINITION, MODELS);
         next(Phase.NAV_ORIGIN);
@@ -607,6 +703,34 @@ final class ProductionChooserProbe {
               + "; "
               + narration);
     unchangedDraft();
+  }
+
+  private void assertInspection() {
+    if (NativeUi.current() != root
+        || !(workflow.navigation().current().orElse(null) instanceof ClientDestination.Inspection)
+        || workflow.inspection().flatMap(value -> value.reviewedInput()).orElse(null)
+            != inspectionCapture
+        || !editor.form().fieldOrder().equals(FIELD_PATHS))
+      throw new IllegalStateException("Inspection reflow replaced its actual root/capture/order");
+    unchangedDraft();
+  }
+
+  private net.minecraft.client.gui.components.AbstractWidget inspectionCycleControl() {
+    return UiProbe.children(root).stream()
+        .filter(net.minecraft.client.gui.components.AbstractWidget.class::isInstance)
+        .map(net.minecraft.client.gui.components.AbstractWidget.class::cast)
+        .filter(value -> NativeBindings.narration(value).startsWith("Field: "))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("No mounted focused Field cycle"));
+  }
+
+  private void advanceInspectionCycle() {
+    var cycle = inspectionCycleControl();
+    if (!cycle.active
+        || !UiProbe.focusControl(root, cycle)
+        || !NativeBindings.activateFocused(root))
+      throw new IllegalStateException(
+          "Focused inspection cycle refused native keyboard activation");
   }
 
   private void unresolvedState(Minecraft mc, String phase) {
