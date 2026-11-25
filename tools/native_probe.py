@@ -401,6 +401,7 @@ def require_production_chooser(data, expected_choice=None):
             or choice['title'] not in value.get('inspectedChoiceNarration', '')):
         raise RuntimeError('Production chooser lost the declared local title or native narration')
     require_workspace_navigation(value.get('workspaceNavigation'))
+    require_single_location_narration(value.get('workspaceNavigation'))
 
 
 def require_workspace_navigation(value):
@@ -436,6 +437,17 @@ def require_workspace_navigation(value):
                    or v.get('actualTarget') != v.get('expectedTarget')
                    for index, (name, v) in enumerate(zip(names, visits)))):
         raise RuntimeError('Production chooser lost native ancestor-menu keyboard evidence')
+
+
+def require_single_location_narration(value):
+    # This fixture uses the English breadcrumb declared by the actual production hierarchy.
+    # Keep writing acceptance separate from the functional keyboard/target checks above.
+    path = 'Home / Settings / Appearance / Profile selection / Models'
+    visits = value.get('ancestorKeyboardVisits') if isinstance(value, dict) else None
+    if (not isinstance(visits, list) or len(visits) != 4
+            or any(not isinstance(v, dict) or not isinstance(v.get('locationNarration'), str)
+                   or v['locationNarration'].count(path) != 1 for v in visits)):
+        raise RuntimeError('Production chooser must narrate the complete Location path exactly once')
 
 
 def require_production_failure(data):

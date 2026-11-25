@@ -413,6 +413,17 @@ class NativeFixtureTest(unittest.TestCase):
             with self.subTest(visits=visits),self.assertRaisesRegex(RuntimeError,'ancestor-menu'):
                 native_probe.require_workspace_navigation({**value,'ancestorKeyboardVisits':visits})
 
+    def test_location_narration_refuses_duplicate_or_missing_complete_path(self):
+        value=self.workspace_navigation()
+        native_probe.require_single_location_narration(value)
+        for text in [None,'Location: Models',value['ancestorKeyboardVisits'][0]['locationNarration']*2]:
+            bad=copy.deepcopy(value);bad['ancestorKeyboardVisits'][0]['locationNarration']=text
+            with self.subTest(text=text),self.assertRaisesRegex(RuntimeError,'exactly once'):
+                native_probe.require_single_location_narration(bad)
+        for bad in [None,{},dict(ancestorKeyboardVisits=[])]:
+            with self.subTest(value=bad),self.assertRaisesRegex(RuntimeError,'exactly once'):
+                native_probe.require_single_location_narration(bad)
+
     def test_fresh_captions_require_native_cycle_and_canonical_review(self):
         modes = ['AUTO', 'ON', 'OFF', 'AUTO']
         labels = dict(AUTO='Auto', ON='On', OFF='Off')
