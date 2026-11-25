@@ -330,7 +330,8 @@ class NativeFixtureTest(unittest.TestCase):
         value = dict(searchRemovedDefaultChoice=True, queryAndInspectionSurviveWindowReflow=True,
                      inspectionDoesNotStage=True, sameDraftAndOwner=True,
                      sourceFileAndGenerationUnchanged=True, closedCleanly=True,
-                     baselineModels='lootr_styled:default', baselineArtwork='lootr_styled:default', states=states)
+                     baselineModels='lootr_styled:default', baselineArtwork='lootr_styled:default', states=states,
+                     workspaceNavigation=self.workspace_navigation())
         native_probe.require_production_chooser({'productionChooser': value})
         for bad in [[], [None]*3, [states[0],{**states[1],'queryFocus':False},states[2]],
                     [states[0],states[1],{**states[2],'models':'lootr_styled:vanilla'}],
@@ -352,7 +353,7 @@ class NativeFixtureTest(unittest.TestCase):
                      sourceFileAndGenerationUnchanged=True, closedCleanly=True,
                      baselineModels=choice['id'], baselineArtwork=choice['id'],
                      inspectedTitle=title, inspectedId=choice['id'], queryText=choice['query'],
-                     inspectedChoiceNarration='Button ' + title,
+                     inspectedChoiceNarration='Button ' + title, workspaceNavigation=self.workspace_navigation(),
                      states=[state('inspected','854x480'), state('narrow','320x240'),
                              state('returned','854x480')])
         native_probe.require_production_chooser({'productionChooser': value}, choice)
@@ -364,6 +365,28 @@ class NativeFixtureTest(unittest.TestCase):
         stale['states'][1]['inspected'] = 'lootr_styled:vanilla'
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser':stale}, choice)
+
+    def workspace_navigation(self):
+        return dict(query='Models',caret=3,selectionIndex=1,initialFilter='ALL',changedFilter='MODIFIED',
+                    expandedCount=3,narrowGui='320x240',bookmarkRestoresNativeQueryFilterAndFocus=True,
+                    bookmarkStateSurvivesActualWindowRoundTrip=True,sameOwnerDraftSourceAndGeneration=True,
+                    upTargets=[dict(attempt='parent',kind='Category',target='Settings',outcome='REVEALED'),
+                               dict(attempt='root',kind='Home',target='Home',outcome='REVEALED')])
+
+    def test_workspace_navigation_requires_real_restoration_and_identified_reveals(self):
+        value=self.workspace_navigation()
+        native_probe.require_workspace_navigation(value)
+        for key,replacement in [('query','wrong'),('caret',0),('selectionIndex',3),
+                                ('changedFilter','ALL'),('expandedCount',-1),
+                                ('bookmarkRestoresNativeQueryFilterAndFocus',False),
+                                ('bookmarkStateSurvivesActualWindowRoundTrip',False),
+                                ('sameOwnerDraftSourceAndGeneration',False),('upTargets',[])]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production chooser'):
+                native_probe.require_workspace_navigation({**value,key:replacement})
+        for key,replacement in [('outcome','FAILED'),('kind','Field'),('attempt','parent')]:
+            bad=copy.deepcopy(value);bad['upTargets'][-1][key]=replacement
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production chooser'):
+                native_probe.require_workspace_navigation(bad)
 
     def test_fresh_captions_require_native_cycle_and_canonical_review(self):
         modes = ['AUTO', 'ON', 'OFF', 'AUTO']

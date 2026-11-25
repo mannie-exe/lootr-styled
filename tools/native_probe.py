@@ -400,6 +400,27 @@ def require_production_chooser(data, expected_choice=None):
             or value.get('inspectedTitle') != choice['title'] or value.get('queryText') != choice['query']
             or choice['title'] not in value.get('inspectedChoiceNarration', '')):
         raise RuntimeError('Production chooser lost the declared local title or native narration')
+    require_workspace_navigation(value.get('workspaceNavigation'))
+
+
+def require_workspace_navigation(value):
+    if (not isinstance(value, dict) or value.get('query') != 'Models'
+            or value.get('caret') != 3 or value.get('selectionIndex') != 1
+            or value.get('initialFilter') != 'ALL'
+            or not value.get('changedFilter') or value['changedFilter'] == 'ALL'
+            or not isinstance(value.get('expandedCount'), int) or value['expandedCount'] < 0
+            or not value.get('narrowGui')
+            or any(value.get(k) is not True for k in (
+                'bookmarkRestoresNativeQueryFilterAndFocus',
+                'bookmarkStateSurvivesActualWindowRoundTrip', 'sameOwnerDraftSourceAndGeneration'))):
+        raise RuntimeError('Production chooser lost native workspace bookmark state')
+    targets = value.get('upTargets')
+    if (not isinstance(targets, list) or not 1 <= len(targets) <= 8
+            or any(not isinstance(t, dict) or not t.get('attempt') or not t.get('target')
+                   or t.get('outcome') != 'REVEALED' for t in targets)
+            or targets[-1].get('kind') != 'Home'
+            or len({t['attempt'] for t in targets}) != len(targets)):
+        raise RuntimeError('Production chooser lost identified parent-navigation evidence')
 
 
 def require_production_failure(data):

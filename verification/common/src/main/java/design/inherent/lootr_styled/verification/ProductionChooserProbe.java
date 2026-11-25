@@ -10,8 +10,11 @@ import design.inherent.lootr_styled.client.StyleSettingsStore;
 import design.inherent.lootr_styled.profile.ClientSettings;
 import design.inherent.reform.definition.FieldPath;
 import design.inherent.reform.edit.DraftRevision;
+import design.inherent.reform.minecraft.client.ClientDestination;
 import design.inherent.reform.minecraft.client.ClientEditingWorkflow;
 import design.inherent.reform.minecraft.client.ClientEditor;
+import design.inherent.reform.minecraft.client.NavigationAttempt;
+import design.inherent.reform.minecraft.client.NavigationBookmark;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -19,6 +22,7 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 
@@ -34,6 +38,14 @@ final class ProductionChooserProbe {
     RETURNED,
     RETURNED_IMAGE,
     BACK,
+    NAV_ORIGIN,
+    NAV_QUERY,
+    NAV_CHANGED,
+    NAV_UP,
+    NAV_RESTORED,
+    NAV_NARROW,
+    NAV_RETURNED,
+    NAV_BASELINE,
     CLOSED
   }
 
@@ -54,6 +66,12 @@ final class ProductionChooserProbe {
   private Screen browser;
   private int browserWidth, browserHeight, ticks, captureTicks;
   private boolean captureRequested, captured;
+  private CompletableFuture<?> navigationReveal;
+  private NavigationAttempt navigationAttempt;
+  private NavigationBookmark navigationBaseline, navigationBookmark;
+  private int upSteps, rootWidth, rootHeight;
+  private final JsonArray upTargets = new JsonArray();
+  private final JsonObject navigationResult = new JsonObject();
   private Phase phase = Phase.OPEN;
 
   ProductionChooserProbe(Minecraft mc) throws Exception {
@@ -179,6 +197,108 @@ final class ProductionChooserProbe {
       case BACK -> {
         if (NativeUi.current() != root || !editor.canSubmit()) return null;
         unchangedDraft();
+        navigationReveal = WorkflowReveal.field(workflow, StyleSettingsStore.DEFINITION, MODELS);
+        next(Phase.NAV_ORIGIN);
+      }
+      case NAV_ORIGIN -> {
+        if (!navigationReveal.isDone()) return null;
+        navigationReveal.join();
+        navigationBaseline = workflow.navigation().bookmark();
+        navigationQuery().setValue("Models");
+        next(Phase.NAV_QUERY);
+      }
+      case NAV_QUERY -> {
+        var query = navigationQuery();
+        if (!query.getValue().equals("Models")) return null;
+        query.setCursorPosition(3);
+        query.setHighlightPos(1);
+        if (!UiProbe.focusControl(root, query))
+          throw new IllegalStateException("Cannot focus actual workspace search");
+        navigationBookmark = workflow.navigation().bookmark();
+        if (!navigationBookmark.navigation().orElseThrow().filter().equals("ALL"))
+          throw new IllegalStateException("Unexpected initial workspace filter");
+        navigationResult.addProperty(
+            "query", navigationBookmark.navigation().orElseThrow().query());
+        navigationResult.addProperty(
+            "caret", navigationBookmark.navigation().orElseThrow().cursor());
+        navigationResult.addProperty(
+            "selectionIndex", navigationBookmark.navigation().orElseThrow().selection());
+        navigationResult.addProperty(
+            "initialFilter", navigationBookmark.navigation().orElseThrow().filter());
+        navigationResult.addProperty(
+            "expandedCount", navigationBookmark.navigation().orElseThrow().expandedCount());
+        var filter =
+            UiProbe.children(root).stream()
+                .filter(value -> value instanceof CycleButton<?>)
+                .map(value -> (CycleButton<?>) value)
+                .filter(value -> value.getMessage().getString().startsWith("Show"))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Missing workspace filter"));
+        if (!UiProbe.focusControl(root, filter) || !NativeBindings.activateFocused(root))
+          throw new IllegalStateException("Native workspace filter activation failed");
+        navigationQuery().setValue("No matching setting");
+        next(Phase.NAV_CHANGED);
+      }
+      case NAV_CHANGED -> {
+        var changed = workflow.navigation().bookmark().navigation().orElseThrow();
+        if (changed.filter().equals("ALL") || !changed.query().equals("No matching setting"))
+          return null;
+        navigationResult.addProperty("changedFilter", changed.filter());
+        navigationAttempt = workflow.navigation().up().orElseThrow();
+        next(Phase.NAV_UP);
+      }
+      case NAV_UP -> {
+        if (!navigationReady()) return null;
+        var visited = new JsonObject();
+        visited.addProperty("attempt", navigationAttempt.id().toString());
+        visited.addProperty("kind", navigationAttempt.target().getClass().getSimpleName());
+        visited.addProperty("target", navigationAttempt.target().toString());
+        visited.addProperty("outcome", navigationAttempt.result().orElseThrow().outcome().name());
+        upTargets.add(visited);
+        if (++upSteps > 8) throw new IllegalStateException("Actual hierarchy did not reach Home");
+        if (workflow.navigation().current().orElseThrow() instanceof ClientDestination.Home) {
+          if (workflow.navigation().up().isPresent())
+            throw new IllegalStateException("Rooted Home unexpectedly has a parent");
+          navigationResult.add("upTargets", upTargets);
+          navigationAttempt = workflow.navigation().restore(navigationBookmark);
+          next(Phase.NAV_RESTORED);
+        } else navigationAttempt = workflow.navigation().up().orElseThrow();
+      }
+      case NAV_RESTORED -> {
+        if (!navigationReady()) return null;
+        assertNavigation();
+        navigationResult.addProperty("bookmarkRestoresNativeQueryFilterAndFocus", true);
+        rootWidth = root.width;
+        rootHeight = root.height;
+        NativeBindings.resizeWindow(mc, 320, 240);
+        next(Phase.NAV_NARROW);
+      }
+      case NAV_NARROW -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), new int[] {320, 240})
+            || root.width == rootWidth && root.height == rootHeight) return null;
+        assertNavigation();
+        navigationResult.addProperty("narrowGui", root.width + "x" + root.height);
+        NativeBindings.resizeWindow(mc, window[0], window[1]);
+        next(Phase.NAV_RETURNED);
+      }
+      case NAV_RETURNED -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), window)
+            || root.width != rootWidth
+            || root.height != rootHeight) return null;
+        assertNavigation();
+        navigationResult.addProperty("bookmarkStateSurvivesActualWindowRoundTrip", true);
+        navigationAttempt = workflow.navigation().restore(navigationBaseline);
+        next(Phase.NAV_BASELINE);
+      }
+      case NAV_BASELINE -> {
+        if (!navigationReady()) return null;
+        if (!navigationQuery()
+            .getValue()
+            .equals(navigationBaseline.navigation().orElseThrow().query()))
+          throw new IllegalStateException("Original workspace query was not restored");
+        unchangedDraft();
+        navigationResult.addProperty("sameOwnerDraftSourceAndGeneration", true);
+        result.add("workspaceNavigation", navigationResult);
         if (!UiProbe.button(root, "Done").active) return null;
         NativeBindings.press(UiProbe.button(root, "Done"));
         next(Phase.CLOSED);
@@ -192,6 +312,56 @@ final class ProductionChooserProbe {
       }
     }
     return null;
+  }
+
+  private boolean navigationReady() {
+    var value = navigationAttempt.result();
+    if (value.isEmpty()) return false;
+    var completed = value.orElseThrow();
+    if (completed.outcome() != NavigationAttempt.Outcome.REVEALED
+        || !completed.id().equals(navigationAttempt.id())
+        || !completed.target().equals(navigationAttempt.target())
+        || NativeUi.current() != root)
+      throw new IllegalStateException("Actual workspace destination not revealed: " + completed);
+    return true;
+  }
+
+  private EditBox navigationQuery() {
+    return UiProbe.children(root).stream()
+        .filter(EditBox.class::isInstance)
+        .map(EditBox.class::cast)
+        .filter(value -> value.getMessage().getString().equals("Search settings"))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("Missing actual workspace search"));
+  }
+
+  private void assertNavigation() {
+    var query = navigationQuery();
+    var state = workflow.navigation().bookmark().navigation().orElseThrow();
+    var expected = navigationBookmark.navigation().orElseThrow();
+    if (!query.getValue().equals("Models")
+        || query.getCursorPosition() != 3
+        || !query.getHighlighted().equals("od")
+        || !UiProbe.focusedPath(root, query)
+        || !state.filter().equals(expected.filter())
+        || state.expandedCount() != expected.expandedCount()
+        || !workflow.navigation().current().orElseThrow().equals(navigationBookmark.destination()))
+      throw new IllegalStateException(
+          "Workspace bookmark lost native state: query="
+              + query.getValue()
+              + ", cursor="
+              + query.getCursorPosition()
+              + ", selection="
+              + query.getHighlighted()
+              + ", focus="
+              + UiProbe.focusedPath(root, query)
+              + ", filter="
+              + state.filter()
+              + ", expanded="
+              + state.expandedCount()
+              + ", target="
+              + workflow.navigation().current());
+    unchangedDraft();
   }
 
   private EditBox box(String name) {
