@@ -1121,20 +1121,11 @@ final class UiProbe {
           throw new IllegalStateException("Captured Fresh Objects labels changed canonical values");
         result.addProperty("reviewFreshCaption", caption);
         result.addProperty("reviewFreshCanonical", originalMode.name());
-        NativeBindings.press(
-            buttons.stream()
-                .filter(value -> value.getMessage().getString().equals("Fresh Objects"))
-                .findFirst()
-                .orElseThrow());
         mountTicks = 0;
         stage = REVIEW_FRESH;
       }
       case REVIEW_FRESH -> {
-        if (!workflow
-            .inspection()
-            .orElseThrow()
-            .selectedField()
-            .equals(java.util.Optional.of(FieldPath.ROOT.field("freshObjects")))) {
+        if (!selectReviewFresh(root)) {
           if (++mountTicks > 200)
             throw new IllegalStateException("Review did not select the actual Fresh Objects field");
           return null;
@@ -1637,6 +1628,41 @@ final class UiProbe {
       throw new IllegalStateException("Fresh Objects did not accept native keyboard activation");
     freshCaptionStep++;
     mountTicks = 0;
+    return false;
+  }
+
+  private boolean selectReviewFresh(Screen root) {
+    if (workflow
+        .inspection()
+        .orElseThrow()
+        .selectedField()
+        .equals(java.util.Optional.of(FieldPath.ROOT.field("freshObjects")))) return true;
+    var index =
+        children(root).stream()
+            .filter(Button.class::isInstance)
+            .map(Button.class::cast)
+            .filter(
+                value ->
+                    !(value
+                        instanceof design.inherent.reform.minecraft.client.NativeNavigationButton))
+            .filter(value -> value.getMessage().getString().equals("Fresh Objects"))
+            .findFirst();
+    if (index.isPresent()) {
+      NativeBindings.press(index.orElseThrow());
+      result.addProperty("reviewFreshSelectionControl", "Field index");
+    } else {
+      var cycle =
+          children(root).stream()
+              .filter(AbstractWidget.class::isInstance)
+              .map(AbstractWidget.class::cast)
+              .filter(value -> NativeBindings.narration(value).startsWith("Field: "))
+              .findFirst();
+      if (cycle.isEmpty()) return false;
+      if (!focusControl(root, cycle.orElseThrow()) || !NativeBindings.activateFocused(root))
+        throw new IllegalStateException(
+            "Focused review field cycle did not accept native keyboard input");
+      result.addProperty("reviewFreshSelectionControl", "Focused field cycle");
+    }
     return false;
   }
 
