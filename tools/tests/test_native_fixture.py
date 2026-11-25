@@ -369,6 +369,7 @@ class NativeFixtureTest(unittest.TestCase):
     def workspace_navigation(self):
         return dict(query='Models',caret=3,selectionIndex=1,initialFilter='ALL',changedFilter='MODIFIED',
                     expandedCount=3,narrowGui='320x240',bookmarkRestoresNativeQueryFilterAndFocus=True,
+                    nativeCategoriesDrawerOpened=True,
                     bookmarkStateSurvivesActualWindowRoundTrip=True,sameOwnerDraftSourceAndGeneration=True,
                     upTargets=[dict(attempt='parent',kind='Category',target='Settings',outcome='REVEALED'),
                                dict(attempt='root',kind='Home',target='Home',outcome='REVEALED')])
@@ -380,6 +381,7 @@ class NativeFixtureTest(unittest.TestCase):
                                 ('changedFilter','ALL'),('expandedCount',-1),
                                 ('bookmarkRestoresNativeQueryFilterAndFocus',False),
                                 ('bookmarkStateSurvivesActualWindowRoundTrip',False),
+                                ('nativeCategoriesDrawerOpened',False),
                                 ('sameOwnerDraftSourceAndGeneration',False),('upTargets',[])]:
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production chooser'):
                 native_probe.require_workspace_navigation({**value,key:replacement})

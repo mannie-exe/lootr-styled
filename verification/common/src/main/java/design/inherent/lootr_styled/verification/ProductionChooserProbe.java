@@ -44,6 +44,7 @@ final class ProductionChooserProbe {
     NAV_UP,
     NAV_RESTORED,
     NAV_NARROW,
+    NAV_DRAWER,
     NAV_RETURNED,
     NAV_BASELINE,
     CLOSED
@@ -276,6 +277,20 @@ final class ProductionChooserProbe {
       case NAV_NARROW -> {
         if (!Arrays.equals(NativeBindings.windowSize(mc), new int[] {320, 240})
             || root.width == rootWidth && root.height == rootHeight) return null;
+        var categories = UiProbe.button(root, "Categories");
+        if (!categories.active
+            || !UiProbe.focusControl(root, categories)
+            || !NativeBindings.activateFocused(root))
+          throw new IllegalStateException("Cannot open actual compact navigation drawer");
+        navigationResult.addProperty("nativeCategoriesDrawerOpened", true);
+        next(Phase.NAV_DRAWER);
+      }
+      case NAV_DRAWER -> {
+        if (UiProbe.children(root).stream()
+            .noneMatch(
+                value ->
+                    value instanceof EditBox input
+                        && input.getMessage().getString().equals("Search settings"))) return null;
         assertNavigation();
         navigationResult.addProperty("narrowGui", root.width + "x" + root.height);
         NativeBindings.resizeWindow(mc, window[0], window[1]);

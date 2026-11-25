@@ -412,7 +412,8 @@ def require_workspace_navigation(value):
             or not value.get('narrowGui')
             or any(value.get(k) is not True for k in (
                 'bookmarkRestoresNativeQueryFilterAndFocus',
-                'bookmarkStateSurvivesActualWindowRoundTrip', 'sameOwnerDraftSourceAndGeneration'))):
+                'bookmarkStateSurvivesActualWindowRoundTrip', 'nativeCategoriesDrawerOpened',
+                'sameOwnerDraftSourceAndGeneration'))):
         raise RuntimeError('Production chooser lost native workspace bookmark state')
     targets = value.get('upTargets')
     if (not isinstance(targets, list) or not 1 <= len(targets) <= 8
