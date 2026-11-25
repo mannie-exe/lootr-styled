@@ -1,5 +1,6 @@
 package design.inherent.lootr_styled.verification;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
@@ -14,6 +15,7 @@ public final class UiCostAudit {
   private static String label;
   private static long started, resourceLookups, metadataReads, preparationsInPaint;
   private static int count;
+  private static JsonArray lookupStacks;
 
   private UiCostAudit() {}
 
@@ -44,6 +46,19 @@ public final class UiCostAudit {
     resourceLookups = 0;
     preparationsInPaint = 0;
     metadataReads = 0;
+    lookupStacks = new JsonArray();
+  }
+
+  /** Bounded causal evidence for first-Home lookups; these samples include observer overhead. */
+  static void lookupObserved() {
+    if (Thread.currentThread() != ownerThread
+        || started == 0
+        || !"unopened-home".equals(label)
+        || lookupStacks.size() == 4) return;
+    var stack = new JsonArray();
+    var frames = Thread.currentThread().getStackTrace();
+    for (int i = 2; i < Math.min(frames.length, 22); i++) stack.add(frames[i].toString());
+    lookupStacks.add(stack);
   }
 
   public static void begin(Object screen) {
@@ -84,6 +99,7 @@ public final class UiCostAudit {
     result.addProperty("packMetadataReadsInCallback", metadataReads);
     result.addProperty("resourceContentLookupsInCallback", resourceLookups - metadataReads);
     result.addProperty("providerEntriesInCallback", preparationsInPaint);
+    result.add("resourceLookupStacks", lookupStacks);
     owner = null;
     ownerThread = null;
     label = null;

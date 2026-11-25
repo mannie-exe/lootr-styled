@@ -13,7 +13,10 @@ public final class ResourceLookupAudit {
 
   public static void observed() {
     var count = LOOKUPS.get();
-    if (count != null) LOOKUPS.set(count + 1);
+    if (count != null) {
+      LOOKUPS.set(count + 1);
+      UiCostAudit.lookupObserved();
+    }
   }
 
   public static int end() {
