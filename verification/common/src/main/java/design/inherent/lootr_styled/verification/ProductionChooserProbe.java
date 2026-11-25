@@ -2,6 +2,7 @@ package design.inherent.lootr_styled.verification;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import design.inherent.lootr_styled.client.ClientRuntime;
 import design.inherent.lootr_styled.client.NativeUi;
 import design.inherent.lootr_styled.client.StylePreferences;
@@ -45,6 +46,7 @@ final class ProductionChooserProbe {
   private final BasicFileAttributes attributes;
   private final UUID generation;
   private final int[] window;
+  private final String inspectedTitle, inspectedId, queryText;
   private final JsonObject result = new JsonObject();
   private final JsonArray states = new JsonArray();
   private ClientEditor<ClientSettings> editor;
@@ -61,6 +63,28 @@ final class ProductionChooserProbe {
     attributes = Files.readAttributes(settings, BasicFileAttributes.class);
     generation = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
     window = NativeBindings.windowSize(mc);
+    if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-local-profile"))) {
+      var descriptor =
+          JsonParser.parseString(
+                  Files.readString(
+                      ClientRuntime.configuration().root().resolve("fixture/profile.json")))
+              .getAsJsonObject();
+      inspectedTitle = descriptor.get("title").getAsString();
+      inspectedId = "lootr_styled_local:fixture";
+      queryText =
+          inspectedTitle.substring(
+              0,
+              inspectedTitle.offsetByCodePoints(
+                  0, Math.min(32, inspectedTitle.codePointCount(0, inspectedTitle.length()))));
+    } else {
+      inspectedTitle = "Vanilla (Inherited)";
+      inspectedId = ClientSettings.VANILLA.toString();
+      queryText = "Vanilla";
+    }
+    if (queryText.length() < 3) throw new IllegalArgumentException("Chooser query is too short");
+    result.addProperty("inspectedTitle", inspectedTitle);
+    result.addProperty("inspectedId", inspectedId);
+    result.addProperty("queryText", queryText);
     workflow = StylePreferences.open(parent);
     root = workflow.screen();
     NativeUi.open(root);
@@ -92,20 +116,24 @@ final class ProductionChooserProbe {
         browser = NativeUi.current();
         if (browser == root || !UiProbe.hasButton(browser, "Search")) return null;
         if (!UiProbe.button(browser, "Search").active) return null;
-        box("Search").setValue("Vanilla");
+        box("Search").setValue(queryText);
         press("Search");
         next(Phase.SEARCHED);
       }
       case SEARCHED -> {
         if (UiProbe.hasButton(browser, "Default")
-            || !UiProbe.hasButton(browser, "Vanilla (Inherited)")
-            || !UiProbe.button(browser, "Vanilla (Inherited)").active) return null;
+            || !UiProbe.hasButton(browser, inspectedTitle)
+            || !UiProbe.button(browser, inspectedTitle).active) return null;
+        var narration = NativeBindings.narration(UiProbe.button(browser, inspectedTitle));
+        if (!narration.contains(inspectedTitle))
+          throw new IllegalStateException("Chooser narration truncated the profile title");
+        result.addProperty("inspectedChoiceNarration", narration);
         result.addProperty("searchRemovedDefaultChoice", true);
-        press("Vanilla (Inherited)");
+        press(inspectedTitle);
         next(Phase.INSPECTED);
       }
       case INSPECTED -> {
-        if (!box("Reference ID").getValue().equals(ClientSettings.VANILLA.toString())
+        if (!box("Reference ID").getValue().equals(inspectedId)
             || !UiProbe.button(browser, "Use selection").active) return null;
         var query = box("Search");
         if (!UiProbe.focusControl(browser, query))
@@ -184,11 +212,11 @@ final class ProductionChooserProbe {
   private void assertRetained() {
     var query = box("Search");
     if (NativeUi.current() != browser
-        || !query.getValue().equals("Vanilla")
+        || !query.getValue().equals(queryText)
         || query.getCursorPosition() != 3
-        || !query.getHighlighted().equals("an")
+        || !query.getHighlighted().equals(queryText.substring(1, 3))
         || !UiProbe.focusedPath(browser, query)
-        || !box("Reference ID").getValue().equals(ClientSettings.VANILLA.toString()))
+        || !box("Reference ID").getValue().equals(inspectedId))
       throw new IllegalStateException("Chooser lost query, focus or inspection: " + observations());
     unchangedDraft();
   }

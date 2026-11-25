@@ -340,6 +340,47 @@ class NativeFixtureTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser': {**value,'inspectionDoesNotStage':False}})
 
+    def test_production_chooser_matches_authored_long_title_and_narration(self):
+        title = ('Woodland containers with alternating polished trim and dark oak panels ' * 3)[:160]
+        choice = dict(id='lootr_styled_local:fixture', title=title, query=title[:32])
+        def state(phase, window):
+            return dict(phase=phase, window=window, gui=window, query=choice['query'], caret=3,
+                        selection=choice['query'][1:3], queryFocus=True, inspected=choice['id'],
+                        models=choice['id'], artwork=choice['id'])
+        value = dict(searchRemovedDefaultChoice=True, queryAndInspectionSurviveWindowReflow=True,
+                     inspectionDoesNotStage=True, sameDraftAndOwner=True,
+                     sourceFileAndGenerationUnchanged=True, closedCleanly=True,
+                     baselineModels=choice['id'], baselineArtwork=choice['id'],
+                     inspectedTitle=title, inspectedId=choice['id'], queryText=choice['query'],
+                     inspectedChoiceNarration='Button ' + title,
+                     states=[state('inspected','854x480'), state('narrow','320x240'),
+                             state('returned','854x480')])
+        native_probe.require_production_chooser({'productionChooser': value}, choice)
+        for key, replacement in [('inspectedTitle', title[:-1]), ('inspectedId','lootr_styled:default'),
+                                 ('queryText','Vanilla'), ('inspectedChoiceNarration',title[:80])]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError,'Production chooser'):
+                native_probe.require_production_chooser({'productionChooser': {**value,key:replacement}}, choice)
+        stale = copy.deepcopy(value)
+        stale['states'][1]['inspected'] = 'lootr_styled:vanilla'
+        with self.assertRaisesRegex(RuntimeError,'Production chooser'):
+            native_probe.require_production_chooser({'productionChooser':stale}, choice)
+
+    def test_local_and_standard_fixture_inputs_stay_isolated(self):
+        profile = self.root / 'private-profile'
+        profile.mkdir()
+        (profile / 'profile.json').write_text('{"format":1,"title":"Fixture"}')
+        local, _, _ = native_probe.prepare('neoforge-1_21_1', 'native', local_profile=profile)
+        self.assertNotEqual(local, self.fixture)
+        marker = local / '.lootr-styled-local-profile'
+        copied = local / 'config/lootr_styled/fixture'
+        self.assertTrue(marker.is_file())
+        self.assertTrue(copied.is_dir())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertTrue(marker.is_file())
+        self.assertTrue(copied.is_dir())
+        self.assertFalse((self.fixture / '.lootr-styled-local-profile').exists())
+        self.assertTrue((profile / 'profile.json').is_file())
+
     def test_production_input_scope_is_exclusive_and_cleared(self):
         marker = self.fixture / '.lootr-styled-production-input'
         native_probe.prepare('neoforge-1_21_1', 'native', production_input=True)

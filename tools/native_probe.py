@@ -348,7 +348,8 @@ def require_production_operation(data):
         raise RuntimeError('Production operation lost running state or truthful native application evidence')
 
 
-def require_production_chooser(data):
+def require_production_chooser(data, expected_choice=None):
+    choice = expected_choice or dict(id='lootr_styled:vanilla', title='Vanilla (Inherited)', query='Vanilla')
     value = data.get('productionChooser')
     if (not isinstance(value, dict) or any(value.get(k) is not True for k in (
             'searchRemovedDefaultChoice', 'queryAndInspectionSurviveWindowReflow',
@@ -359,14 +360,18 @@ def require_production_chooser(data):
             or [s.get('phase') for s in states if isinstance(s, dict)] != ['inspected', 'narrow', 'returned']
             or not value.get('baselineModels') or not value.get('baselineArtwork')
             or value['baselineModels'] == 'lootr_styled:vanilla'
-            or any(s.get('query') != 'Vanilla' or s.get('caret') != 3 or s.get('selection') != 'an'
-                   or s.get('queryFocus') is not True or s.get('inspected') != 'lootr_styled:vanilla'
+            or any(s.get('query') != choice['query'] or s.get('caret') != 3 or s.get('selection') != choice['query'][1:3]
+                   or s.get('queryFocus') is not True or s.get('inspected') != choice['id']
                    or s.get('models') != value['baselineModels']
                    or s.get('artwork') != value['baselineArtwork'] for s in states)
             or states[1].get('window') != '320x240'
             or states[0].get('window') != states[2].get('window')
             or states[0].get('gui') != states[2].get('gui')):
         raise RuntimeError('Production chooser lost query, inspection or unchanged field evidence')
+    if expected_choice and (value.get('inspectedId') != choice['id']
+            or value.get('inspectedTitle') != choice['title'] or value.get('queryText') != choice['query']
+            or choice['title'] not in value.get('inspectedChoiceNarration', '')):
+        raise RuntimeError('Production chooser lost the declared local title or native narration')
 
 
 def require_filtered_actions(data):
@@ -813,6 +818,12 @@ def main():
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
     fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale, args.production_preparation)
+    chooser_choice = None
+    if args.production_chooser and args.local_profile:
+        title = json.loads((args.local_profile / 'profile.json').read_text())['title']
+        if not isinstance(title, str) or not 3 <= len(title) <= 160:
+            raise ValueError('The chooser fixture requires a local title of 3 to 160 characters')
+        chooser_choice = dict(id='lootr_styled_local:fixture', title=title, query=title[:32])
     if not args.run:
         print(json.dumps({'prepared': str(fixture.relative_to(ROOT)), 'artifact': product.name, 'sha256': digest(product)}))
         return
@@ -879,7 +890,7 @@ def main():
             if not path.is_file() or not path.stat().st_size:
                 raise RuntimeError(f'Production operation capture missing: {name}')
     if args.production_chooser:
-        require_production_chooser(data)
+        require_production_chooser(data, chooser_choice)
         for name in ('production-chooser-narrow', 'production-chooser-returned'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production chooser capture missing: {name}')
