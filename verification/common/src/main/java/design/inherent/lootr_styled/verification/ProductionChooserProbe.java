@@ -346,7 +346,7 @@ final class ProductionChooserProbe {
         if (!capture(mc, "production-inspection-narrow")) return null;
         assertInspection();
         inspectionFieldY = inspectionCycleControl().getY();
-        if (!root.mouseScrolled(root.width * 0.72, root.height * 0.5, 0, -11))
+        if (!root.mouseScrolled(root.width * 0.72, root.height * 0.5, 0, -9.5))
           throw new IllegalStateException("Native inspection viewport refused the wheel event");
         inspectionScrollDraws = FrameAudit.rootSequence(root);
         next(Phase.REVIEW_SCROLL);
@@ -390,7 +390,7 @@ final class ProductionChooserProbe {
         observation.addProperty("fieldY", inspectionCycleControl().getY());
         inspectionScrollFrames.add(observation);
         result.addProperty("inspectionComparisonCaptureDraws", draws);
-        if (++inspectionScrollImage < 3) {
+        if (++inspectionScrollImage < 4) {
           if (!root.mouseScrolled(root.width * 0.72, root.height * 0.5, 0, -1.5))
             throw new IllegalStateException("Native inspection refused the next comparison scroll");
           inspectionScrollDraws = FrameAudit.rootSequence(root);

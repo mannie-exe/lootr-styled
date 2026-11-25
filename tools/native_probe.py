@@ -33,7 +33,9 @@ CAPTURES = (
     'production-input-filtered', 'production-input-filtered-defaults',
     'production-input-filtered-redo', 'production-input-filtered-reloaded',
     'production-chooser-narrow', 'production-chooser-returned',
-    'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow', *(f'production-inspection-comparison-{i}' for i in range(3)),
+    'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow',
+    'production-inspection-comparison',  # Obsolete observer capture; clear before reusing an owned fixture.
+    *(f'production-inspection-comparison-{i}' for i in range(4)),
     'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'production-locale-changed', 'production-locale-restored',
@@ -509,11 +511,11 @@ def require_production_chooser(data, expected_choice=None):
             or type(value['inspectionComparison'].get('effectiveAvailable')) is not bool):
         raise RuntimeError('Production chooser lacks actual inspection scroll/draw comparison evidence')
     frames = value.get('inspectionScrollFrames')
-    if (not isinstance(frames, list) or len(frames) != 3
-            or [f.get('image') for f in frames if isinstance(f, dict)] != [0, 1, 2]
+    if (not isinstance(frames, list) or len(frames) != 4
+            or [f.get('image') for f in frames if isinstance(f, dict)] != [0, 1, 2, 3]
             or any(type(f.get('completedDraws')) is not int or f['completedDraws'] < 4
                    or type(f.get('fieldY')) is not int for f in frames)
-            or not frames[0]['fieldY'] > frames[1]['fieldY'] > frames[2]['fieldY']):
+            or not frames[0]['fieldY'] > frames[1]['fieldY'] > frames[2]['fieldY'] > frames[3]['fieldY']):
         raise RuntimeError('Production chooser lacks sequential native inspection scroll frames')
     require_unresolved_chooser(value, choice)
     require_workspace_navigation(value.get('workspaceNavigation'))
@@ -1151,7 +1153,9 @@ def main():
     if args.production_chooser:
         require_production_chooser(data, chooser_choice)
         for name in ('production-chooser-narrow', 'production-chooser-returned',
-                     'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow', *(f'production-inspection-comparison-{i}' for i in range(3))):
+                     'production-chooser-missing-narrow', 'production-chooser-missing-returned',
+                     'production-inspection-narrow',
+                     *(f'production-inspection-comparison-{i}' for i in range(4))):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production chooser capture missing: {name}')
     if args.production_failure:

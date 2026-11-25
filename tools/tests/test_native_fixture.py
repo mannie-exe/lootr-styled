@@ -151,12 +151,12 @@ class NativeFixtureTest(unittest.TestCase):
             self.assertFalse((self.fixture / name).exists(), name)
 
     def test_stopped_preparation_clears_owned_captures_but_keeps_other_files(self):
-        for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png',
+        for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png', 'production-inspection-comparison.png', 'production-inspection-comparison-3.png',
                      'lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json'):
             (self.fixture / name).write_bytes(b'Previous capture')
         (self.fixture / 'operator-reference.png').write_bytes(b'Keep reference')
         native_probe.prepare('neoforge-1_21_1', 'native')
-        for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png',
+        for name in ('reform-home.png', 'reform-navigation.png', 'shared-host-3.png', 'production-inspection-comparison.png', 'production-inspection-comparison-3.png',
                      'lootr-styled-entry-controls.json', 'lootr-styled-ui-observations.json'):
             self.assertFalse((self.fixture / name).exists(), name)
         self.assertEqual(b'Keep reference', (self.fixture / 'operator-reference.png').read_bytes())
@@ -348,7 +348,7 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
                      inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
                      inspectionComparisonCaptureDraws=5,
-                     inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-114-30*i)for i in range(3)],
+                     inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-84-30*i)for i in range(4)],
                      inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser())
         native_probe.require_production_chooser({'productionChooser': value})
@@ -386,7 +386,7 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
                      inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
                      inspectionComparisonCaptureDraws=5,
-                     inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-114-30*i)for i in range(3)],
+                     inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-84-30*i)for i in range(4)],
                      inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser(choice['query'],choice['id']))
         native_probe.require_production_chooser({'productionChooser': value}, choice)
