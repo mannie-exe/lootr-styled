@@ -16,7 +16,7 @@ Profiles uses that same source in its own shared task. Use for Models and Use fo
 
 Show preview reveals and focuses the existing viewport without preparing a new scene. Fit the viewport to its visible pane and narrate its identity and state. Keep preparation and camera actions separate from this navigation action. Explicitly discarding the settings owner must retire its task views; reopening must bind the new owner rather than reuse controls from the discarded draft.
 
-Document actions stays in the workspace and uses the same document, draft, and history. Defaults changes the retained draft; Undo restores the previous selections. Both leave the file unchanged until an explicit save. Returning from that view retains the actual editor. Save and reload resources and profile exports remain separate guarded operations.
+Document actions stays in the workspace and uses the same document, draft, and history. Defaults changes the retained draft; Undo and Redo move through complete document edits, including fields hidden by the current view. These actions leave the file unchanged until an explicit save. Reload saved reads the source; when the draft has unsaved edits, retain them for conflict review rather than replacing them silently. Resolve draft changes the draft, and saving remains separate. Returning from that view retains the actual editor. Save and reload resources and profile exports remain separate guarded operations.
 
 Review and operation results stay in the settings window. Navigation history restores an earlier view; a task’s return action names its parent, such as Back to settings. Neither should start another effect.
 
