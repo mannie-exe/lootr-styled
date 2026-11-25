@@ -31,6 +31,7 @@ CAPTURES = (
     'production-viewport-narrow', 'production-viewport-returned',
     'production-input-narrow', 'production-input-returned',
     'production-input-filtered', 'production-input-filtered-defaults',
+    'production-input-filtered-redo', 'production-input-filtered-reloaded',
     'production-chooser-narrow', 'production-chooser-returned',
     'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
@@ -562,7 +563,7 @@ def require_filtered_actions(data):
     value = data.get('productionInput', {}).get('filteredActions')
     if (not isinstance(value, dict) or value.get('query') != 'Vanilla'
             or any(value.get(k) is not True for k in ('hiddenModelAndArtworkControls',
-                'wholeDocumentDefaultsAndUndo', 'sameOwnerAndNoWrite', 'searchRemovedDefaultChoice'))):
+                'wholeDocumentDefaultsAndUndo', 'wholeDocumentRedoAndReloadSaved', 'sameOwnerAndNoWrite', 'searchRemovedDefaultChoice'))):
         raise RuntimeError('Filtered document actions lack actual hidden-field evidence')
     original = data['productionInput'].get('baselineWholeDraft')
     staged = dict(enabled='false', models='lootr_styled:vanilla', artwork='lootr_styled:vanilla', freshObjects='OFF')
@@ -570,7 +571,13 @@ def require_filtered_actions(data):
     if (value.get('stagedWholeDraft') != staged or value.get('undoneWholeDraft') != staged
             or value.get('defaultWholeDraft') != defaults
             or not isinstance(original, dict) or set(original) != set(defaults)
-            or value.get('restoredWholeDraft') != original):
+            or value.get('restoredWholeDraft') != original
+            or value.get('redoneWholeDraft') != defaults
+            or value.get('redoUndoneWholeDraft') != staged
+            or value.get('setupRedoneWholeDraft') != staged
+            or value.get('reloadedWholeDraft') != original
+            or type(value.get('reloadSavedAdditionalStoreReads')) is not int
+            or value['reloadSavedAdditionalStoreReads'] < 1):
         raise RuntimeError('Filtered document actions omitted or changed hidden draft values')
 
 
@@ -1074,7 +1081,8 @@ def main():
     if args.production_input:
         require_production_input(data)
         require_filtered_actions(data)
-        for name in ('production-input-narrow', 'production-input-returned', 'production-input-filtered', 'production-input-filtered-defaults'):
+        for name in ('production-input-narrow', 'production-input-returned', 'production-input-filtered', 'production-input-filtered-defaults',
+                     'production-input-filtered-redo', 'production-input-filtered-reloaded'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production input capture missing: {name}')
     if args.production_locale:

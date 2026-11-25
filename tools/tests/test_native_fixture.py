@@ -232,12 +232,18 @@ class NativeFixtureTest(unittest.TestCase):
         staged = dict(enabled='false',models='lootr_styled:vanilla',artwork='lootr_styled:vanilla',freshObjects='OFF')
         facts = dict(query='Vanilla',hiddenModelAndArtworkControls=True,wholeDocumentDefaultsAndUndo=True,
                      sameOwnerAndNoWrite=True,searchRemovedDefaultChoice=True,stagedWholeDraft=staged,undoneWholeDraft=staged,
-                     defaultWholeDraft=defaults,restoredWholeDraft=defaults)
+                     defaultWholeDraft=defaults,restoredWholeDraft=defaults,redoneWholeDraft=defaults,
+                     redoUndoneWholeDraft=staged,setupRedoneWholeDraft=staged,reloadedWholeDraft=defaults,
+                     wholeDocumentRedoAndReloadSaved=True,reloadSavedAdditionalStoreReads=1)
         value = dict(baselineWholeDraft=defaults,filteredActions=facts)
         native_probe.require_filtered_actions({'productionInput':value})
         for key,replacement in [('query',''),('hiddenModelAndArtworkControls',False),
                                 ('sameOwnerAndNoWrite',False),('undoneWholeDraft',defaults),
-                                ('defaultWholeDraft',staged),('restoredWholeDraft',staged)]:
+                                ('defaultWholeDraft',staged),('restoredWholeDraft',staged),
+                                ('redoneWholeDraft',staged),('redoUndoneWholeDraft',defaults),
+                                ('setupRedoneWholeDraft',defaults),('reloadedWholeDraft',staged),
+                                ('wholeDocumentRedoAndReloadSaved',False),
+                                ('reloadSavedAdditionalStoreReads',0),('reloadSavedAdditionalStoreReads',True)]:
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Filtered document actions'):
                 native_probe.require_filtered_actions({'productionInput':{**value,'filteredActions':{**facts,key:replacement}}})
 

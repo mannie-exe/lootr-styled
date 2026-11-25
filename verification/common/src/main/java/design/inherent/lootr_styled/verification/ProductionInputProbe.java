@@ -53,8 +53,18 @@ final class ProductionInputProbe {
     DEFAULT_CAPTURE,
     UNDO_MENU,
     UNDONE,
+    REDO_MENU,
+    REDONE,
+    REDO_CAPTURE,
+    REDO_UNDO_MENU,
+    REDO_UNDONE,
     RESTORE_MENU,
     RESTORED_ORIGINAL,
+    SETUP_REDO_MENU,
+    SETUP_REDONE,
+    RELOAD_MENU,
+    RELOADED,
+    RELOAD_CAPTURE,
     CLOSED
   }
 
@@ -82,6 +92,7 @@ final class ProductionInputProbe {
   private int ticks, captureTicks;
   private boolean captureRequested, captured;
   private long editStarted;
+  private long readsBeforeReload;
 
   ProductionInputProbe(Minecraft mc) throws Exception {
     parent = NativeUi.current();
@@ -313,6 +324,37 @@ final class ProductionInputProbe {
         if (!editor.view().canUndo())
           throw new IllegalStateException("Actual actor has no setup undo after Defaults undo");
         press("Document actions…");
+        next(Phase.REDO_MENU);
+      }
+      case REDO_MENU -> {
+        if (!UiProbe.hasButton(root, "Redo") || !UiProbe.button(root, "Redo").active) return null;
+        press("Redo");
+        next(Phase.REDONE);
+      }
+      case REDONE -> {
+        if (busy() || UiProbe.hasButton(root, "Redo") || !editor.canSubmit()) return null;
+        partial();
+        if (!candidate().equals(ClientSettings.DEFAULTS)) return null;
+        filteredActions.add("redoneWholeDraft", draft());
+        next(Phase.REDO_CAPTURE);
+      }
+      case REDO_CAPTURE -> {
+        if (!capture(mc, "production-input-filtered-redo")) return null;
+        partial();
+        press("Document actions…");
+        next(Phase.REDO_UNDO_MENU);
+      }
+      case REDO_UNDO_MENU -> {
+        if (!UiProbe.hasButton(root, "Undo") || !UiProbe.button(root, "Undo").active) return null;
+        press("Undo");
+        next(Phase.REDO_UNDONE);
+      }
+      case REDO_UNDONE -> {
+        if (busy() || UiProbe.hasButton(root, "Undo") || !editor.canSubmit()) return null;
+        partial();
+        if (!stagedActions.equals(draft())) return null;
+        filteredActions.add("redoUndoneWholeDraft", draft());
+        press("Document actions…");
         next(Phase.RESTORE_MENU);
       }
       case RESTORE_MENU -> {
@@ -326,6 +368,44 @@ final class ProductionInputProbe {
         if (!candidate().equals(original)) return null;
         filteredActions.add("restoredWholeDraft", draft());
         filteredActions.addProperty("wholeDocumentDefaultsAndUndo", true);
+        press("Document actions…");
+        next(Phase.SETUP_REDO_MENU);
+      }
+      case SETUP_REDO_MENU -> {
+        if (!UiProbe.hasButton(root, "Redo") || !UiProbe.button(root, "Redo").active) return null;
+        press("Redo");
+        next(Phase.SETUP_REDONE);
+      }
+      case SETUP_REDONE -> {
+        if (busy() || UiProbe.hasButton(root, "Redo") || !editor.canSubmit()) return null;
+        partial();
+        if (!stagedActions.equals(draft())) return null;
+        filteredActions.add("setupRedoneWholeDraft", draft());
+        readsBeforeReload = UiCostAudit.settingsReads();
+        press("Document actions…");
+        next(Phase.RELOAD_MENU);
+      }
+      case RELOAD_MENU -> {
+        if (!UiProbe.hasButton(root, "Reload saved")
+            || !UiProbe.button(root, "Reload saved").active) return null;
+        press("Reload saved");
+        next(Phase.RELOADED);
+      }
+      case RELOADED -> {
+        if (busy() || UiProbe.hasButton(root, "Reload saved") || !editor.canSubmit()) return null;
+        partial();
+        if (!candidate().equals(original)) return null;
+        long reads = UiCostAudit.settingsReads() - readsBeforeReload;
+        if (reads < 1)
+          throw new IllegalStateException("Reload saved did not read the actual store");
+        filteredActions.addProperty("reloadSavedAdditionalStoreReads", reads);
+        filteredActions.add("reloadedWholeDraft", draft());
+        filteredActions.addProperty("wholeDocumentRedoAndReloadSaved", true);
+        next(Phase.RELOAD_CAPTURE);
+      }
+      case RELOAD_CAPTURE -> {
+        if (!capture(mc, "production-input-filtered-reloaded")) return null;
+        partial();
         filteredActions.addProperty("sameOwnerAndNoWrite", true);
         result.add("filteredActions", filteredActions);
         if (!UiProbe.button(root, "Done").active) return null;
