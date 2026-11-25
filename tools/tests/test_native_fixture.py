@@ -473,6 +473,48 @@ class NativeFixtureTest(unittest.TestCase):
             with self.subTest(background=key),self.assertRaisesRegex(RuntimeError,'Unopened Home'):
                 native_probe.require_unopened_home(dict(nativeWidgets=dict(unopenedHome={**background,key:replacement})))
 
+    def test_unavailable_home_isolated_input_and_live_process_guard(self):
+        fixture, _, command = native_probe.prepare('neoforge-1_21_1', 'native', unavailable_home=True)
+        self.assertEqual(self.root / 'verification/neoforge-1_21_1/runs/native-unavailable', fixture)
+        self.assertIn('-PunavailableHome=true', command)
+        settings=fixture/'config/lootr_styled/settings.json'
+        self.assertEqual(b'{"format":', settings.read_bytes())
+        self.assertEqual(hashlib.sha256(settings.read_bytes()).hexdigest(),
+                         (fixture/'.lootr-styled-unavailable-home').read_text().strip())
+        self.assertEqual('Preserve running client input', self.settings.read_text())
+        (fixture/'.lootr-styled-probe-pid').write_text(str(os.getpid()))
+        settings.write_text('Preserve live unavailable fixture')
+        with self.assertRaisesRegex(ValueError,'may still be running'):
+            native_probe.prepare('neoforge-1_21_1', 'native', unavailable_home=True)
+        self.assertEqual('Preserve live unavailable fixture',settings.read_text())
+        for scope in ('scene','graphics_only','preview_host','production_close','production_failure'):
+            with self.subTest(scope=scope),self.assertRaisesRegex(ValueError,'Choose one check'):
+                native_probe.prepare('neoforge-1_21_1','native',unavailable_home=True,**{scope:True})
+        with self.assertRaisesRegex(ValueError,'requires native mode'):
+            native_probe.prepare('neoforge-1_21_1','fresh',unavailable_home=True)
+
+    def test_unavailable_home_requires_actual_failure_and_retained_source(self):
+        paint=dict(phase='unopened-home',samples=8,otherResourceContentLookupsInCallback=0,
+                   providerEntriesInCallback=0,resourceContentLookupsInCallback=0,
+                   nativeMenuBackgroundLookupsInCallback=0,resourceLookupStacks=[])
+        value=dict(initialLifecycle='UNAVAILABLE',finalLifecycle='UNAVAILABLE',startupSettingsReads=1,
+                   initialIssueCodes=['settings.format'],settingsReadsDuringHome=0,catalogueDiscoveriesDuringHome=0,
+                   providerEntriesDuringHome=0,openedDocuments=0,availableDocuments=0,
+                   sameInvalidFileAndIdentity=True,closedCleanly=True,cachedUnavailableReason='Settings unavailable',
+                   nativeButtons=['Settings','Profiles','Done'],paint=paint)
+        native_probe.require_unavailable_home(dict(unavailableHome=value))
+        for key,replacement in [('initialLifecycle','READY'),('finalLifecycle','READY'),
+                                ('startupSettingsReads',0),('initialIssueCodes',[]),('settingsReadsDuringHome',1),
+                                ('catalogueDiscoveriesDuringHome',1),('providerEntriesDuringHome',1),
+                                ('openedDocuments',1),('availableDocuments',1),('sameInvalidFileAndIdentity',False),
+                                ('closedCleanly',False),('cachedUnavailableReason',''),('nativeButtons',['Done'])]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Unavailable Home'):
+                native_probe.require_unavailable_home(dict(unavailableHome={**value,key:replacement}))
+        for key,replacement in [('samples',0),('otherResourceContentLookupsInCallback',1),
+                                ('providerEntriesInCallback',1),('resourceContentLookupsInCallback',1)]:
+            with self.subTest(paint=key),self.assertRaisesRegex(RuntimeError,'Unavailable Home'):
+                native_probe.require_unavailable_home(dict(unavailableHome={**value,'paint':{**paint,key:replacement}}))
+
     def test_fresh_captions_require_native_cycle_and_canonical_review(self):
         modes = ['AUTO', 'ON', 'OFF', 'AUTO']
         labels = dict(AUTO='Auto', ON='On', OFF='Off')

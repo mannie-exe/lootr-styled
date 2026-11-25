@@ -35,7 +35,7 @@ CAPTURES = (
     'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'production-locale-changed', 'production-locale-restored',
-    'reform-review',
+    'reform-review', 'unavailable-home',
     'reform-home', 'reform-initial-appearance', 'reform-navigation', 'reform-unmounted',
     'reform-profile-browser', 'reform-appearance', 'reform-document-actions', 'reform-manual-id',
     'reform-production-preview-idle', 'reform-production-preview-drawn',
@@ -72,9 +72,11 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False, production_locale=False, production_preparation=False, production_failure=False):
-    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation, production_locale, production_preparation, production_failure)) > 1:
-        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, --production-locale, --production-preparation, --production-failure, or --scene')
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False, production_locale=False, production_preparation=False, production_failure=False, unavailable_home=False):
+    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation, production_locale, production_preparation, production_failure, unavailable_home)) > 1:
+        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, --production-locale, --production-preparation, --production-failure, --unavailable-home, or --scene')
+    if unavailable_home and (mode != 'native' or local_profile):
+        raise ValueError('--unavailable-home requires native mode without a local profile')
     if production_failure and not local_profile:
         raise ValueError('--production-failure requires a local tint profile')
     if expected_private_sprites is not None and (local_profile is None or not 0 <= expected_private_sprites <= 128):
@@ -86,7 +88,7 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     product = ROOT / f'build/distributions/lootr-styled-{game}-{loader}-{version}.jar'
     if not product.is_file():
         raise ValueError('Build the four product distributions first')
-    fixture = ROOT / f'verification/{target}/runs/{mode}{"-profile" if local_profile else ""}{"-scene" if scene else ""}'
+    fixture = ROOT / f'verification/{target}/runs/{mode}{"-profile" if local_profile else ""}{"-scene" if scene else ""}{"-unavailable" if unavailable_home else ""}'
     require_stopped(fixture)
     if fixture.is_symlink() or any(parent.is_symlink() for parent in fixture.parents if parent != ROOT.parent):
         raise ValueError('Fixture paths must not contain symbolic links')
@@ -124,6 +126,12 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     configuration.mkdir(parents=True, exist_ok=True)
     selected = 'lootr_styled_local:fixture' if local_profile and not (production_chooser or production_failure) else None
     (configuration / 'settings.json').write_text(json.dumps({'format': 1, 'enabled': True, 'models': selected or 'lootr_styled:default', 'artwork': selected or 'lootr_styled:default', 'freshObjects': 'OFF' if mode == 'off' else 'AUTO'}, indent=2) + '\n')
+    unavailable_marker = fixture / '.lootr-styled-unavailable-home'
+    if unavailable_home:
+        (configuration / 'settings.json').write_bytes(b'{"format":')
+        unavailable_marker.write_text(digest(configuration / 'settings.json') + '\n')
+    else:
+        unavailable_marker.unlink(missing_ok=True)
     if local_profile:
         destination = configuration / 'fixture'
         if destination.exists():
@@ -235,6 +243,8 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     command = [str(ROOT / 'gradlew'), '--no-daemon', '-p', str(ROOT / 'verification'), f':{target}:runClient', f'-PprobeTarget={target}', f'-PstyledVersion={version}', f'-PstyledSha256={digest(product)}', f'-PprobeMode={mode}']
     if 'repository' in library:
         command.append(f'-Preform_repository={library["repository"]}')
+    if unavailable_home:
+        command.append('-PunavailableHome=true')
     if scene:
         command.append('-Pscene=true')
     if local_profile:
@@ -282,6 +292,10 @@ def require_unopened_home(data):
             or any(type(value.get(k)) is not int or value[k] != 0 for k in zero_counts)
             or value.get('sameFileAndResourceGeneration') is not True):
         raise RuntimeError('Unopened Home lacks actual idle-domain and unchanged-source evidence')
+    _require_native_background(value, 'Unopened Home')
+
+
+def _require_native_background(value, label):
     background = value.get('nativeMenuBackgroundLookupsInCallback')
     content = value.get('resourceContentLookupsInCallback')
     stacks = value.get('resourceLookupStacks')
@@ -292,7 +306,32 @@ def require_unopened_home(data):
                 and any('net.minecraft.client.gui.screens.Screen.renderMenuBackgroundTexture(' in str(frame) for frame in stack)
                 and any('net.minecraft.client.renderer.texture.SimpleTexture.load(' in str(frame) for frame in stack)
                 for stack in stacks))):
-        raise RuntimeError('Unopened Home lacks bounded native-background lookup attribution')
+        raise RuntimeError(label + ' lacks bounded native-background lookup attribution')
+
+
+def require_unavailable_home(data):
+    value = data.get('unavailableHome')
+    zeros = ('settingsReadsDuringHome', 'catalogueDiscoveriesDuringHome',
+             'providerEntriesDuringHome', 'openedDocuments', 'availableDocuments')
+    if (not isinstance(value, dict) or value.get('initialLifecycle') != 'UNAVAILABLE'
+            or value.get('finalLifecycle') != 'UNAVAILABLE'
+            or type(value.get('startupSettingsReads')) is not int or value['startupSettingsReads'] < 1
+            or not isinstance(value.get('initialIssueCodes'), list) or not value['initialIssueCodes']
+            or any(not isinstance(code, str) or not code for code in value['initialIssueCodes'])
+            or any(type(value.get(k)) is not int or value[k] != 0 for k in zeros)
+            or value.get('sameInvalidFileAndIdentity') is not True
+            or value.get('closedCleanly') is not True
+            or not isinstance(value.get('cachedUnavailableReason'), str) or not value['cachedUnavailableReason']
+            or not isinstance(value.get('nativeButtons'), list)
+            or not {'Settings', 'Profiles', 'Done'}.issubset(value['nativeButtons'])):
+        raise RuntimeError('Unavailable Home lacks real source, destination, and no-work evidence')
+    paint = value.get('paint')
+    if (not isinstance(paint, dict) or paint.get('phase') != 'unopened-home'
+            or type(paint.get('samples')) is not int or not 8 <= paint['samples'] <= 256
+            or paint.get('otherResourceContentLookupsInCallback') != 0
+            or paint.get('providerEntriesInCallback') != 0):
+        raise RuntimeError('Unavailable Home lacks actual idle paint evidence')
+    _require_native_background(paint, 'Unavailable Home')
 
 
 def require_fresh_captions(data):
@@ -944,6 +983,7 @@ def main():
     parser.add_argument('--mode', choices=('native', 'fresh', 'off'), default='native')
     parser.add_argument('--fetch', action='store_true', help='Fetch missing pinned verification inputs, never product runtime content')
     parser.add_argument('--run', action='store_true', help='Launch a GUI after external desktop coordination')
+    parser.add_argument('--unavailable-home', action='store_true', help='Check real Home with an invalid startup settings file, without repair or implicit reload')
     parser.add_argument('--preview-host', action='store_true', help='Qualify the actual retained provider/worker host with a test-mounted shared widget')
     parser.add_argument('--production-shutdown', action='store_true', help='Check preview discard, recovery, and normal shutdown after settings checks')
     parser.add_argument('--production-document', action='store_true', help='Check real source conflicts, native imported value JSON, Stage and Undo')
@@ -963,7 +1003,7 @@ def main():
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale, args.production_preparation, args.production_failure)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale, args.production_preparation, args.production_failure, args.unavailable_home)
     chooser_choice = None
     if args.production_chooser and args.local_profile:
         title = json.loads((args.local_profile / 'profile.json').read_text())['title']
@@ -996,6 +1036,7 @@ def main():
     data = json.loads(report.read_text()) if report.is_file() else None
     if (result != 0 or data is None or data.get('passed') is not True
             or data.get('artifactSha256') != digest(product)
+            or ('unavailableHome' in data) != args.unavailable_home
             or ('isolatedGraphic' in data) != args.graphics_only
             or ('sharedGraphicHost' in data) != args.preview_host
             or ('productionViewport' in data) != args.production_viewport
@@ -1014,6 +1055,10 @@ def main():
         require_header_offers(data)
         require_unopened_home(data)
         require_fresh_captions(data)
+    if args.unavailable_home:
+        require_unavailable_home(data)
+        if not (fixture / 'unavailable-home.png').is_file():
+            raise RuntimeError('Unavailable Home capture missing')
     if args.preview_host or args.production_shutdown:
         require_renderer_shutdown(data, fixture, product, args.target)
     if args.production_shutdown and data['rendererShutdown'].get('productionTask') is not True:
@@ -1066,7 +1111,7 @@ def main():
         require_preview_cleanup_modes(data)
         require_preview_review(data)
         require_preview_selection_states(data, fixture)
-    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'production-failure' if args.production_failure else 'production-preparation' if args.production_preparation else 'production-locale' if args.production_locale else 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data['snapshots']), 'report': str(report.relative_to(ROOT))}))
+    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'unavailable-home' if args.unavailable_home else 'production-failure' if args.production_failure else 'production-preparation' if args.production_preparation else 'production-locale' if args.production_locale else 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data.get('snapshots', [])), 'report': str(report.relative_to(ROOT))}))
 
 
 if __name__ == '__main__':

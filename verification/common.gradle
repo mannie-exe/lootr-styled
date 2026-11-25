@@ -12,7 +12,7 @@ ext.styledRoot = rootProject.file('..')
 ext.modern = modern
 ext.loaderKind = loaderKind
 ext.fixtureMode = fixtureMode
-ext.fixtureDirectory = fixtureMode + (providers.gradleProperty('profileProbe').getOrElse('false') == 'true' ? '-profile' : '') + (providers.gradleProperty('scene').getOrElse('false') == 'true' ? '-scene' : '')
+ext.fixtureDirectory = fixtureMode + (providers.gradleProperty('profileProbe').getOrElse('false') == 'true' ? '-profile' : '') + (providers.gradleProperty('scene').getOrElse('false') == 'true' ? '-scene' : '') + (providers.gradleProperty('unavailableHome').getOrElse('false') == 'true' ? '-unavailable' : '')
 ext.productJar = rootProject.file("../build/distributions/lootr-styled-${game}-${loaderKind}-${productVersion}.jar")
 java { toolchain.languageVersion = JavaLanguageVersion.of(modern ? 25 : 21) }
 tasks.withType(JavaCompile).configureEach {

@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
  */
 public final class NativeProbe {
   private static UiProbe ui;
+  private static UnavailableHomeProbe unavailableHome;
   private static IsolatedGraphicProbe graphics;
   private static SharedGraphicHostProbe sharedHost;
   private static RendererShutdownProbe rendererShutdown;
@@ -82,6 +83,35 @@ public final class NativeProbe {
       }
       if (stage < 2 && !NativeBindings.ready(mc)) return;
       if (stage == 0
+          && Files.isRegularFile(
+              mc.gameDirectory.toPath().resolve(".lootr-styled-unavailable-home"))) {
+        var lifecycle =
+            design.inherent.lootr_styled.client.StylePreferences.settings().status().lifecycle();
+        if (lifecycle
+                == design.inherent.reform.minecraft.client.ClientFileSettings.Lifecycle.REGISTERED
+            || lifecycle
+                == design.inherent.reform.minecraft.client.ClientFileSettings.Lifecycle
+                    .INITIALIZING) return;
+        if (!Files.readString(mc.gameDirectory.toPath().resolve("lootr-styled-probe-mode.txt"))
+            .strip()
+            .equals("native"))
+          throw new IllegalStateException(
+              "Unavailable Home requires its isolated native-only fixture");
+        recordRuntime(mc, "native");
+        unavailableHome = new UnavailableHomeProbe(mc);
+        stage = 31;
+        return;
+      }
+      if (stage == 31) {
+        var observed = unavailableHome.tick(mc);
+        if (observed != null) {
+          REPORT.add("unavailableHome", observed);
+          REPORT.addProperty("passed", true);
+          finish(mc, null);
+        }
+        return;
+      }
+      if (stage == 0
           && design.inherent.lootr_styled.client.StylePreferences.resourceStatus().state()
               != design.inherent.lootr_styled.client.StyleApplication.State.APPLIED) return;
       Path modeFile = mc.gameDirectory.toPath().resolve("lootr-styled-probe-mode.txt");
@@ -92,37 +122,7 @@ public final class NativeProbe {
         throw new IllegalStateException("Unknown fixture mode");
       if (stage == 0) {
         REPORT.add("publishedProfiles", PreviewProbeAccess.publishedProfiles());
-        String client =
-            ClientRuntime.class.getProtectionDomain().getCodeSource().getLocation().toString();
-        String core =
-            ResourceId.class.getProtectionDomain().getCodeSource().getLocation().toString();
-        if (!client.equals(core) || !client.contains(".jar"))
-          throw new IllegalStateException(
-              "Product/core must come from the same packaged JAR, not source outputs");
-        REPORT.addProperty("productCodeSource", client);
-        String library =
-            design.inherent.reform.minecraft.client.ClientFileSettings.class
-                .getProtectionDomain()
-                .getCodeSource()
-                .getLocation()
-                .toString();
-        if (!library.contains(".jar"))
-          throw new IllegalStateException("re:form must be an independent packaged input");
-        REPORT.addProperty("libraryCodeSource", library);
-        REPORT.addProperty(
-            "libraryInputSha256",
-            Files.readString(
-                    mc.gameDirectory.toPath().resolve(".lootr-styled-expected-reform-sha256"))
-                .strip());
-        REPORT.addProperty(
-            "artifactSha256",
-            Files.readString(mc.gameDirectory.toPath().resolve(".lootr-styled-expected-sha256"))
-                .strip());
-        REPORT.addProperty("mode", mode);
-        REPORT.addProperty("java", Runtime.version().feature());
-        REPORT.add(
-            "runtimeArtifacts",
-            RuntimeArtifacts.capture(mc.gameDirectory.toPath(), NativeRuntimeArtifacts.roots()));
+        recordRuntime(mc, mode);
         snapshots.add(NativeBindings.capture(mc, mode));
         stage = 1;
         mc.reloadResourcePacks()
@@ -363,11 +363,44 @@ public final class NativeProbe {
           "Actual Iris shader state differs from the fixture expectation");
   }
 
+  private static void recordRuntime(Minecraft mc, String mode) throws Exception {
+    String client =
+        ClientRuntime.class.getProtectionDomain().getCodeSource().getLocation().toString();
+    String core = ResourceId.class.getProtectionDomain().getCodeSource().getLocation().toString();
+    if (!client.equals(core) || !client.contains(".jar"))
+      throw new IllegalStateException(
+          "Product/core must come from the same packaged JAR, not source outputs");
+    REPORT.addProperty("productCodeSource", client);
+    String library =
+        design.inherent.reform.minecraft.client.ClientFileSettings.class
+            .getProtectionDomain()
+            .getCodeSource()
+            .getLocation()
+            .toString();
+    if (!library.contains(".jar"))
+      throw new IllegalStateException("re:form must be an independent packaged input");
+    REPORT.addProperty("libraryCodeSource", library);
+    REPORT.addProperty(
+        "libraryInputSha256",
+        Files.readString(mc.gameDirectory.toPath().resolve(".lootr-styled-expected-reform-sha256"))
+            .strip());
+    REPORT.addProperty(
+        "artifactSha256",
+        Files.readString(mc.gameDirectory.toPath().resolve(".lootr-styled-expected-sha256"))
+            .strip());
+    REPORT.addProperty("mode", mode);
+    REPORT.addProperty("java", Runtime.version().feature());
+    REPORT.add(
+        "runtimeArtifacts",
+        RuntimeArtifacts.capture(mc.gameDirectory.toPath(), NativeRuntimeArtifacts.roots()));
+  }
+
   private static synchronized void finish(Minecraft mc, Throwable error) {
     if (terminal) return;
     terminal = true;
     try {
       if (error != null) {
+        if (unavailableHome != null) REPORT.add("unavailableHome", unavailableHome.observations());
         if (productionLocale != null)
           REPORT.add("productionLocale", productionLocale.observations(mc));
         if (productionOperation != null)

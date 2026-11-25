@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /** Bounded verification-only elapsed callback measurements, never a GPU/frame-time profiler. */
 public final class UiCostAudit {
   private static final AtomicLong PREPARATIONS = new AtomicLong();
+  private static final AtomicLong SETTINGS_READS = new AtomicLong();
   private static final AtomicLong DISCOVERIES = new AtomicLong();
   private static final long[] SAMPLES = new long[256];
   private static Object owner;
@@ -22,6 +23,14 @@ public final class UiCostAudit {
 
   static long preparations() {
     return PREPARATIONS.get();
+  }
+
+  static long settingsReads() {
+    return SETTINGS_READS.get();
+  }
+
+  public static void settingsRead() {
+    SETTINGS_READS.incrementAndGet();
   }
 
   static long discoveries() {
