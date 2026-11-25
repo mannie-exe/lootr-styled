@@ -375,6 +375,17 @@ final class ProductionChooserProbe {
         comparison.addProperty("field", "enabled");
         comparison.addProperty("baseline", entry.baseline());
         comparison.addProperty("draft", entry.draft());
+        var baselineCaption = entry.choiceValues().baseline().orElseThrow();
+        var draftCaption = entry.choiceValues().draft().orElseThrow();
+        if (!baselineCaption.value().equals("true")
+            || !draftCaption.value().equals("true")
+            || !baselineCaption.fallback().equals("On")
+            || !draftCaption.fallback().equals("On"))
+          throw new IllegalStateException("Boolean captions differ from the retained raw values");
+        comparison.addProperty("baselineCaption", baselineCaption.fallback());
+        comparison.addProperty("draftCaption", draftCaption.fallback());
+        comparison.addProperty("baselineCanonical", baselineCaption.value());
+        comparison.addProperty("draftCanonical", draftCaption.value());
         comparison.addProperty("effectiveAvailable", entry.effective().isPresent());
         entry.effective().ifPresent(value -> comparison.addProperty("effective", value));
         result.add("inspectionComparison", comparison);
@@ -754,7 +765,7 @@ final class ProductionChooserProbe {
         || !UiProbe.focusedPath(browser, key)
         || UiProbe.button(browser, "Use selection").active
         || !UiProbe.hasButton(browser, "Hide source details")
-        || !narration.contains("unknown reference")
+        || !narration.contains("Unknown reference")
         || !narration.contains(MISSING_REASON))
       throw new IllegalStateException(
           "Unresolved manual ID lost state or admission guard: "

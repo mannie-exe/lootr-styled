@@ -349,7 +349,7 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
                      inspectionComparisonCaptureDraws=5,
                      inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-84-30*i)for i in range(4)],
-                     inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',effectiveAvailable=False),
+                     inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',baselineCaption='On',draftCaption='On',baselineCanonical='true',draftCanonical='true',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser())
         native_probe.require_production_chooser({'productionChooser': value})
         for bad in [[], [None]*3, [states[0],{**states[1],'queryFocus':False},states[2]],
@@ -359,6 +359,12 @@ class NativeFixtureTest(unittest.TestCase):
                 native_probe.require_production_chooser({'productionChooser': {**value,'states':bad}})
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser': {**value,'inspectionDoesNotStage':False}})
+        for key,replacement in [('baselineCaption','Off'),('draftCaption','true'),
+                                ('baselineCanonical','false'),('draftCanonical','On')]:
+            wrong = copy.deepcopy(value)
+            wrong['inspectionComparison'][key] = replacement
+            with self.subTest(caption=key),self.assertRaisesRegex(RuntimeError,'inspection'):
+                native_probe.require_production_chooser({'productionChooser':wrong})
         for key,replacement in [('inspectionSameCaptureAcrossWindowReflow',False),
                                 ('inspectionNativeFieldCycle',['Enabled','Models','Artwork','Fresh Objects','Enabled']),
                                 ('inspectionNativeScrollAccepted',False),('inspectionFieldYAfterScroll',107),
@@ -387,7 +393,7 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
                      inspectionComparisonCaptureDraws=5,
                      inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-84-30*i)for i in range(4)],
-                     inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',effectiveAvailable=False),
+                     inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',baselineCaption='On',draftCaption='On',baselineCanonical='true',draftCanonical='true',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser(choice['query'],choice['id']))
         native_probe.require_production_chooser({'productionChooser': value}, choice)
         for key, replacement in [('inspectedTitle', title[:-1]), ('inspectedId','lootr_styled:default'),
@@ -405,7 +411,7 @@ class NativeFixtureTest(unittest.TestCase):
                         queryFocus=False, inspected='missing:preview_fixture',
                         manualCaret=3,manualSelection='is',manualFocus=True,useSelectionActive=False,
                         sourceDetailsOpen=True,models=baseline,artwork=baseline,
-                        narration='unknown reference\nReference is not present in this complete index')
+                        narration='Unknown reference\nReference is not present in this complete index')
         return [state('missing','854x480'),state('narrow','320x240'),state('returned','854x480')]
 
     def test_unresolved_chooser_refuses_lost_input_and_false_admission(self):
@@ -415,7 +421,9 @@ class NativeFixtureTest(unittest.TestCase):
         native_probe.require_unresolved_chooser(value,choice)
         for key,replacement in [('query',''),('inspected','lootr_styled:default'),('manualFocus',False),
                                 ('manualCaret',0),('manualSelection',''),('useSelectionActive',True),
-                                ('sourceDetailsOpen',False),('narration','Resolved'),('models','missing:preview_fixture')]:
+                                ('sourceDetailsOpen',False),('narration','Resolved'),
+                                ('narration','unknown reference\nReference is not present in this complete index'),
+                                ('models','missing:preview_fixture')]:
             bad=copy.deepcopy(value);bad['unresolvedStates'][1][key]=replacement
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'unresolved manual input'):
                 native_probe.require_unresolved_chooser(bad,choice)

@@ -508,6 +508,10 @@ def require_production_chooser(data, expected_choice=None):
             or value.get('inspectionComparison', {}).get('field') != 'enabled'
             or value['inspectionComparison'].get('baseline') != '"true"'
             or value['inspectionComparison'].get('draft') != '"true"'
+            or value['inspectionComparison'].get('baselineCaption') != 'On'
+            or value['inspectionComparison'].get('draftCaption') != 'On'
+            or value['inspectionComparison'].get('baselineCanonical') != 'true'
+            or value['inspectionComparison'].get('draftCanonical') != 'true'
             or type(value['inspectionComparison'].get('effectiveAvailable')) is not bool):
         raise RuntimeError('Production chooser lacks actual inspection scroll/draw comparison evidence')
     frames = value.get('inspectionScrollFrames')
@@ -535,7 +539,7 @@ def require_unresolved_chooser(value, choice):
                    or s.get('useSelectionActive') is not False or s.get('sourceDetailsOpen') is not True
                    or s.get('models') != value['baselineModels']
                    or s.get('artwork') != value['baselineArtwork']
-                   or 'unknown reference' not in s.get('narration', '')
+                   or 'Unknown reference' not in s.get('narration', '')
                    or 'Reference is not present in this complete index' not in s.get('narration', '')
                    for s in states)
             or states[1].get('window') != '320x240'
