@@ -33,7 +33,7 @@ CAPTURES = (
     'production-input-filtered', 'production-input-filtered-defaults',
     'production-input-filtered-redo', 'production-input-filtered-reloaded',
     'production-chooser-narrow', 'production-chooser-returned',
-    'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow',
+    'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow', 'production-inspection-comparison',
     'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'production-locale-changed', 'production-locale-restored',
@@ -497,6 +497,17 @@ def require_production_chooser(data, expected_choice=None):
     if (value.get('inspectionSameCaptureAcrossWindowReflow') is not True
             or value.get('inspectionNativeFieldCycle') != ['Enabled', 'Fresh Objects', 'Models', 'Artwork', 'Enabled']):
         raise RuntimeError('Production chooser lost native focused inspection order or retained capture')
+    if (value.get('inspectionNativeScrollAccepted') is not True
+            or type(value.get('inspectionFieldYBeforeScroll')) is not int
+            or type(value.get('inspectionFieldYAfterScroll')) is not int
+            or value['inspectionFieldYAfterScroll'] >= value['inspectionFieldYBeforeScroll']
+            or type(value.get('inspectionComparisonCaptureDraws')) is not int
+            or value['inspectionComparisonCaptureDraws'] < 4
+            or value.get('inspectionComparison', {}).get('field') != 'enabled'
+            or value['inspectionComparison'].get('baseline') != 'true'
+            or value['inspectionComparison'].get('draft') != 'true'
+            or type(value['inspectionComparison'].get('effectiveAvailable')) is not bool):
+        raise RuntimeError('Production chooser lacks actual inspection scroll/draw comparison evidence')
     require_unresolved_chooser(value, choice)
     require_workspace_navigation(value.get('workspaceNavigation'))
     require_single_location_narration(value.get('workspaceNavigation'))
@@ -1133,7 +1144,7 @@ def main():
     if args.production_chooser:
         require_production_chooser(data, chooser_choice)
         for name in ('production-chooser-narrow', 'production-chooser-returned',
-                     'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow'):
+                     'production-chooser-missing-narrow', 'production-chooser-missing-returned', 'production-inspection-narrow', 'production-inspection-comparison'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production chooser capture missing: {name}')
     if args.production_failure:

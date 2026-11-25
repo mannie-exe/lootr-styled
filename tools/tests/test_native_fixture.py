@@ -346,6 +346,9 @@ class NativeFixtureTest(unittest.TestCase):
                      unresolvedManualIdSurvivesWindowReflow=True,
                      inspectionSameCaptureAcrossWindowReflow=True,
                      inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
+                     inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
+                     inspectionComparisonCaptureDraws=5,
+                     inspectionComparison=dict(field='enabled',baseline='true',draft='true',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser())
         native_probe.require_production_chooser({'productionChooser': value})
         for bad in [[], [None]*3, [states[0],{**states[1],'queryFocus':False},states[2]],
@@ -356,8 +359,10 @@ class NativeFixtureTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser': {**value,'inspectionDoesNotStage':False}})
         for key,replacement in [('inspectionSameCaptureAcrossWindowReflow',False),
-                                ('inspectionNativeFieldCycle',['Enabled','Models','Artwork','Fresh Objects','Enabled'])]:
-            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'focused inspection'):
+                                ('inspectionNativeFieldCycle',['Enabled','Models','Artwork','Fresh Objects','Enabled']),
+                                ('inspectionNativeScrollAccepted',False),('inspectionFieldYAfterScroll',107),
+                                ('inspectionComparisonCaptureDraws',3)]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'inspection'):
                 native_probe.require_production_chooser({'productionChooser':{**value,key:replacement}})
 
     def test_production_chooser_matches_authored_long_title_and_narration(self):
@@ -377,6 +382,9 @@ class NativeFixtureTest(unittest.TestCase):
                              state('returned','854x480')], unresolvedManualIdSurvivesWindowReflow=True,
                      inspectionSameCaptureAcrossWindowReflow=True,
                      inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
+                     inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
+                     inspectionComparisonCaptureDraws=5,
+                     inspectionComparison=dict(field='enabled',baseline='true',draft='true',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser(choice['query'],choice['id']))
         native_probe.require_production_chooser({'productionChooser': value}, choice)
         for key, replacement in [('inspectedTitle', title[:-1]), ('inspectedId','lootr_styled:default'),

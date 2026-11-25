@@ -50,6 +50,8 @@ final class ProductionChooserProbe {
     REVIEW_NARROW,
     REVIEW_CYCLE,
     REVIEW_IMAGE,
+    REVIEW_SCROLL,
+    REVIEW_COMPARISON_IMAGE,
     REVIEW_RETURNED,
     REVIEW_BACK,
     NAV_ORIGIN,
@@ -108,6 +110,8 @@ final class ProductionChooserProbe {
   private final JsonArray ancestorVisits = new JsonArray();
   private int ancestorIndex;
   private int inspectionWidth, inspectionHeight, inspectionStep;
+  private int inspectionFieldY;
+  private long inspectionScrollDraws;
   private design.inherent.reform.operation.DocumentReview inspectionCapture;
   private final JsonArray inspectionCycle = new JsonArray();
   private Screen ancestorMenu;
@@ -339,6 +343,47 @@ final class ProductionChooserProbe {
       case REVIEW_IMAGE -> {
         if (!capture(mc, "production-inspection-narrow")) return null;
         assertInspection();
+        inspectionFieldY = inspectionCycleControl().getY();
+        if (!root.mouseScrolled(root.width * 0.72, root.height * 0.5, 0, -6))
+          throw new IllegalStateException("Native inspection viewport refused the wheel event");
+        inspectionScrollDraws = FrameAudit.rootSequence(root);
+        next(Phase.REVIEW_SCROLL);
+      }
+      case REVIEW_SCROLL -> {
+        assertInspection();
+        long draws = FrameAudit.rootSequence(root);
+        if (draws < 0) return null;
+        if (inspectionScrollDraws < 0) {
+          inspectionScrollDraws = draws;
+          return null;
+        }
+        if (draws < inspectionScrollDraws + 4) return null;
+        int after = inspectionCycleControl().getY();
+        if (after >= inspectionFieldY)
+          throw new IllegalStateException("Accepted wheel event did not move inspection content");
+        result.addProperty("inspectionNativeScrollAccepted", true);
+        result.addProperty("inspectionFieldYBeforeScroll", inspectionFieldY);
+        result.addProperty("inspectionFieldYAfterScroll", after);
+        var entry =
+            inspectionCapture.entries().stream()
+                .filter(value -> value.path().equals(FIELD_PATHS.getFirst()))
+                .findFirst()
+                .orElseThrow();
+        var comparison = new JsonObject();
+        comparison.addProperty("field", "enabled");
+        comparison.addProperty("baseline", entry.baseline());
+        comparison.addProperty("draft", entry.draft());
+        comparison.addProperty("effectiveAvailable", entry.effective().isPresent());
+        entry.effective().ifPresent(value -> comparison.addProperty("effective", value));
+        result.add("inspectionComparison", comparison);
+        next(Phase.REVIEW_COMPARISON_IMAGE);
+      }
+      case REVIEW_COMPARISON_IMAGE -> {
+        if (!capture(mc, "production-inspection-comparison")) return null;
+        assertInspection();
+        result.addProperty(
+            "inspectionComparisonCaptureDraws",
+            FrameAudit.rootSequence(root) - inspectionScrollDraws);
         NativeBindings.resizeWindow(mc, window[0], window[1]);
         next(Phase.REVIEW_RETURNED);
       }
