@@ -18,10 +18,13 @@ import design.inherent.reform.minecraft.client.NavigationBookmark;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -45,6 +48,10 @@ final class ProductionChooserProbe {
     NAV_RESTORED,
     NAV_NARROW,
     NAV_DRAWER,
+    ANCESTOR_MENU,
+    ANCESTOR_SELECTED,
+    ANCESTOR_RESTORED,
+    ANCESTOR_DRAWER,
     NAV_RETURNED,
     NAV_BASELINE,
     CLOSED
@@ -73,6 +80,14 @@ final class ProductionChooserProbe {
   private int upSteps, rootWidth, rootHeight;
   private final JsonArray upTargets = new JsonArray();
   private final JsonObject navigationResult = new JsonObject();
+  private static final List<String> ANCESTORS =
+      List.of("Home", "Settings", "Appearance", "Profile selection");
+  private final List<ClientDestination> upDestinations = new ArrayList<>();
+  private final JsonArray ancestorVisits = new JsonArray();
+  private int ancestorIndex;
+  private Screen ancestorMenu;
+  private String locationNarration;
+  private JsonObject ancestorVisit;
   private Phase phase = Phase.OPEN;
 
   ProductionChooserProbe(Minecraft mc) throws Exception {
@@ -256,6 +271,7 @@ final class ProductionChooserProbe {
         visited.addProperty("target", navigationAttempt.target().toString());
         visited.addProperty("outcome", navigationAttempt.result().orElseThrow().outcome().name());
         upTargets.add(visited);
+        upDestinations.add(navigationAttempt.target());
         if (++upSteps > 8) throw new IllegalStateException("Actual hierarchy did not reach Home");
         if (workflow.navigation().current().orElseThrow() instanceof ClientDestination.Home) {
           if (workflow.navigation().up().isPresent())
@@ -301,8 +317,81 @@ final class ProductionChooserProbe {
         assertNavigation();
         navigationResult.addProperty("queryExplicitlyRefocusedInDrawer", true);
         navigationResult.addProperty("narrowGui", root.width + "x" + root.height);
-        NativeBindings.resizeWindow(mc, window[0], window[1]);
-        next(Phase.NAV_RETURNED);
+        if (upDestinations.size() != ANCESTORS.size())
+          throw new IllegalStateException("Declared ancestor hierarchy changed: " + upTargets);
+        openLocationMenu();
+      }
+      case ANCESTOR_MENU -> {
+        ancestorMenu = NativeUi.current();
+        if (ancestorMenu == null
+            || ancestorMenu == root
+            || !ancestorMenu.getTitle().getString().equals("Location")) return null;
+        var expectedOrder = new ArrayList<>(ANCESTORS);
+        expectedOrder.add("Models");
+        var observedOrder =
+            UiProbe.children(ancestorMenu).stream()
+                .filter(Button.class::isInstance)
+                .map(Button.class::cast)
+                .filter(button -> expectedOrder.contains(button.getMessage().getString()))
+                .sorted(
+                    java.util.Comparator.comparingInt(Button::getY).thenComparingInt(Button::getX))
+                .map(button -> button.getMessage().getString())
+                .toList();
+        if (!observedOrder.equals(expectedOrder))
+          throw new IllegalStateException(
+              "Native ancestor menu lost declared order: " + observedOrder);
+        var name = ANCESTORS.get(ancestorIndex);
+        var control = UiProbe.button(ancestorMenu, name);
+        var narration = NativeBindings.narration(control);
+        if (!control.active
+            || !narration.contains(name)
+            || !UiProbe.focusControl(ancestorMenu, control)
+            || !NativeBindings.activateFocused(ancestorMenu))
+          throw new IllegalStateException("Native ancestor keyboard activation failed: " + name);
+        ancestorVisit = new JsonObject();
+        ancestorVisit.addProperty("name", name);
+        ancestorVisit.addProperty("narration", narration);
+        ancestorVisit.addProperty("locationNarration", locationNarration);
+        ancestorVisit.addProperty("expectedTarget", ancestorTarget().toString());
+        next(Phase.ANCESTOR_SELECTED);
+      }
+      case ANCESTOR_SELECTED -> {
+        if (NativeUi.current() != root
+            || !workflow.navigation().current().filter(ancestorTarget()::equals).isPresent())
+          return null;
+        unchangedDraft();
+        ancestorVisit.addProperty(
+            "actualTarget", workflow.navigation().current().orElseThrow().toString());
+        ancestorVisit.addProperty("sameRootOwnerAndDraft", true);
+        ancestorVisits.add(ancestorVisit);
+        navigationAttempt = workflow.navigation().restore(navigationBookmark);
+        next(Phase.ANCESTOR_RESTORED);
+      }
+      case ANCESTOR_RESTORED -> {
+        if (!navigationReady()) return null;
+        var categories = UiProbe.button(root, "Categories");
+        if (!categories.active
+            || !UiProbe.focusControl(root, categories)
+            || !NativeBindings.activateFocused(root))
+          throw new IllegalStateException("Cannot reopen compact navigation after ancestor return");
+        next(Phase.ANCESTOR_DRAWER);
+      }
+      case ANCESTOR_DRAWER -> {
+        if (UiProbe.children(root).stream()
+            .noneMatch(
+                value ->
+                    value instanceof EditBox input
+                        && input.getMessage().getString().equals("Search settings"))) return null;
+        assertNavigation(false);
+        if (!UiProbe.focusControl(root, navigationQuery()))
+          throw new IllegalStateException("Cannot refocus restored native navigation search");
+        assertNavigation();
+        if (++ancestorIndex < ANCESTORS.size()) openLocationMenu();
+        else {
+          navigationResult.add("ancestorKeyboardVisits", ancestorVisits);
+          NativeBindings.resizeWindow(mc, window[0], window[1]);
+          next(Phase.NAV_RETURNED);
+        }
       }
       case NAV_RETURNED -> {
         if (!Arrays.equals(NativeBindings.windowSize(mc), window)
@@ -335,6 +424,33 @@ final class ProductionChooserProbe {
       }
     }
     return null;
+  }
+
+  private ClientDestination ancestorTarget() {
+    return upDestinations.get(upDestinations.size() - 1 - ancestorIndex);
+  }
+
+  private void openLocationMenu() {
+    var location =
+        UiProbe.children(root).stream()
+            .filter(Button.class::isInstance)
+            .map(Button.class::cast)
+            .filter(
+                button ->
+                    button.getMessage().getString().equals("Models")
+                        && NativeBindings.narration(button).startsWith("Location:"))
+            .findFirst()
+            .orElseThrow(
+                () -> new IllegalStateException("Missing actual compact Location control"));
+    locationNarration = NativeBindings.narration(location);
+    if (ANCESTORS.stream().anyMatch(name -> !locationNarration.contains(name))
+        || !locationNarration.contains("Models")
+        || !location.active
+        || !UiProbe.focusControl(root, location)
+        || !NativeBindings.activateFocused(root))
+      throw new IllegalStateException(
+          "Actual Location control lost its full path or keyboard action: " + locationNarration);
+    next(Phase.ANCESTOR_MENU);
   }
 
   private boolean navigationReady() {
@@ -469,6 +585,10 @@ final class ProductionChooserProbe {
 
   JsonObject observations() {
     var value = new JsonObject();
+    value.add("workspaceNavigation", navigationResult.deepCopy());
+    if (workflow.isOpen() && workflow.navigation().current().isPresent())
+      value.addProperty(
+          "workspaceDestination", workflow.navigation().current().orElseThrow().toString());
     if (editor != null && editor.isOpen() && editor.view().snapshot().isPresent()) {
       var candidate =
           editor.view().snapshot().orElseThrow().inspect().candidate().orElseThrow().value();

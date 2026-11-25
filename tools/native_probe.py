@@ -423,6 +423,19 @@ def require_workspace_navigation(value):
             or targets[-1].get('kind') != 'Home'
             or len({t['attempt'] for t in targets}) != len(targets)):
         raise RuntimeError('Production chooser lost identified parent-navigation evidence')
+    names = ['Home', 'Settings', 'Appearance', 'Profile selection']
+    visits = value.get('ancestorKeyboardVisits')
+    if (not isinstance(visits, list) or len(visits) != len(names) or len(targets) != len(names)
+            or any(not isinstance(v, dict) or v.get('name') != name
+                   or not isinstance(v.get('narration'), str)
+                   or not isinstance(v.get('locationNarration'), str)
+                   or name not in v.get('narration', '')
+                   or any(label not in v.get('locationNarration', '') for label in [*names, 'Models'])
+                   or v.get('sameRootOwnerAndDraft') is not True
+                   or v.get('expectedTarget') != targets[-1-index]['target']
+                   or v.get('actualTarget') != v.get('expectedTarget')
+                   for index, (name, v) in enumerate(zip(names, visits)))):
+        raise RuntimeError('Production chooser lost native ancestor-menu keyboard evidence')
 
 
 def require_production_failure(data):

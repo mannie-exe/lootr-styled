@@ -367,13 +367,20 @@ class NativeFixtureTest(unittest.TestCase):
             native_probe.require_production_chooser({'productionChooser':stale}, choice)
 
     def workspace_navigation(self):
+        targets=[dict(attempt='parent',kind='Section',target='Profile selection',outcome='REVEALED'),
+                 dict(attempt='appearance',kind='Placement',target='Appearance',outcome='REVEALED'),
+                 dict(attempt='settings',kind='Category',target='Settings',outcome='REVEALED'),
+                 dict(attempt='root',kind='Home',target='Home',outcome='REVEALED')]
         return dict(query='Models',caret=3,selectionIndex=1,initialFilter='ALL',changedFilter='MODIFIED',
                     expandedCount=3,narrowGui='320x240',bookmarkRestoresNativeQueryFilterAndFocus=True,
                     nativeCategoriesDrawerOpened=True,
                     queryExplicitlyRefocusedInDrawer=True,
                     bookmarkStateSurvivesActualWindowRoundTrip=True,sameOwnerDraftSourceAndGeneration=True,
-                    upTargets=[dict(attempt='parent',kind='Category',target='Settings',outcome='REVEALED'),
-                               dict(attempt='root',kind='Home',target='Home',outcome='REVEALED')])
+                    upTargets=targets,ancestorKeyboardVisits=[
+                        dict(name=t['target'],narration=t['target']+' button',
+                             locationNarration='Home / Settings / Appearance / Profile selection / Models',
+                             expectedTarget=t['target'],actualTarget=t['target'],sameRootOwnerAndDraft=True)
+                        for t in reversed(targets)])
 
     def test_workspace_navigation_requires_real_restoration_and_identified_reveals(self):
         value=self.workspace_navigation()
@@ -391,6 +398,20 @@ class NativeFixtureTest(unittest.TestCase):
             bad=copy.deepcopy(value);bad['upTargets'][-1][key]=replacement
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Production chooser'):
                 native_probe.require_workspace_navigation(bad)
+
+    def test_ancestor_menu_requires_all_keyboard_choices_and_actual_targets(self):
+        value=self.workspace_navigation()
+        native_probe.require_workspace_navigation(value)
+        for key,replacement in [('name','Other'),('narration','unlabelled'),
+                                ('narration',None),('locationNarration',None),
+                                ('locationNarration','Models'),('expectedTarget','wrong'),
+                                ('actualTarget','wrong'),('sameRootOwnerAndDraft',False)]:
+            bad=copy.deepcopy(value);bad['ancestorKeyboardVisits'][1][key]=replacement
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'ancestor-menu'):
+                native_probe.require_workspace_navigation(bad)
+        for visits in [[],value['ancestorKeyboardVisits'][:-1],list(reversed(value['ancestorKeyboardVisits']))]:
+            with self.subTest(visits=visits),self.assertRaisesRegex(RuntimeError,'ancestor-menu'):
+                native_probe.require_workspace_navigation({**value,'ancestorKeyboardVisits':visits})
 
     def test_fresh_captions_require_native_cycle_and_canonical_review(self):
         modes = ['AUTO', 'ON', 'OFF', 'AUTO']
