@@ -64,6 +64,9 @@ final class ProductionInputProbe {
     SETUP_REDONE,
     RELOAD_MENU,
     RELOADED,
+    RELOAD_CHOICES,
+    RELOAD_RESOLVED,
+    RELOAD_RETURNED,
     RELOAD_CAPTURE,
     CLOSED
   }
@@ -392,13 +395,74 @@ final class ProductionInputProbe {
         next(Phase.RELOADED);
       }
       case RELOADED -> {
-        if (busy() || UiProbe.hasButton(root, "Reload saved") || !editor.canSubmit()) return null;
+        if (busy() || editor.view().review().isEmpty()) return null;
         partial();
-        if (!candidate().equals(original)) return null;
+        if (!stagedActions.equals(draft()) || editor.canSubmit())
+          throw new IllegalStateException(
+              "Dirty reload lost the complete draft or submission guard");
         long reads = UiCostAudit.settingsReads() - readsBeforeReload;
         if (reads < 1)
           throw new IllegalStateException("Reload saved did not read the actual store");
         filteredActions.addProperty("reloadSavedAdditionalStoreReads", reads);
+        filteredActions.add("dirtyReloadRetainedWholeDraft", draft());
+        filteredActions.addProperty("dirtyReloadRequiresReview", true);
+        if (!UiProbe.hasButton(root, "Review conflict…")
+            || !UiProbe.button(root, "Review conflict…").active) return null;
+        press("Review conflict…");
+        next(Phase.RELOAD_CHOICES);
+      }
+      case RELOAD_CHOICES -> {
+        var view = workflow.conflictInspection().orElse(null);
+        if (view == null || view.reviewedInput().isEmpty()) return null;
+        var review = view.reviewedInput().orElseThrow();
+        var paths = review.entries().stream().map(entry -> entry.path()).toList();
+        if (paths.size() != 4
+            || !paths.containsAll(
+                java.util.List.of(
+                    ENABLED,
+                    MODELS,
+                    FieldPath.ROOT.field("artwork"),
+                    FieldPath.ROOT.field("freshObjects"))))
+          throw new IllegalStateException("Dirty reload review omitted a hidden field: " + paths);
+        var choices = new JsonObject();
+        for (var entry : review.entries()) {
+          int attempts = 0;
+          while (true) {
+            var cycle = (CycleButton<?>) view.choiceControl(entry.path()).orElseThrow();
+            if (cycle.getMessage().getString().contains("Observed saved value")) {
+              var field = (FieldPath.Field) entry.path().segments().getFirst();
+              choices.addProperty(field.id(), cycle.getMessage().getString());
+              break;
+            }
+            if (++attempts > 4)
+              throw new IllegalStateException(
+                  "Conflict choice did not select observed saved value");
+            NativeBindings.press(cycle);
+          }
+        }
+        if (!UiProbe.button(root, "Resolve draft").active) return null;
+        filteredActions.add("nativeReloadChoices", choices);
+        press("Resolve draft");
+        next(Phase.RELOAD_RESOLVED);
+      }
+      case RELOAD_RESOLVED -> {
+        if (busy()
+            || workflow.conflictInspection().isPresent()
+            || editor.view().review().isPresent()
+            || !editor.canSubmit()) return null;
+        if (!candidate().equals(original))
+          throw new IllegalStateException("Reviewed reload did not restore the saved whole draft");
+        filteredActions.addProperty("resolvedSavedSourceWithoutSave", true);
+        pending =
+            WorkflowReveal.view(
+                workflow,
+                StyleSettingsStore.DEFINITION,
+                DestinationId.parse("lootr_styled:profiles_page"));
+        next(Phase.RELOAD_RETURNED);
+      }
+      case RELOAD_RETURNED -> {
+        if (!ready()) return null;
+        partial();
         filteredActions.add("reloadedWholeDraft", draft());
         filteredActions.addProperty("wholeDocumentRedoAndReloadSaved", true);
         next(Phase.RELOAD_CAPTURE);

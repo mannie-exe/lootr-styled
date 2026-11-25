@@ -563,7 +563,8 @@ def require_filtered_actions(data):
     value = data.get('productionInput', {}).get('filteredActions')
     if (not isinstance(value, dict) or value.get('query') != 'Vanilla'
             or any(value.get(k) is not True for k in ('hiddenModelAndArtworkControls',
-                'wholeDocumentDefaultsAndUndo', 'wholeDocumentRedoAndReloadSaved', 'sameOwnerAndNoWrite', 'searchRemovedDefaultChoice'))):
+                'wholeDocumentDefaultsAndUndo', 'wholeDocumentRedoAndReloadSaved', 'sameOwnerAndNoWrite', 'searchRemovedDefaultChoice',
+                'dirtyReloadRequiresReview', 'resolvedSavedSourceWithoutSave'))):
         raise RuntimeError('Filtered document actions lack actual hidden-field evidence')
     original = data['productionInput'].get('baselineWholeDraft')
     staged = dict(enabled='false', models='lootr_styled:vanilla', artwork='lootr_styled:vanilla', freshObjects='OFF')
@@ -575,6 +576,10 @@ def require_filtered_actions(data):
             or value.get('redoneWholeDraft') != defaults
             or value.get('redoUndoneWholeDraft') != staged
             or value.get('setupRedoneWholeDraft') != staged
+            or value.get('dirtyReloadRetainedWholeDraft') != staged
+            or not isinstance(value.get('nativeReloadChoices'), dict)
+            or set(value['nativeReloadChoices']) != set(defaults)
+            or any('Observed saved value' not in str(choice) for choice in value['nativeReloadChoices'].values())
             or value.get('reloadedWholeDraft') != original
             or type(value.get('reloadSavedAdditionalStoreReads')) is not int
             or value['reloadSavedAdditionalStoreReads'] < 1):

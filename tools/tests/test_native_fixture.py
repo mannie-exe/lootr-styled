@@ -234,7 +234,9 @@ class NativeFixtureTest(unittest.TestCase):
                      sameOwnerAndNoWrite=True,searchRemovedDefaultChoice=True,stagedWholeDraft=staged,undoneWholeDraft=staged,
                      defaultWholeDraft=defaults,restoredWholeDraft=defaults,redoneWholeDraft=defaults,
                      redoUndoneWholeDraft=staged,setupRedoneWholeDraft=staged,reloadedWholeDraft=defaults,
-                     wholeDocumentRedoAndReloadSaved=True,reloadSavedAdditionalStoreReads=1)
+                     wholeDocumentRedoAndReloadSaved=True,reloadSavedAdditionalStoreReads=1,
+                     dirtyReloadRetainedWholeDraft=staged,dirtyReloadRequiresReview=True,resolvedSavedSourceWithoutSave=True,
+                     nativeReloadChoices={key:'Observed saved value' for key in defaults})
         value = dict(baselineWholeDraft=defaults,filteredActions=facts)
         native_probe.require_filtered_actions({'productionInput':value})
         for key,replacement in [('query',''),('hiddenModelAndArtworkControls',False),
@@ -243,6 +245,9 @@ class NativeFixtureTest(unittest.TestCase):
                                 ('redoneWholeDraft',staged),('redoUndoneWholeDraft',defaults),
                                 ('setupRedoneWholeDraft',defaults),('reloadedWholeDraft',staged),
                                 ('wholeDocumentRedoAndReloadSaved',False),
+                                ('dirtyReloadRetainedWholeDraft',defaults),('dirtyReloadRequiresReview',False),
+                                ('resolvedSavedSourceWithoutSave',False),('nativeReloadChoices',{}),
+                                ('nativeReloadChoices',{key:'Your draft' for key in defaults}),
                                 ('reloadSavedAdditionalStoreReads',0),('reloadSavedAdditionalStoreReads',True)]:
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Filtered document actions'):
                 native_probe.require_filtered_actions({'productionInput':{**value,'filteredActions':{**facts,key:replacement}}})
