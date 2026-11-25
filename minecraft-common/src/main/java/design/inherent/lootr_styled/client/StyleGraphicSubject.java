@@ -33,4 +33,28 @@ record StyleGraphicSubject(Container container, boolean looted, boolean open, fl
     if (!Float.isFinite(lid) || lid < 0 || lid > 1)
       throw new IllegalArgumentException("Lid pose must be between zero and one");
   }
+
+  /** The factored Open control follows the active container's native pose. */
+  boolean opened() {
+    return container == Container.BARREL ? open : lid > 0;
+  }
+
+  StyleGraphicSubject withContainer(Container value) {
+    Objects.requireNonNull(value);
+    if (value == container) return this;
+    if (value == Container.BARREL) return new StyleGraphicSubject(value, looted, opened(), lid);
+    if (container == Container.BARREL)
+      return new StyleGraphicSubject(value, looted, open, open ? 1 : 0);
+    return new StyleGraphicSubject(value, looted, open, lid);
+  }
+
+  StyleGraphicSubject withLooted(boolean value) {
+    return new StyleGraphicSubject(container, value, open, lid);
+  }
+
+  StyleGraphicSubject withOpened(boolean value) {
+    return container == Container.BARREL
+        ? new StyleGraphicSubject(container, looted, value, lid)
+        : new StyleGraphicSubject(container, looted, open, value ? 1 : 0);
+  }
 }
