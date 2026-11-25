@@ -185,9 +185,8 @@ final class StyleGraphicProvider
                               "still_policy",
                               "Still rendering",
                               "First declared frame; nearest filtering, back-face culling, no world shaders"));
-                      facts.add(fact("models", "Requested models", settings.models().toString()));
-                      facts.add(
-                          fact("artwork", "Requested artwork", settings.artwork().toString()));
+                      facts.add(fact("models", "Preview models", settings.models().toString()));
+                      facts.add(fact("artwork", "Preview artwork", settings.artwork().toString()));
                       var scene =
                           StyleStillMaterials.classify(
                               mesh.prepare(work.ledger(), METADATA, checkpoint),
@@ -277,17 +276,17 @@ final class StyleGraphicProvider
     facts.add(
         fact(
             id + "_effective",
-            "Effective " + title + " profile",
+            "Resolved preview " + title + " profile",
             resolution.effective().map(Object::toString).orElse("None; styling is disabled")));
     facts.add(
         fact(
             id + "_resolution",
             title.equals("model") ? "Model profile status" : "Artwork profile status",
             switch (resolution.state()) {
-              case SELECTED -> "Requested profile selected";
-              case MISSING -> "Requested profile unavailable; using inherited resources";
-              case REFUSED -> "Requested profile refused; using inherited resources";
-              case DISABLED -> "Styling is disabled; the requested profile is retained";
+              case SELECTED -> "Profile used in this preview";
+              case MISSING -> "Profile unavailable; preview uses inherited resources";
+              case REFUSED -> "Profile refused; preview uses inherited resources";
+              case DISABLED -> "Styling is disabled in this preview; the selection is retained";
             }));
     resolution
         .source()

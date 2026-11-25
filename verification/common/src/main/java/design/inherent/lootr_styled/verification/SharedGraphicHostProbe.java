@@ -139,7 +139,11 @@ final class SharedGraphicHostProbe {
       if (lease.facts().stream()
           .noneMatch(
               f ->
-                  f.title().equals("Requested artwork")
+                  f.id()
+                          .equals(
+                              design.inherent.reform.definition.DocumentId.parse(
+                                  "lootr_styled:preview/artwork"))
+                      && f.title().equals("Preview artwork")
                       && f.value().equals(ClientSettings.VANILLA.toString())))
         throw new IllegalStateException(
             "The worker did not consume the complete unsaved candidate");
