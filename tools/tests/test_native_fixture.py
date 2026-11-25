@@ -386,7 +386,7 @@ class NativeFixtureTest(unittest.TestCase):
                         queryFocus=False, inspected='missing:preview_fixture',
                         manualCaret=3,manualSelection='is',manualFocus=True,useSelectionActive=False,
                         sourceDetailsOpen=True,models=baseline,artwork=baseline,
-                        narration='Unknown reference\nReference is not present in this complete index')
+                        narration='unknown reference\nReference is not present in this complete index')
         return [state('missing','854x480'),state('narrow','320x240'),state('returned','854x480')]
 
     def test_unresolved_chooser_refuses_lost_input_and_false_admission(self):

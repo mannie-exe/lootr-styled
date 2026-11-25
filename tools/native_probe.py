@@ -512,7 +512,7 @@ def require_unresolved_chooser(value, choice):
                    or s.get('useSelectionActive') is not False or s.get('sourceDetailsOpen') is not True
                    or s.get('models') != value['baselineModels']
                    or s.get('artwork') != value['baselineArtwork']
-                   or 'Unknown reference' not in s.get('narration', '')
+                   or 'unknown reference' not in s.get('narration', '')
                    or 'Reference is not present in this complete index' not in s.get('narration', '')
                    for s in states)
             or states[1].get('window') != '320x240'

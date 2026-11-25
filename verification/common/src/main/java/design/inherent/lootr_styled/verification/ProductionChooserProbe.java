@@ -599,7 +599,7 @@ final class ProductionChooserProbe {
         || !UiProbe.focusedPath(browser, key)
         || UiProbe.button(browser, "Use selection").active
         || !UiProbe.hasButton(browser, "Hide source details")
-        || !narration.contains("Unknown reference")
+        || !narration.contains("unknown reference")
         || !narration.contains(MISSING_REASON))
       throw new IllegalStateException(
           "Unresolved manual ID lost state or admission guard: "
@@ -695,8 +695,12 @@ final class ProductionChooserProbe {
         value.addProperty("selection", box.getHighlighted());
         value.addProperty("queryFocus", UiProbe.focusedPath(browser, box));
       }
-      if (box.getMessage().getString().equals("Reference ID"))
+      if (box.getMessage().getString().equals("Reference ID")) {
         value.addProperty("inspected", box.getValue());
+        value.addProperty("manualCaret", box.getCursorPosition());
+        value.addProperty("manualSelection", box.getHighlighted());
+        value.addProperty("manualFocus", UiProbe.focusedPath(browser, box));
+      }
     }
     return value;
   }
