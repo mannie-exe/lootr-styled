@@ -348,7 +348,8 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
                      inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
                      inspectionComparisonCaptureDraws=5,
-                     inspectionComparison=dict(field='enabled',baseline='true',draft='true',effectiveAvailable=False),
+                     inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-114-30*i)for i in range(3)],
+                     inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser())
         native_probe.require_production_chooser({'productionChooser': value})
         for bad in [[], [None]*3, [states[0],{**states[1],'queryFocus':False},states[2]],
@@ -361,7 +362,8 @@ class NativeFixtureTest(unittest.TestCase):
         for key,replacement in [('inspectionSameCaptureAcrossWindowReflow',False),
                                 ('inspectionNativeFieldCycle',['Enabled','Models','Artwork','Fresh Objects','Enabled']),
                                 ('inspectionNativeScrollAccepted',False),('inspectionFieldYAfterScroll',107),
-                                ('inspectionComparisonCaptureDraws',3)]:
+                                ('inspectionComparisonCaptureDraws',3),('inspectionScrollFrames',[]),
+                                ('inspectionComparison',dict(field='enabled',baseline='true',draft='true',effectiveAvailable=False))]:
             with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'inspection'):
                 native_probe.require_production_chooser({'productionChooser':{**value,key:replacement}})
 
@@ -384,7 +386,8 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectionNativeFieldCycle=['Enabled','Fresh Objects','Models','Artwork','Enabled'],
                      inspectionNativeScrollAccepted=True,inspectionFieldYBeforeScroll=107,inspectionFieldYAfterScroll=-13,
                      inspectionComparisonCaptureDraws=5,
-                     inspectionComparison=dict(field='enabled',baseline='true',draft='true',effectiveAvailable=False),
+                     inspectionScrollFrames=[dict(image=i,completedDraws=5,fieldY=-114-30*i)for i in range(3)],
+                     inspectionComparison=dict(field='enabled',baseline='"true"',draft='"true"',effectiveAvailable=False),
                      unresolvedStates=self.unresolved_chooser(choice['query'],choice['id']))
         native_probe.require_production_chooser({'productionChooser': value}, choice)
         for key, replacement in [('inspectedTitle', title[:-1]), ('inspectedId','lootr_styled:default'),

@@ -112,6 +112,8 @@ final class ProductionChooserProbe {
   private int inspectionWidth, inspectionHeight, inspectionStep;
   private int inspectionFieldY;
   private long inspectionScrollDraws;
+  private int inspectionScrollImage;
+  private final JsonArray inspectionScrollFrames = new JsonArray();
   private design.inherent.reform.operation.DocumentReview inspectionCapture;
   private final JsonArray inspectionCycle = new JsonArray();
   private Screen ancestorMenu;
@@ -344,7 +346,7 @@ final class ProductionChooserProbe {
         if (!capture(mc, "production-inspection-narrow")) return null;
         assertInspection();
         inspectionFieldY = inspectionCycleControl().getY();
-        if (!root.mouseScrolled(root.width * 0.72, root.height * 0.5, 0, -6))
+        if (!root.mouseScrolled(root.width * 0.72, root.height * 0.5, 0, -11))
           throw new IllegalStateException("Native inspection viewport refused the wheel event");
         inspectionScrollDraws = FrameAudit.rootSequence(root);
         next(Phase.REVIEW_SCROLL);
@@ -379,13 +381,25 @@ final class ProductionChooserProbe {
         next(Phase.REVIEW_COMPARISON_IMAGE);
       }
       case REVIEW_COMPARISON_IMAGE -> {
-        if (!capture(mc, "production-inspection-comparison")) return null;
+        if (!capture(mc, "production-inspection-comparison-" + inspectionScrollImage)) return null;
         assertInspection();
-        result.addProperty(
-            "inspectionComparisonCaptureDraws",
-            FrameAudit.rootSequence(root) - inspectionScrollDraws);
-        NativeBindings.resizeWindow(mc, window[0], window[1]);
-        next(Phase.REVIEW_RETURNED);
+        long draws = FrameAudit.rootSequence(root) - inspectionScrollDraws;
+        var observation = new JsonObject();
+        observation.addProperty("image", inspectionScrollImage);
+        observation.addProperty("completedDraws", draws);
+        observation.addProperty("fieldY", inspectionCycleControl().getY());
+        inspectionScrollFrames.add(observation);
+        result.addProperty("inspectionComparisonCaptureDraws", draws);
+        if (++inspectionScrollImage < 3) {
+          if (!root.mouseScrolled(root.width * 0.72, root.height * 0.5, 0, -1.5))
+            throw new IllegalStateException("Native inspection refused the next comparison scroll");
+          inspectionScrollDraws = FrameAudit.rootSequence(root);
+          next(Phase.REVIEW_SCROLL);
+        } else {
+          result.add("inspectionScrollFrames", inspectionScrollFrames);
+          NativeBindings.resizeWindow(mc, window[0], window[1]);
+          next(Phase.REVIEW_RETURNED);
+        }
       }
       case REVIEW_RETURNED -> {
         if (!Arrays.equals(NativeBindings.windowSize(mc), window)
