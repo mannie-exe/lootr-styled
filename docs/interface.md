@@ -2,6 +2,8 @@
 
 Use short, familiar labels that describe the action: Save, Defaults, Reload resources, Open profiles folder, and Export artwork. Defaults loads the declared appearance defaults; Revert restores the editor's observed starting values. Explain an action's effect in its tooltip when the label needs context. Use sentence case and readable state names such as Auto, On, and Off. Save and reload resources names both effects; Save alone must not imply live application.
 
+Readable value captions belong to presentation. Keep the saved Fresh Objects values `AUTO`, `ON`, and `OFF` unchanged, and use the same caption declaration in editing and review. Unknown or invalid input must remain visible and repairable; a friendly caption must not replace the underlying draft value. Request a shared presentation API when needed rather than changing enum names, codec choices, or field order to alter a label.
+
 Show a profile's optional `title` in selectors. Keep its ID unchanged in settings and available in tooltips; use the ID as the label only when no title is available. Built-in titles are Default and Vanilla (Inherited). Custom profiles follow the same rule.
 
 Use re:form's shared layout declarations for the Appearance page. Styling groups the enable switch and Fresh Objects adaptation; Profile selection groups Models and Artwork. Those selectors may share a row when their measured content fits and stack in order when it does not. Their values and validation remain independent. Keep field help to its purpose. Put fallback rules, source precedence, application details, and adapter diagnostics in contextual information.
