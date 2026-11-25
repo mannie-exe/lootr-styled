@@ -9,6 +9,7 @@ final class PreviewWorkerGate implements Runnable {
   static final class Hold {
     private final CountDownLatch release = new CountDownLatch(1);
     volatile boolean entered, exited;
+    volatile String thread;
 
     void release() {
       release.countDown();
@@ -31,6 +32,7 @@ final class PreviewWorkerGate implements Runnable {
     if (hold == null) return;
     if (Thread.currentThread() == client)
       throw new IllegalStateException("Preview preparation reached the gate on the client");
+    hold.thread = Thread.currentThread().getName();
     hold.entered = true;
     boolean interrupted = false;
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);

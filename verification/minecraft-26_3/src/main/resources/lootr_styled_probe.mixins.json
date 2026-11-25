@@ -12,7 +12,9 @@
     "NativeReloadFaultMixin",
     "StyleOutcomeAccessor",
     "UiCostMixin",
-    "ProviderCostMixin"
+    "ProviderCostMixin",
+    "ProductionRequestMixin",
+    "ProductionWorkerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

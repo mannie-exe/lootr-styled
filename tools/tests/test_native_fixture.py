@@ -451,6 +451,42 @@ class NativeFixtureTest(unittest.TestCase):
                         for name in ('production-effects-cancel-pending', 'production-effects-cancelled',
                                      'production-effects-cancelled-details')])
 
+    def test_production_preparation_requires_entered_work_real_reload_and_explicit_recovery(self):
+        rows = [dict(case=name, operation='actual-' + name, workerThread='actual-worker',
+                     workerEntered=True, heldWithoutObsoleteDraw=True, workerExited=True,
+                     terminalState='CANCELLED', terminalBeforeWorkerExit=False,
+                     explicitRecoveryDrawn=True, recoveryReleased=True)
+                for name in ('cancel', 'reload', 'hidden-return', 'close')]
+        rows[0]['nativeCancellationRequested'] = True
+        rows[1].update(generationBefore='old', generationAfter='new', recoveryGeneration='new')
+        rows[2]['returnDoesNotPrepare'] = True
+        value = dict(settingsUnchanged=True, savedFileIdentityUnchanged=True,
+                     draftRetainedUntilClose=True, closedWorkflowDiscardsLateResult=True, localProfileFilesUnchanged=True, resourceGenerationPreservedOutsideReload=True,
+                     actualResourceReloads=1, requests=7, nativeBytes=0, sceneBytes=0, cases=rows)
+        native_probe.require_production_preparation(dict(productionPreparation=value))
+        for key, bad in [('requests', True), ('requests', 8), ('actualResourceReloads', True), ('actualResourceReloads', 0), ('nativeBytes', False),
+                         ('sceneBytes', 1), ('settingsUnchanged', False), ('localProfileFilesUnchanged', False), ('resourceGenerationPreservedOutsideReload', False), ('cases', rows[:-1])]:
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'Production preparation'):
+                native_probe.require_production_preparation(dict(productionPreparation={**value, key: bad}))
+        for index, key, bad in [(0, 'nativeCancellationRequested', False), (0, 'terminalBeforeWorkerExit', True),
+                                (0, 'workerEntered', False), (1, 'generationAfter', 'old'),
+                                (1, 'recoveryGeneration', 'old'), (2, 'returnDoesNotPrepare', False),
+                                (2, 'explicitRecoveryDrawn', False), (3, 'terminalState', 'READY'),
+                                (3, 'workerThread', ''), (3, 'operation', ''), (2, 'recoveryReleased', False)]:
+            changed = copy.deepcopy(value)
+            changed['cases'][index][key] = bad
+            with self.subTest(index=index, key=key), self.assertRaisesRegex(RuntimeError, 'Production preparation'):
+                native_probe.require_production_preparation(dict(productionPreparation=changed))
+
+    def test_production_preparation_is_explicit_and_cleared_by_ordinary_prepare(self):
+        native_probe.prepare('neoforge-1_21_1', 'native', production_preparation=True)
+        marker = self.fixture / '.lootr-styled-production-preparation'
+        self.assertTrue(marker.is_file())
+        with self.assertRaisesRegex(ValueError, 'Choose one check'):
+            native_probe.prepare('neoforge-1_21_1', 'native', production_preparation=True, production_viewport=True)
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
     def test_capture_frames_requires_actual_root_draws_and_completion_order(self):
         rows = self.cancellation_facts()['captureFrames']
         native_probe.require_capture_frames(rows)
