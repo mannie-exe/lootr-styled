@@ -147,12 +147,17 @@ final class ProductionFailureProbe {
         for (var child : UiProbe.children(workflow.screen()))
           if (child instanceof NarratableEntry entry)
             narration.append(NativeBindings.narration(entry)).append('\n');
-        String feedback = narration.toString();
+        String widgets = narration.toString();
+        String screen = workflow.screen().getNarrationMessage().getString();
+        result.addProperty("failureWidgetNarration", widgets);
+        result.addProperty("failureScreenNarration", screen);
+        String feedback = screen + "\n" + widgets;
         result.addProperty("failureFeedback", feedback);
         boolean useful =
             feedback.contains("native tint provider") && feedback.contains("cannot be inferred");
         result.addProperty("readableFailureCause", useful);
-        if (!useful) throw new IllegalStateException("Actual preview feedback omitted tint cause");
+        // Retain recovery observations even when narration is incomplete. The driver still
+        // rejects this case after closure; partial evidence does not become a pass.
         if (!failedRevision.equals(DraftRevision.of(editor.view().snapshot().orElseThrow()))
             || !editor.isOpen()
             || NativeUi.current() != workflow.screen())

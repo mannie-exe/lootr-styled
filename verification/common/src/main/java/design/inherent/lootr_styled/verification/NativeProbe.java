@@ -260,6 +260,9 @@ public final class NativeProbe {
         var observations = productionFailure.tick(mc);
         if (observations == null) return;
         REPORT.add("productionFailure", observations);
+        if (!observations.get("readableFailureCause").getAsBoolean())
+          throw new IllegalStateException(
+              "Native screen and widget narration omitted the tint cause");
         REPORT.addProperty("passed", true);
         finish(mc, null);
       } else if (stage == 21) {
