@@ -40,6 +40,11 @@ final class ProductionChooserProbe {
     NARROW_IMAGE,
     RETURNED,
     RETURNED_IMAGE,
+    MISSING,
+    MISSING_NARROW,
+    MISSING_NARROW_IMAGE,
+    MISSING_RETURNED,
+    MISSING_RETURNED_IMAGE,
     BACK,
     NAV_ORIGIN,
     NAV_QUERY,
@@ -58,6 +63,8 @@ final class ProductionChooserProbe {
   }
 
   private static final FieldPath MODELS = FieldPath.ROOT.field("models");
+  private static final String MISSING_ID = "missing:preview_fixture";
+  private static final String MISSING_REASON = "Reference is not present in this complete index";
   private final Screen parent, root;
   private final ClientEditingWorkflow workflow;
   private final CompletableFuture<?> admission;
@@ -69,6 +76,7 @@ final class ProductionChooserProbe {
   private final String inspectedTitle, inspectedId, queryText;
   private final JsonObject result = new JsonObject();
   private final JsonArray states = new JsonArray();
+  private final JsonArray unresolvedStates = new JsonArray();
   private ClientEditor<ClientSettings> editor;
   private DraftRevision revision;
   private Screen browser;
@@ -126,6 +134,7 @@ final class ProductionChooserProbe {
         WorkflowReveal.field(workflow, StyleSettingsStore.DEFINITION, MODELS)
             .thenAccept(value -> editor = value);
     result.add("states", states);
+    result.add("unresolvedStates", unresolvedStates);
   }
 
   JsonObject tick(Minecraft mc) throws Exception {
@@ -207,6 +216,48 @@ final class ProductionChooserProbe {
         assertRetained();
         result.addProperty("queryAndInspectionSurviveWindowReflow", true);
         result.addProperty("inspectionDoesNotStage", true);
+        box("Reference ID").setValue(MISSING_ID);
+        press("Inspect");
+        next(Phase.MISSING);
+      }
+      case MISSING -> {
+        if (!browser.getNarrationMessage().getString().contains(MISSING_REASON)) return null;
+        if (!UiProbe.hasButton(browser, "Hide source details")) press("Source details");
+        var key = box("Reference ID");
+        if (!UiProbe.focusControl(browser, key))
+          throw new IllegalStateException("Cannot focus unresolved manual ID");
+        key.setCursorPosition(3);
+        key.setHighlightPos(1);
+        assertUnresolvedRetained();
+        unresolvedState(mc, "missing");
+        NativeBindings.resizeWindow(mc, 320, 240);
+        next(Phase.MISSING_NARROW);
+      }
+      case MISSING_NARROW -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), new int[] {320, 240})
+            || browser.width == browserWidth && browser.height == browserHeight) return null;
+        assertUnresolvedRetained();
+        unresolvedState(mc, "narrow");
+        next(Phase.MISSING_NARROW_IMAGE);
+      }
+      case MISSING_NARROW_IMAGE -> {
+        if (!capture(mc, "production-chooser-missing-narrow")) return null;
+        assertUnresolvedRetained();
+        NativeBindings.resizeWindow(mc, window[0], window[1]);
+        next(Phase.MISSING_RETURNED);
+      }
+      case MISSING_RETURNED -> {
+        if (!Arrays.equals(NativeBindings.windowSize(mc), window)
+            || browser.width != browserWidth
+            || browser.height != browserHeight) return null;
+        assertUnresolvedRetained();
+        unresolvedState(mc, "returned");
+        next(Phase.MISSING_RETURNED_IMAGE);
+      }
+      case MISSING_RETURNED_IMAGE -> {
+        if (!capture(mc, "production-chooser-missing-returned")) return null;
+        assertUnresolvedRetained();
+        result.addProperty("unresolvedManualIdSurvivesWindowReflow", true);
         press("Back");
         next(Phase.BACK);
       }
@@ -532,6 +583,46 @@ final class ProductionChooserProbe {
         || !box("Reference ID").getValue().equals(inspectedId))
       throw new IllegalStateException("Chooser lost query, focus or inspection: " + observations());
     unchangedDraft();
+  }
+
+  private void assertUnresolvedRetained() {
+    var query = box("Search");
+    var key = box("Reference ID");
+    String narration = browser.getNarrationMessage().getString();
+    if (NativeUi.current() != browser
+        || !query.getValue().equals(queryText)
+        || query.getCursorPosition() != 3
+        || !query.getHighlighted().equals(queryText.substring(1, 3))
+        || !key.getValue().equals(MISSING_ID)
+        || key.getCursorPosition() != 3
+        || !key.getHighlighted().equals(MISSING_ID.substring(1, 3))
+        || !UiProbe.focusedPath(browser, key)
+        || UiProbe.button(browser, "Use selection").active
+        || !UiProbe.hasButton(browser, "Hide source details")
+        || !narration.contains("Unknown reference")
+        || !narration.contains(MISSING_REASON))
+      throw new IllegalStateException(
+          "Unresolved manual ID lost state or admission guard: "
+              + observations()
+              + "; "
+              + narration);
+    unchangedDraft();
+  }
+
+  private void unresolvedState(Minecraft mc, String phase) {
+    var value = observations();
+    var key = box("Reference ID");
+    value.addProperty("phase", phase);
+    var size = NativeBindings.windowSize(mc);
+    value.addProperty("window", size[0] + "x" + size[1]);
+    value.addProperty("gui", browser.width + "x" + browser.height);
+    value.addProperty("manualCaret", key.getCursorPosition());
+    value.addProperty("manualSelection", key.getHighlighted());
+    value.addProperty("manualFocus", UiProbe.focusedPath(browser, key));
+    value.addProperty("useSelectionActive", UiProbe.button(browser, "Use selection").active);
+    value.addProperty("sourceDetailsOpen", UiProbe.hasButton(browser, "Hide source details"));
+    value.addProperty("narration", browser.getNarrationMessage().getString());
+    unresolvedStates.add(value);
   }
 
   private void unchangedDraft() {

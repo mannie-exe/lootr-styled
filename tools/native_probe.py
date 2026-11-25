@@ -33,6 +33,7 @@ CAPTURES = (
     'production-input-filtered', 'production-input-filtered-defaults',
     'production-input-filtered-redo', 'production-input-filtered-reloaded',
     'production-chooser-narrow', 'production-chooser-returned',
+    'production-chooser-missing-narrow', 'production-chooser-missing-returned',
     'production-failure-tint',
     'production-operation-narrow', 'production-operation-returned', 'production-operation-completed',
     'production-locale-changed', 'production-locale-restored',
@@ -493,8 +494,32 @@ def require_production_chooser(data, expected_choice=None):
             or value.get('inspectedTitle') != choice['title'] or value.get('queryText') != choice['query']
             or choice['title'] not in value.get('inspectedChoiceNarration', '')):
         raise RuntimeError('Production chooser lost the declared local title or native narration')
+    require_unresolved_chooser(value, choice)
     require_workspace_navigation(value.get('workspaceNavigation'))
     require_single_location_narration(value.get('workspaceNavigation'))
+
+
+def require_unresolved_chooser(value, choice):
+    states = value.get('unresolvedStates')
+    if (value.get('unresolvedManualIdSurvivesWindowReflow') is not True
+            or not isinstance(states, list) or len(states) != 3
+            or [s.get('phase') for s in states if isinstance(s, dict)] != ['missing', 'narrow', 'returned']
+            or any(s.get('query') != choice['query'] or s.get('caret') != 3
+                   or s.get('selection') != choice['query'][1:3]
+                   or s.get('inspected') != 'missing:preview_fixture'
+                   or s.get('manualCaret') != 3 or s.get('manualSelection') != 'is'
+                   or s.get('manualFocus') is not True or s.get('queryFocus') is not False
+                   or s.get('useSelectionActive') is not False or s.get('sourceDetailsOpen') is not True
+                   or s.get('models') != value['baselineModels']
+                   or s.get('artwork') != value['baselineArtwork']
+                   or 'Unknown reference' not in s.get('narration', '')
+                   or 'Reference is not present in this complete index' not in s.get('narration', '')
+                   for s in states)
+            or states[1].get('window') != '320x240'
+            or states[0].get('window') != states[2].get('window')
+            or states[0].get('gui') != states[2].get('gui')
+            or len({s['narration'] for s in states}) != 1):
+        raise RuntimeError('Production chooser lost unresolved manual input, disclosure or admission guard')
 
 
 def require_workspace_navigation(value):
@@ -1104,7 +1129,8 @@ def main():
                 raise RuntimeError(f'Production operation capture missing: {name}')
     if args.production_chooser:
         require_production_chooser(data, chooser_choice)
-        for name in ('production-chooser-narrow', 'production-chooser-returned'):
+        for name in ('production-chooser-narrow', 'production-chooser-returned',
+                     'production-chooser-missing-narrow', 'production-chooser-missing-returned'):
             if not (fixture / (name + '.png')).is_file():
                 raise RuntimeError(f'Production chooser capture missing: {name}')
     if args.production_failure:

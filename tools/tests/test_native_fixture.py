@@ -342,7 +342,9 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectionDoesNotStage=True, sameDraftAndOwner=True,
                      sourceFileAndGenerationUnchanged=True, closedCleanly=True,
                      baselineModels='lootr_styled:default', baselineArtwork='lootr_styled:default', states=states,
-                     workspaceNavigation=self.workspace_navigation())
+                     workspaceNavigation=self.workspace_navigation(),
+                     unresolvedManualIdSurvivesWindowReflow=True,
+                     unresolvedStates=self.unresolved_chooser())
         native_probe.require_production_chooser({'productionChooser': value})
         for bad in [[], [None]*3, [states[0],{**states[1],'queryFocus':False},states[2]],
                     [states[0],states[1],{**states[2],'models':'lootr_styled:vanilla'}],
@@ -366,7 +368,8 @@ class NativeFixtureTest(unittest.TestCase):
                      inspectedTitle=title, inspectedId=choice['id'], queryText=choice['query'],
                      inspectedChoiceNarration='Button ' + title, workspaceNavigation=self.workspace_navigation(),
                      states=[state('inspected','854x480'), state('narrow','320x240'),
-                             state('returned','854x480')])
+                             state('returned','854x480')], unresolvedManualIdSurvivesWindowReflow=True,
+                     unresolvedStates=self.unresolved_chooser(choice['query'],choice['id']))
         native_probe.require_production_chooser({'productionChooser': value}, choice)
         for key, replacement in [('inspectedTitle', title[:-1]), ('inspectedId','lootr_styled:default'),
                                  ('queryText','Vanilla'), ('inspectedChoiceNarration',title[:80])]:
@@ -376,6 +379,27 @@ class NativeFixtureTest(unittest.TestCase):
         stale['states'][1]['inspected'] = 'lootr_styled:vanilla'
         with self.assertRaisesRegex(RuntimeError,'Production chooser'):
             native_probe.require_production_chooser({'productionChooser':stale}, choice)
+
+    def unresolved_chooser(self, query='Vanilla', baseline='lootr_styled:default'):
+        def state(phase, size):
+            return dict(phase=phase, window=size, gui=size, query=query, caret=3, selection=query[1:3],
+                        queryFocus=False, inspected='missing:preview_fixture',
+                        manualCaret=3,manualSelection='is',manualFocus=True,useSelectionActive=False,
+                        sourceDetailsOpen=True,models=baseline,artwork=baseline,
+                        narration='Unknown reference\nReference is not present in this complete index')
+        return [state('missing','854x480'),state('narrow','320x240'),state('returned','854x480')]
+
+    def test_unresolved_chooser_refuses_lost_input_and_false_admission(self):
+        choice=dict(query='Vanilla')
+        value=dict(baselineModels='lootr_styled:default',baselineArtwork='lootr_styled:default',
+                   unresolvedManualIdSurvivesWindowReflow=True,unresolvedStates=self.unresolved_chooser())
+        native_probe.require_unresolved_chooser(value,choice)
+        for key,replacement in [('query',''),('inspected','lootr_styled:default'),('manualFocus',False),
+                                ('manualCaret',0),('manualSelection',''),('useSelectionActive',True),
+                                ('sourceDetailsOpen',False),('narration','Resolved'),('models','missing:preview_fixture')]:
+            bad=copy.deepcopy(value);bad['unresolvedStates'][1][key]=replacement
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'unresolved manual input'):
+                native_probe.require_unresolved_chooser(bad,choice)
 
     def workspace_navigation(self):
         targets=[dict(attempt='parent',kind='Section',target='Profile selection',outcome='REVEALED'),
