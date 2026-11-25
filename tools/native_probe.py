@@ -242,6 +242,48 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
     return fixture, product, command
 
 
+def require_header_offers(data):
+    rows = data.get('nativeWidgets', {}).get('headerOffers')
+    phases = ['home', 'profiles', 'appearance', 'review', 'operation']
+    keys = ('identity', 'viewportWidth', 'viewportHeight', 'fontIdentityWidth', 'fontLineHeight',
+            'locationX', 'locationY', 'locationHeight')
+    if (not isinstance(rows, list) or len(rows) != len(phases)
+            or any(not isinstance(r, dict) or r.get('phase') != phase for r, phase in zip(rows, phases))):
+        raise RuntimeError('Ordinary navigation lacks actual header offer measurements')
+    baseline = tuple(rows[0].get(k) for k in keys)
+    for row in rows:
+        controls = row.get('controls')
+        if (not isinstance(row.get('identity'), str) or not row['identity']
+                or any(type(row.get(k)) is not int for k in keys[1:])
+                or tuple(row.get(k) for k in keys) != baseline
+                or row['viewportWidth'] <= 0 or row['viewportHeight'] <= 0
+                or row['fontIdentityWidth'] <= 0 or row['fontLineHeight'] <= 0
+                or row['locationX'] < 0 or row['locationY'] < 0 or row['locationHeight'] <= 0
+                or row['locationY'] + row['locationHeight'] > row['viewportHeight']
+                or not isinstance(controls, list) or not controls
+                or any(not isinstance(c, dict) or not c.get('caption')
+                       or not isinstance(c.get('narration'), str)
+                       or not c['narration'].startswith(('Location:', 'Current location:'))
+                       or any(type(c.get(k)) is not int for k in ('x','y','width','height'))
+                       or c['y'] != row['locationY'] or c['height'] != row['locationHeight']
+                       or c['x'] < row['locationX'] or c['width'] <= 0
+                       or c['x'] + c['width'] > row['viewportWidth'] for c in controls)):
+            raise RuntimeError('Ordinary navigation changed its stable native header offer')
+
+
+def require_unopened_home(data):
+    value = data.get('nativeWidgets', {}).get('unopenedHome')
+    zero_counts = ('catalogueDiscoveriesDuringHome', 'providerEntriesDuringHome', 'openedDocuments',
+                   'resourceContentLookupsInCallback', 'providerEntriesInCallback')
+    if (not isinstance(value, dict) or value.get('phase') != 'unopened-home'
+            or type(value.get('samples')) is not int or not 8 <= value['samples'] <= 256
+            or type(value.get('startupCatalogueDiscoveries')) is not int
+            or value['startupCatalogueDiscoveries'] < 1
+            or any(type(value.get(k)) is not int or value[k] != 0 for k in zero_counts)
+            or value.get('sameFileAndResourceGeneration') is not True):
+        raise RuntimeError('Unopened Home lacks actual idle-domain and unchanged-source evidence')
+
+
 def require_fresh_captions(data):
     value = data.get('nativeWidgets', {})
     rows = value.get('freshChoiceCaptions')
@@ -958,6 +1000,8 @@ def main():
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
     require_runtime_artifacts(data, fixture)
     if data.get('nativeWidgetsComplete') is True:
+        require_header_offers(data)
+        require_unopened_home(data)
         require_fresh_captions(data)
     if args.preview_host or args.production_shutdown:
         require_renderer_shutdown(data, fixture, product, args.target)

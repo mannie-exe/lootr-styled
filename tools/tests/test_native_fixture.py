@@ -424,6 +424,43 @@ class NativeFixtureTest(unittest.TestCase):
             with self.subTest(value=bad),self.assertRaisesRegex(RuntimeError,'exactly once'):
                 native_probe.require_single_location_narration(bad)
 
+    def test_header_offers_require_real_controls_and_stable_context(self):
+        rows=[dict(phase=phase,identity='Lootr: Styled',viewportWidth=854,viewportHeight=480,
+                   fontIdentityWidth=80,fontLineHeight=9,locationX=200,locationY=12,locationHeight=20,
+                   controls=[dict(caption='Home',x=200,y=12,width=100,height=20,narration='Location: Home')])
+              for phase in ['home','profiles','appearance','review','operation']]
+        def check(value):
+            native_probe.require_header_offers(dict(nativeWidgets=dict(headerOffers=value)))
+        check(rows)
+        for key,replacement in [('phase','other'),('identity','Page identity'),('viewportWidth',320),
+                                ('fontLineHeight',10),('locationX',210),('locationY',30),
+                                ('locationHeight',40),('controls',[])]:
+            bad=copy.deepcopy(rows);bad[-1][key]=replacement
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'header offer'):
+                check(bad)
+        for key,replacement in [('y',13),('height',21),('width',900),('narration','Other')]:
+            bad=copy.deepcopy(rows);bad[-1]['controls'][0][key]=replacement
+            with self.subTest(control=key),self.assertRaisesRegex(RuntimeError,'header offer'):
+                check(bad)
+        with self.assertRaisesRegex(RuntimeError,'header offer'):
+            check(rows[:-1])
+
+    def test_unopened_home_requires_live_observer_and_no_implicit_domain_work(self):
+        value=dict(phase='unopened-home',samples=8,startupCatalogueDiscoveries=2,
+                   catalogueDiscoveriesDuringHome=0,providerEntriesDuringHome=0,openedDocuments=0,
+                   resourceContentLookupsInCallback=0,providerEntriesInCallback=0,
+                   sameFileAndResourceGeneration=True)
+        native_probe.require_unopened_home(dict(nativeWidgets=dict(unopenedHome=value)))
+        for key,replacement in [('phase','other'),('samples',0),('samples',True),
+                                ('startupCatalogueDiscoveries',0),('startupCatalogueDiscoveries',True),
+                                ('catalogueDiscoveriesDuringHome',1),('providerEntriesDuringHome',1),
+                                ('openedDocuments',1),('resourceContentLookupsInCallback',1),
+                                ('providerEntriesInCallback',1),('sameFileAndResourceGeneration',False)]:
+            with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'Unopened Home'):
+                native_probe.require_unopened_home(dict(nativeWidgets=dict(unopenedHome={**value,key:replacement})))
+        with self.assertRaisesRegex(RuntimeError,'Unopened Home'):
+            native_probe.require_unopened_home({})
+
     def test_fresh_captions_require_native_cycle_and_canonical_review(self):
         modes = ['AUTO', 'ON', 'OFF', 'AUTO']
         labels = dict(AUTO='Auto', ON='On', OFF='Off')

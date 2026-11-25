@@ -81,6 +81,10 @@ final class UiProbe {
   private final byte[] originalBytes;
   private final ClientSettings original;
   private final Path settingsFile;
+  private final java.nio.file.attribute.BasicFileAttributes homeFileAttributes;
+  private final java.util.UUID homeResourceGeneration;
+  private final long homePreparations = UiCostAudit.preparations();
+  private final long homeDiscoveries = UiCostAudit.discoveries();
   private ClientEditor<?> editor;
   private ClientEditor<?> profileOwner;
   private design.inherent.reform.minecraft.client.ClientGraphicHost profileHost;
@@ -102,6 +106,10 @@ final class UiProbe {
   private int nativeWidth, nativeHeight;
   private final JsonObject result = new JsonObject();
   private final JsonObject timings = new JsonObject();
+  private final com.google.gson.JsonArray headerOffers = new com.google.gson.JsonArray();
+  private final Set<String> measuredHeaderPhases = new java.util.HashSet<>();
+  private int[] headerBaseline;
+  private String headerIdentity;
   private final long openedAt = System.nanoTime();
   private long actionAt, searchAt, exportAt;
   private long profileDraws;
@@ -135,6 +143,7 @@ final class UiProbe {
 
   UiProbe() throws Exception {
     result.add("timingsMs", timings);
+    result.add("headerOffers", headerOffers);
     result.addProperty(
         "timingScope",
         "Frame-polled end-to-end latency at fixture30FPS; includes dispatch, rendering and filesystem work, not pure CPU time");
@@ -142,8 +151,12 @@ final class UiProbe {
     settingsFile = ClientRuntime.configuration().root().resolve("settings.json");
     originalBytes = Files.readAllBytes(settingsFile);
     original = ClientSettings.parse(originalBytes);
+    homeFileAttributes =
+        Files.readAttributes(settingsFile, java.nio.file.attribute.BasicFileAttributes.class);
+    homeResourceGeneration = PreviewProbeAccess.generation(PreviewProbeAccess.activePack());
     workflow = StylePreferences.open(parent);
     NativeUi.open(workflow.screen());
+    UiCostAudit.watch(workflow.screen(), "unopened-home");
   }
 
   JsonObject tick(Minecraft mc) throws Exception {
@@ -158,9 +171,39 @@ final class UiProbe {
       observeResultNavigation(root);
     switch (stage) {
       case HOME_ENTRY -> {
-        if (++mountTicks < 4) return null;
+        if (UiCostAudit.samples() < 8 || !NativeBindings.unobscured(mc)) return null;
         if (workflow.documents().stream().anyMatch(ClientEditingWorkflow.DocumentState::opened))
           throw new IllegalStateException("Home eagerly opened an appearance editor");
+        var home = UiCostAudit.finish();
+        home.addProperty("startupCatalogueDiscoveries", homeDiscoveries);
+        home.addProperty(
+            "catalogueDiscoveriesDuringHome", UiCostAudit.discoveries() - homeDiscoveries);
+        home.addProperty(
+            "providerEntriesDuringHome", UiCostAudit.preparations() - homePreparations);
+        home.addProperty(
+            "openedDocuments",
+            workflow.documents().stream()
+                .filter(ClientEditingWorkflow.DocumentState::opened)
+                .count());
+        var now =
+            Files.readAttributes(settingsFile, java.nio.file.attribute.BasicFileAttributes.class);
+        if (NativeUi.current() != root
+            || !(workflow.navigation().current().orElseThrow() instanceof ClientDestination.Home)
+            || homeDiscoveries < 1
+            || UiCostAudit.discoveries() != homeDiscoveries
+            || UiCostAudit.preparations() != homePreparations
+            || home.get("resourceContentLookupsInCallback").getAsLong() != 0
+            || home.get("providerEntriesInCallback").getAsLong() != 0
+            || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile))
+            || !homeFileAttributes.lastModifiedTime().equals(now.lastModifiedTime())
+            || !java.util.Objects.equals(homeFileAttributes.fileKey(), now.fileKey())
+            || !homeResourceGeneration.equals(
+                PreviewProbeAccess.generation(PreviewProbeAccess.activePack())))
+          throw new IllegalStateException(
+              "Home performed domain work or changed its saved source: " + home);
+        home.addProperty("sameFileAndResourceGeneration", true);
+        result.add("unopenedHome", home);
+        recordHeader(root, "home");
         NativeBindings.press(button(root, "Profiles"));
         pending =
             WorkflowReveal.view(
@@ -178,6 +221,7 @@ final class UiProbe {
       }
       case PROFILE_TOOLS -> {
         if (++mountTicks < 4) return null;
+        recordHeader(root, "profiles");
         if (profileOwner == null
             || workflow.editor(StyleSettingsStore.DEFINITION) != profileOwner
             || workflow.documents().stream()
@@ -618,6 +662,7 @@ final class UiProbe {
         stage = -1;
       }
       case -1 -> {
+        recordHeader(root, "appearance");
         if (!freshCaptions(root)) return null;
         if (++mountTicks < 4) return null;
         var names = List.of("Enabled", "Fresh Objects", "Models", "Artwork");
@@ -1130,6 +1175,7 @@ final class UiProbe {
             throw new IllegalStateException("Review did not select the actual Fresh Objects field");
           return null;
         }
+        recordHeader(root, "review");
         if (++mountTicks < 4) return null;
         captured = false;
         NativeWorld.screenshot(mc, "reform-review", () -> captured = true);
@@ -1269,6 +1315,7 @@ final class UiProbe {
             throw new IllegalStateException("Inspect result did not open its retained operation");
           return null;
         }
+        recordHeader(root, "operation");
         unchangedOperation();
         result.addProperty("effectNamedActionAndInspectionSeparated", true);
         result.addProperty("operationsUseOriginalRoot", NativeUi.current() == root);
@@ -1576,6 +1623,69 @@ final class UiProbe {
     var settings = ClientSettings.class.cast(inspected.candidate().orElseThrow().value());
     if (!settings.models().toString().equals(id))
       throw new IllegalStateException("Retained draft lost profile identity");
+  }
+
+  private void recordHeader(Screen root, String phase) {
+    if (measuredHeaderPhases.contains(phase)) return;
+    var controls =
+        children(root).stream()
+            .filter(AbstractWidget.class::isInstance)
+            .map(AbstractWidget.class::cast)
+            .filter(
+                widget -> {
+                  var text = NativeBindings.narration(widget);
+                  return text.startsWith("Location:") || text.startsWith("Current location:");
+                })
+            .toList();
+    if (controls.isEmpty() || NativeUi.current() != root)
+      throw new IllegalStateException("Actual header location controls missing at " + phase);
+    int x = controls.stream().mapToInt(AbstractWidget::getX).min().orElseThrow();
+    int y = controls.stream().mapToInt(AbstractWidget::getY).min().orElseThrow();
+    int height = controls.getFirst().getHeight();
+    var font = Minecraft.getInstance().font;
+    int[] offer = {
+      root.width, root.height, font.width("Lootr: Styled"), font.lineHeight, x, y, height
+    };
+    if (controls.stream().anyMatch(widget -> widget.getY() != y || widget.getHeight() != height)
+        || height <= 0
+        || y < 0
+        || y + height > root.height
+        || headerBaseline != null
+            && (!java.util.Arrays.equals(headerBaseline, offer)
+                || !headerIdentity.equals(root.getTitle().getString())))
+      throw new IllegalStateException(
+          "Ordinary navigation changed the stable header offer at "
+              + phase
+              + ": "
+              + java.util.Arrays.toString(offer));
+    if (headerBaseline == null) {
+      headerBaseline = offer;
+      headerIdentity = root.getTitle().getString();
+    }
+    var row = new JsonObject();
+    row.addProperty("phase", phase);
+    row.addProperty("identity", root.getTitle().getString());
+    row.addProperty("viewportWidth", root.width);
+    row.addProperty("viewportHeight", root.height);
+    row.addProperty("fontIdentityWidth", offer[2]);
+    row.addProperty("fontLineHeight", offer[3]);
+    row.addProperty("locationX", x);
+    row.addProperty("locationY", y);
+    row.addProperty("locationHeight", height);
+    var values = new com.google.gson.JsonArray();
+    for (var control : controls) {
+      var value = new JsonObject();
+      value.addProperty("caption", control.getMessage().getString());
+      value.addProperty("x", control.getX());
+      value.addProperty("y", control.getY());
+      value.addProperty("width", control.getWidth());
+      value.addProperty("height", control.getHeight());
+      value.addProperty("narration", NativeBindings.narration(control));
+      values.add(value);
+    }
+    row.add("controls", values);
+    headerOffers.add(row);
+    measuredHeaderPhases.add(phase);
   }
 
   private boolean freshCaptions(Screen root) throws Exception {
