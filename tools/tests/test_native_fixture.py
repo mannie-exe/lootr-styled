@@ -449,6 +449,8 @@ class NativeFixtureTest(unittest.TestCase):
         value=dict(phase='unopened-home',samples=8,startupCatalogueDiscoveries=2,
                    catalogueDiscoveriesDuringHome=0,providerEntriesDuringHome=0,openedDocuments=0,
                    resourceContentLookupsInCallback=0,providerEntriesInCallback=0,
+                   otherResourceContentLookupsInCallback=0,nativeMenuBackgroundLookupsInCallback=0,
+                   resourceLookupStacks=[],
                    sameFileAndResourceGeneration=True)
         native_probe.require_unopened_home(dict(nativeWidgets=dict(unopenedHome=value)))
         for key,replacement in [('phase','other'),('samples',0),('samples',True),
@@ -460,6 +462,16 @@ class NativeFixtureTest(unittest.TestCase):
                 native_probe.require_unopened_home(dict(nativeWidgets=dict(unopenedHome={**value,key:replacement})))
         with self.assertRaisesRegex(RuntimeError,'Unopened Home'):
             native_probe.require_unopened_home({})
+        background={**value,'resourceContentLookupsInCallback':1,'nativeMenuBackgroundLookupsInCallback':1,
+                    'resourceLookupStacks':[['net.minecraft.client.gui.screens.Screen.renderMenuBackgroundTexture(Screen.java:393)',
+                                             'net.minecraft.client.renderer.texture.SimpleTexture.load(SimpleTexture.java:30)']]}
+        native_probe.require_unopened_home(dict(nativeWidgets=dict(unopenedHome=background)))
+        for key,replacement in [('otherResourceContentLookupsInCallback',1),
+                                ('nativeMenuBackgroundLookupsInCallback',2),
+                                ('resourceContentLookupsInCallback',2),('resourceLookupStacks',[]),
+                                ('resourceLookupStacks',[['example.Screen.renderOther(Screen.java:1)']])]:
+            with self.subTest(background=key),self.assertRaisesRegex(RuntimeError,'Unopened Home'):
+                native_probe.require_unopened_home(dict(nativeWidgets=dict(unopenedHome={**background,key:replacement})))
 
     def test_fresh_captions_require_native_cycle_and_canonical_review(self):
         modes = ['AUTO', 'ON', 'OFF', 'AUTO']

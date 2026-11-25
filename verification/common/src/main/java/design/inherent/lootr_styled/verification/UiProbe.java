@@ -192,7 +192,8 @@ final class UiProbe {
             || homeDiscoveries < 1
             || UiCostAudit.discoveries() != homeDiscoveries
             || UiCostAudit.preparations() != homePreparations
-            || home.get("resourceContentLookupsInCallback").getAsLong() != 0
+            || home.get("otherResourceContentLookupsInCallback").getAsLong() != 0
+            || home.get("nativeMenuBackgroundLookupsInCallback").getAsLong() > 1
             || home.get("providerEntriesInCallback").getAsLong() != 0
             || !java.util.Arrays.equals(originalBytes, Files.readAllBytes(settingsFile))
             || !homeFileAttributes.lastModifiedTime().equals(now.lastModifiedTime())

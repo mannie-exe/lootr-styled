@@ -15,6 +15,7 @@ public final class UiCostAudit {
   private static String label;
   private static long started, resourceLookups, metadataReads, preparationsInPaint;
   private static int count;
+  private static long nativeBackgroundLookups;
   private static JsonArray lookupStacks;
 
   private UiCostAudit() {}
@@ -46,17 +47,27 @@ public final class UiCostAudit {
     resourceLookups = 0;
     preparationsInPaint = 0;
     metadataReads = 0;
+    nativeBackgroundLookups = 0;
     lookupStacks = new JsonArray();
   }
 
   /** Bounded causal evidence for first-Home lookups; these samples include observer overhead. */
   static void lookupObserved() {
-    if (Thread.currentThread() != ownerThread
-        || started == 0
-        || !"unopened-home".equals(label)
-        || lookupStacks.size() == 4) return;
-    var stack = new JsonArray();
+    if (Thread.currentThread() != ownerThread || started == 0 || !"unopened-home".equals(label))
+      return;
     var frames = Thread.currentThread().getStackTrace();
+    boolean background = false, texture = false;
+    for (var frame : frames) {
+      background |=
+          frame.getClassName().equals("net.minecraft.client.gui.screens.Screen")
+              && frame.getMethodName().equals("renderMenuBackgroundTexture");
+      texture |=
+          frame.getClassName().equals("net.minecraft.client.renderer.texture.SimpleTexture")
+              && frame.getMethodName().equals("load");
+    }
+    if (background && texture) nativeBackgroundLookups++;
+    if (lookupStacks.size() == 4) return;
+    var stack = new JsonArray();
     for (int i = 2; i < Math.min(frames.length, 22); i++) stack.add(frames[i].toString());
     lookupStacks.add(stack);
   }
@@ -98,6 +109,10 @@ public final class UiCostAudit {
     result.addProperty("resourceManagerCallsInCallback", resourceLookups);
     result.addProperty("packMetadataReadsInCallback", metadataReads);
     result.addProperty("resourceContentLookupsInCallback", resourceLookups - metadataReads);
+    result.addProperty("nativeMenuBackgroundLookupsInCallback", nativeBackgroundLookups);
+    result.addProperty(
+        "otherResourceContentLookupsInCallback",
+        resourceLookups - metadataReads - nativeBackgroundLookups);
     result.addProperty("providerEntriesInCallback", preparationsInPaint);
     result.add("resourceLookupStacks", lookupStacks);
     owner = null;

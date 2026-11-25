@@ -274,7 +274,7 @@ def require_header_offers(data):
 def require_unopened_home(data):
     value = data.get('nativeWidgets', {}).get('unopenedHome')
     zero_counts = ('catalogueDiscoveriesDuringHome', 'providerEntriesDuringHome', 'openedDocuments',
-                   'resourceContentLookupsInCallback', 'providerEntriesInCallback')
+                   'otherResourceContentLookupsInCallback', 'providerEntriesInCallback')
     if (not isinstance(value, dict) or value.get('phase') != 'unopened-home'
             or type(value.get('samples')) is not int or not 8 <= value['samples'] <= 256
             or type(value.get('startupCatalogueDiscoveries')) is not int
@@ -282,6 +282,17 @@ def require_unopened_home(data):
             or any(type(value.get(k)) is not int or value[k] != 0 for k in zero_counts)
             or value.get('sameFileAndResourceGeneration') is not True):
         raise RuntimeError('Unopened Home lacks actual idle-domain and unchanged-source evidence')
+    background = value.get('nativeMenuBackgroundLookupsInCallback')
+    content = value.get('resourceContentLookupsInCallback')
+    stacks = value.get('resourceLookupStacks')
+    if (type(background) is not int or background not in (0, 1)
+            or type(content) is not int or content != background
+            or not isinstance(stacks, list)
+            or (background == 1 and not any(isinstance(stack, list)
+                and any('net.minecraft.client.gui.screens.Screen.renderMenuBackgroundTexture(' in str(frame) for frame in stack)
+                and any('net.minecraft.client.renderer.texture.SimpleTexture.load(' in str(frame) for frame in stack)
+                for stack in stacks))):
+        raise RuntimeError('Unopened Home lacks bounded native-background lookup attribution')
 
 
 def require_fresh_captions(data):
