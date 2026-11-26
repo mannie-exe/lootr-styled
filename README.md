@@ -12,6 +12,8 @@ Install Lootr and [re:form 0.2.0](https://github.com/mannie-exe/reform/releases/
 
 ## Development status
 
+The 0.2.0 release candidate updates the settings interface for exact re:form 0.4.0. Appearance has searchable inline Models and Artwork lists with a shared draft preview. Profiles offers read-only try-ons before an explicit choice. Container, looted state, and Open controls update previews while retaining rotation. Existing settings, defaults, and profile IDs are preserved. Public delivery is being coordinated; the installation links above remain the published 0.1.0 instructions until that completes.
+
 Version 0.1.0 provides client-side model and artwork profiles with re:form settings. [Verification](docs/verification.md) records tested behavior and limits. Default includes the selected chest and barrel artwork. Layered trim, emission, and recoloring remain design work.
 
 Development targets re:form 0.4 for shared navigation, responsive settings, and isolated profile previews. The selected engineering inputs are pinned in [the dependency manifest](gradle/reform.json); they require an explicit staged repository. Development bindings provide inline Appearance choices, a shared complete-draft preview, and read-only profile auditions. Subject changes use the shared bounded update lane. Full UI qualification remains in progress. See [development](docs/development.md) for build instructions.
