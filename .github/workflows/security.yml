@@ -18,7 +18,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - uses: gradle/actions/setup-gradle@07d1f8453baaff67fb503883367f8b13e6158a54 # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       - name: Resolve core and test inventory
         run: ./gradlew --no-daemon -I tools/security.init.gradle :core:securityDependencies --write-locks
       - name: Scan core and test dependencies
