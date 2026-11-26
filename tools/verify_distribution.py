@@ -32,16 +32,18 @@ def retired_settings_inventory(names, label):
 
 
 def archive_inventory(archive, label):
-    names = archive.namelist()
+    members = archive.infolist()
+    names = [member.filename for member in members]
+    for member in members:
+        name = member.orig_filename
+        if (name != member.filename or name.startswith('/') or '\\' in name
+                or '..' in PurePosixPath(name).parts or PureWindowsPath(name).drive):
+            raise ValueError(f'{label}: unsafe archive path {name}')
     if len(names) != len(set(names)) or archive.testzip() is not None:
         raise ValueError(f'{label}: duplicate or corrupt archive members')
     for required in ('LICENSE', 'NOTICE'):
         if names.count(required) != 1:
             raise ValueError(f'{label}: missing or duplicate {required}')
-    for name in names:
-        if (name.startswith('/') or '\\' in name or '..' in PurePosixPath(name).parts
-                or PureWindowsPath(name).drive):
-            raise ValueError(f'{label}: unsafe archive path {name}')
     return names
 
 

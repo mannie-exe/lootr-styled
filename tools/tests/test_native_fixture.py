@@ -557,7 +557,8 @@ class NativeFixtureTest(unittest.TestCase):
         self.assertEqual('Preserve running client input', self.settings.read_text())
         (fixture/'.lootr-styled-probe-pid').write_text(str(os.getpid()))
         settings.write_text('Preserve live unavailable fixture')
-        with self.assertRaisesRegex(ValueError,'may still be running'):
+        refusal = 'may still be running' if os.name == 'posix' else 'Confirm the previous fixture JVM stopped'
+        with self.assertRaisesRegex(ValueError, refusal):
             native_probe.prepare('neoforge-1_21_1', 'native', unavailable_home=True)
         self.assertEqual('Preserve live unavailable fixture',settings.read_text())
         for scope in ('scene','graphics_only','preview_host','production_close','production_failure'):

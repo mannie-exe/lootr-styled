@@ -7,11 +7,12 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock
 import warnings
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from verify_distribution import ARTWORK_MANIFEST, distribution, verify
+from verify_distribution import ARTWORK_MANIFEST, archive_inventory, distribution, verify
 
 
 class DistributionTest(unittest.TestCase):
@@ -30,12 +31,29 @@ class DistributionTest(unittest.TestCase):
         path = Path(self.temp.name, 'candidate.jar')
         with zipfile.ZipFile(path, 'w') as archive:
             for name, value in entries.items():
-                archive.writestr(name, value)
+                # Preserve the intended raw ZIP name even on Windows.
+                member = zipfile.ZipInfo()
+                member.filename = member.orig_filename = name
+                archive.writestr(member, value)
         return path
 
     def refused(self, entries, reason):
         with self.assertRaisesRegex(ValueError, reason):
             verify(self.write(entries), '1.21.1', 'fabric', self.version)
+
+    def test_raw_archive_name_cannot_hide_behind_reader_normalization(self):
+        for raw, normalized in (('folder\\outside.txt', 'folder/outside.txt'),
+                                ('safe.txt\x00outside', 'safe.txt')):
+            with self.subTest(raw=raw):
+                member = zipfile.ZipInfo(raw)
+                member.filename = normalized
+                archive = Mock()
+                archive.infolist.return_value = [zipfile.ZipInfo('LICENSE'),
+                                                zipfile.ZipInfo('NOTICE'), member]
+                archive.namelist.return_value = ['LICENSE', 'NOTICE', normalized]
+                archive.testzip.return_value = None
+                with self.assertRaisesRegex(ValueError, 'unsafe archive path'):
+                    archive_inventory(archive, 'normalized reader')
 
     def test_actual_build_inventory(self):
         self.assertEqual(8, len(distribution(self.staged, self.version)))
