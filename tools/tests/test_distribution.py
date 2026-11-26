@@ -46,6 +46,13 @@ class DistributionTest(unittest.TestCase):
             'design/inherent/lootr_styled/ResourceId.class']
         self.refused(entries, 'foreign or probe class')
 
+    def test_installable_refuses_unsafe_archive_paths(self):
+        for name in ('../outside.txt', '/absolute.txt', 'folder\\outside.txt', 'C:/outside.txt'):
+            with self.subTest(name=name):
+                entries = dict(self.entries)
+                entries[name] = b'not a product resource'
+                self.refused(entries, 'unsafe archive path')
+
     def test_reform_is_required_without_bundling_library_classes(self):
         self.assertFalse(any(n.startswith('design/inherent/reform/') for n in self.entries))
         for version in (None, '0.1.0', '*'):
@@ -161,6 +168,55 @@ class DistributionTest(unittest.TestCase):
             shutil.copyfile(path, target / path.name)
         shutil.copyfile(self.source, target / 'unadmitted.jar')
         with self.assertRaisesRegex(ValueError, 'missing or unadmitted'):
+            distribution(target, self.version)
+
+    def source_fixture(self):
+        target = Path(self.temp.name, 'distribution')
+        target.mkdir()
+        for path in self.staged.glob('*.jar'):
+            shutil.copyfile(path, target / path.name)
+        sources = target / self.source.name.replace('.jar', '-sources.jar')
+        with zipfile.ZipFile(sources) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        return target, sources, entries
+
+    def test_sources_refuse_unsafe_archive_paths(self):
+        target, sources, original = self.source_fixture()
+        for name in ('../outside.txt', '/absolute.txt', 'folder\\outside.txt', 'C:/outside.txt'):
+            with self.subTest(name=name):
+                entries = dict(original)
+                entries[name] = b'not a source resource'
+                shutil.copyfile(self.write(entries), sources)
+                with self.assertRaisesRegex(ValueError, 'unsafe archive path'):
+                    distribution(target, self.version)
+
+    def test_sources_require_both_license_notices(self):
+        target, sources, original = self.source_fixture()
+        for name in ('LICENSE', 'NOTICE'):
+            with self.subTest(name=name):
+                entries = dict(original)
+                del entries[name]
+                shutil.copyfile(self.write(entries), sources)
+                with self.assertRaisesRegex(ValueError, 'missing or duplicate'):
+                    distribution(target, self.version)
+
+    def test_sources_refuse_foreign_code_and_compiled_classes(self):
+        target, sources, original = self.source_fixture()
+        for name in ('foreign/Donor.java', 'design/inherent/lootr_styled/Unexpected.class'):
+            with self.subTest(name=name):
+                entries = dict(original)
+                entries[name] = b'not admitted source code'
+                shutil.copyfile(self.write(entries), sources)
+                with self.assertRaisesRegex(ValueError, 'foreign or compiled source member'):
+                    distribution(target, self.version)
+
+    def test_sources_refuse_duplicate_members(self):
+        target, sources, entries = self.source_fixture()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            with zipfile.ZipFile(sources, 'a') as archive:
+                archive.writestr('NOTICE', entries['NOTICE'])
+        with self.assertRaisesRegex(ValueError, 'duplicate or corrupt'):
             distribution(target, self.version)
 
 

@@ -12,6 +12,8 @@ Verify client-only loading, native/default and resource-pack model inheritance, 
 
 Inspect both installable and source artifacts for donor files, pending artwork, foreign classes and accidental vanilla output overrides. Permission-pending previews remain local and separate from the base. Source license text does not clear artwork for publication. Do not copy another product's security exceptions without reviewing their exact applicability.
 
+The distribution verifier checks safe, unique archive paths and the presence of LICENSE and NOTICE in both artifact types. Source archives must contain the project's Java sources without foreign source namespaces, compiled classes or verification-only code. Mutation tests exercise these refusals against the actual built distributions.
+
 When artwork is included, carry its source credits, license links and modification notices with the assets and in the bundled [NOTICE](../NOTICE). Keep Apache-2.0 code terms distinct from artwork terms and record each donor's permission basis. [Development](development.md#artwork-handoffs) owns handoff checks.
 
 Publication requires explicit authorization. The build workflow checks all targets and records distribution hashes. Manual runs can retain review artifacts for three days; ordinary checks do not depend on artifact-storage quota. The security workflow checks its documented scope. Neither workflow publishes a release. Release delivery must verify the version, exact artifact set and hashes before creating a draft or public release.

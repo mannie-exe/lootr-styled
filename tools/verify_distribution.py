@@ -3,7 +3,7 @@
 import argparse
 import json
 import hashlib
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import struct
 import tomllib
 import zipfile
@@ -29,6 +29,20 @@ def retired_settings_inventory(names, label):
         if any(name == old + suffix or name.startswith(old + '$')
                for old in RETIRED_TYPES for suffix in ('.class', '.java')):
             raise ValueError(f'{label}: retired settings/UI type {name}')
+
+
+def archive_inventory(archive, label):
+    names = archive.namelist()
+    if len(names) != len(set(names)) or archive.testzip() is not None:
+        raise ValueError(f'{label}: duplicate or corrupt archive members')
+    for required in ('LICENSE', 'NOTICE'):
+        if names.count(required) != 1:
+            raise ValueError(f'{label}: missing or duplicate {required}')
+    for name in names:
+        if (name.startswith('/') or '\\' in name or '..' in PurePosixPath(name).parts
+                or PureWindowsPath(name).drive):
+            raise ValueError(f'{label}: unsafe archive path {name}')
+    return names
 
 
 def artwork_inventory(archive, label):
@@ -66,19 +80,14 @@ def artwork_inventory(archive, label):
 
 def verify(path, minecraft, loader, version):
     with zipfile.ZipFile(path) as archive:
-        names = archive.namelist()
-        if len(names) != len(set(names)) or archive.testzip() is not None:
-            raise ValueError(f'{path.name}: duplicate or corrupt archive members')
-        for required in ('LICENSE', 'NOTICE', 'design/inherent/lootr_styled/ResourceId.class'):
-            if names.count(required) != 1:
-                raise ValueError(f'{path.name}: missing or duplicate {required}')
+        names = archive_inventory(archive, path.name)
+        if names.count('design/inherent/lootr_styled/ResourceId.class') != 1:
+            raise ValueError(f'{path.name}: missing or duplicate ResourceId.class')
         artwork_inventory(archive, path.name)
         retired_settings_inventory(names, path.name)
         for name in names:
             if name.startswith('design/inherent/lootr_styled/verification/'):
                 raise ValueError(f'{path.name}: verification-only code {name}')
-            if name.startswith('/') or '\\' in name or '..' in Path(name).parts:
-                raise ValueError(f'{path.name}: unsafe archive path {name}')
             if name.startswith('assets/minecraft/'):
                 raise ValueError(f'{path.name}: unexpected vanilla resource override {name}')
             if name.endswith('.class'):
@@ -135,11 +144,16 @@ def distribution(root, version):
             verify(path, minecraft, loader, version)
             sources = root / f'{prefix}-sources.jar'
             with zipfile.ZipFile(sources) as archive:
-                retired_settings_inventory(archive.namelist(), sources.name)
-                if any(n.startswith('design/inherent/lootr_styled/verification/') for n in archive.namelist()):
+                names = archive_inventory(archive, sources.name)
+                retired_settings_inventory(names, sources.name)
+                if any(n.startswith('design/inherent/lootr_styled/verification/') for n in names):
                     raise ValueError(f'{sources.name}: verification-only sources')
-                if archive.testzip() is not None or 'design/inherent/lootr_styled/ResourceId.java' not in archive.namelist():
+                if 'design/inherent/lootr_styled/ResourceId.java' not in names:
                     raise ValueError(f'{sources.name}: missing or corrupt own sources')
+                for name in names:
+                    if name.endswith('.class') or (name.endswith('.java')
+                            and not name.startswith('design/inherent/lootr_styled/')):
+                        raise ValueError(f'{sources.name}: foreign or compiled source member {name}')
                 artwork_inventory(archive, sources.name)
             found.extend((path.name, sources.name))
     if sorted(p.name for p in root.glob('*.jar')) != sorted(found):
