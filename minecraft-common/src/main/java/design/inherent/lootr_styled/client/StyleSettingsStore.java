@@ -31,7 +31,7 @@ public final class StyleSettingsStore extends TextStore<ClientSettings> {
   public static final DocumentId PROFILES = DocumentId.parse("lootr_styled:profiles");
   public static final int MAXIMUM_BYTES = 16384;
   public static final JsonLimits LIMITS = new JsonLimits(MAXIMUM_BYTES, 16, 64, 512, 32, 512);
-  private static final ValueType<ResourceId> PROFILE =
+  static final ValueType<ResourceId> PROFILE =
       ValueTypes.reference(
           ValueType.of(
               Codec.STRING.comapFlatMap(StyleSettingsStore::profile, ResourceId::toString),

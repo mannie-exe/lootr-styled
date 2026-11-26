@@ -179,6 +179,9 @@ public final class StylePreferences {
             Component.literal("Defaults"),
             Component.literal("Load default appearance settings into this draft."))
         .withReferenceTitles(StyleSettingsStore.PROFILES, profileTitles)
+        .withSection(
+            new design.inherent.reform.presentation.FormTarget.Section("group:selection"),
+            StyleProfileViews::appearance)
         .withInformation(
             definition ->
                 Optional.of(

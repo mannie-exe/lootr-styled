@@ -10,13 +10,13 @@ import design.inherent.lootr_styled.resources.EmfSupport;
 import design.inherent.lootr_styled.resources.ResourceAccess;
 import design.inherent.lootr_styled.resources.ResourceInputs;
 import design.inherent.reform.definition.DocumentId;
-import design.inherent.reform.minecraft.client.ClientGraphicProvider;
+import design.inherent.reform.minecraft.client.ClientCapturedGraphicProvider;
 import design.inherent.reform.minecraft.client.ClientGraphicWork;
 import design.inherent.reform.owner.PolicyRefusal;
+import design.inherent.reform.presentation.graphics.CapturedGraphicRequest;
 import design.inherent.reform.presentation.graphics.GraphicCamera;
 import design.inherent.reform.presentation.graphics.GraphicLimits;
 import design.inherent.reform.presentation.graphics.GraphicMaterial;
-import design.inherent.reform.presentation.graphics.GraphicRequest;
 import design.inherent.reform.presentation.graphics.GraphicSceneData;
 import design.inherent.reform.presentation.graphics.GraphicScenePreparation;
 import design.inherent.reform.reference.ReferenceStamp;
@@ -35,7 +35,7 @@ import java.util.function.Function;
  * Domain stages only. The shared host owns READ capture, jobs, visibility, upload, and retirement.
  */
 final class StyleGraphicProvider
-    implements ClientGraphicProvider<ClientSettings, StyleGraphicSubject> {
+    implements ClientCapturedGraphicProvider<ClientSettings, StyleGraphicSubject> {
   private static final DocumentId ID = DocumentId.parse("lootr_styled:appearance_preview");
   private static final DocumentId RESOURCES = DocumentId.parse("lootr_styled:preview_resources");
   // Match the existing bounded resource JSON contract, including accepted long frame lists.
@@ -87,8 +87,8 @@ final class StyleGraphicProvider
         pack.isPresent() ? snapshot.toString() : "unavailable");
   }
 
-  public CompletionStage<GraphicScenePreparation> prepare(
-      GraphicRequest<ClientSettings, StyleGraphicSubject> request, ClientGraphicWork work) {
+  public CompletionStage<GraphicScenePreparation> prepareCaptured(
+      CapturedGraphicRequest<ClientSettings, StyleGraphicSubject> request, ClientGraphicWork work) {
     return work.onClient(() -> captureSource(request))
         .thenCompose(
             source ->
@@ -220,7 +220,8 @@ final class StyleGraphicProvider
                     }));
   }
 
-  private Source captureSource(GraphicRequest<ClientSettings, StyleGraphicSubject> request) {
+  private Source captureSource(
+      CapturedGraphicRequest<ClientSettings, StyleGraphicSubject> request) {
     StylePreferences.requireClient();
     if (request.input().candidate().definition() != StyleSettingsStore.DEFINITION)
       throw new PolicyRefusal(

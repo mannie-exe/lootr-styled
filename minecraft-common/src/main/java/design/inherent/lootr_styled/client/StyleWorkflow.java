@@ -126,7 +126,11 @@ final class StyleWorkflow implements AutoCloseable {
             List.of());
     workflow =
         ClientEditingWorkflow.open(
-            parent, List.of(form), layout, StyleWorkspace.presentation(form.route()));
+            parent,
+            List.of(form),
+            layout,
+            StyleWorkspace.presentation(
+                form.route(), () -> workflow.graphics(StyleWorkspace.PREVIEW_LIMITS, 1)));
   }
 
   private void requireSubmission(ClientEditor<?> editor) {

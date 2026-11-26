@@ -16,7 +16,12 @@ import org.junit.jupiter.api.Test;
 class StyleWorkspaceTest {
   @Test
   void homeTargetsStableCategoriesWithoutOpeningASettingsOwner() {
-    var presentation = StyleWorkspace.presentation(StyleSettingsStore.DEFINITION.id());
+    var presentation =
+        StyleWorkspace.presentation(
+            StyleSettingsStore.DEFINITION.id(),
+            () -> {
+              throw new AssertionError("Metadata admission opened graphics");
+            });
     var form =
         ClientForm.of(
             StyleSettingsStore.DEFINITION.id(),
@@ -55,50 +60,54 @@ class StyleWorkspaceTest {
         List.of(HeaderComposition.Slot.IDENTITY, HeaderComposition.Slot.LOCATION),
         presentation.header().rows().getFirst().slots());
     assertTrue(presentation.header().canvas().isEmpty());
-    var task = presentation.referenceTasks().get(new DestinationId(StyleWorkspace.PROFILES));
-    assertNotNull(task);
-    assertSame(StyleSettingsStore.DEFINITION, task.definition());
-    assertEquals(form.route(), task.route());
-    assertEquals(StyleSettingsStore.PROFILES, task.source());
-    assertEquals(
-        List.of(FieldPath.ROOT.field("models"), FieldPath.ROOT.field("artwork")),
-        task.selections().stream().map(selection -> selection.field()).toList());
-    assertEquals(
-        List.of("Use for Models", "Use for Artwork"),
-        task.selections().stream().map(selection -> selection.label().getString()).toList());
-    assertEquals(1, task.graphic().orElseThrow().maximumViews());
-    assertEquals(StyleWorkspace.PREVIEW_LIMITS, task.graphic().orElseThrow().aggregateLimits());
+    var view = presentation.views().get(new DestinationId(StyleWorkspace.PROFILES));
+    assertNotNull(view);
+    assertEquals(new DestinationId(StyleWorkspace.PROFILES), view.key().id());
+    assertTrue(presentation.referenceTasks().isEmpty());
+    assertEquals(FieldPath.ROOT.field("models"), StyleProfileViews.MODELS.field());
+    assertEquals(FieldPath.ROOT.field("artwork"), StyleProfileViews.ARTWORK.field());
     var missingProfiles = new ClientWorkflowLayout(List.of(layout.groups().getFirst()), List.of());
     assertFalse(presentation.validate(List.of(form), missingProfiles).valid());
   }
 
   @Test
-  void previewSubjectsKeepAppearanceIndependentOfPhysicalPose() {
-    var task =
-        StyleWorkspace.presentation(StyleSettingsStore.DEFINITION.id())
-            .referenceTasks()
-            .get(new DestinationId(StyleWorkspace.PROFILES));
-    var graphic = task.graphic().orElseThrow();
-    assertSame(StyleGraphicSubject.TYPE, graphic.subjects());
-    var subjects =
-        graphic.choices().stream()
-            .map(choice -> StyleGraphicSubject.class.cast(choice.subject()))
-            .toList();
-    assertEquals(12, subjects.size());
-    for (var container : StyleGraphicSubject.Container.values()) {
-      var states = subjects.stream().filter(subject -> subject.container() == container).toList();
-      assertEquals(4, states.size());
-      for (boolean looted : List.of(false, true)) {
-        var poses = states.stream().filter(subject -> subject.looted() == looted).toList();
-        assertEquals(2, poses.size());
-        if (container == StyleGraphicSubject.Container.BARREL) {
-          assertTrue(poses.stream().anyMatch(StyleGraphicSubject::open));
-          assertTrue(poses.stream().anyMatch(subject -> !subject.open()));
-        } else {
-          assertTrue(poses.stream().anyMatch(subject -> subject.lid() == 0));
-          assertTrue(poses.stream().anyMatch(subject -> subject.lid() == 1));
+  @SuppressWarnings("unchecked")
+  void previewSubjectControlsKeepAppearanceIndependentOfPhysicalPose() {
+    var controls = StyleProfileViews.subjectControls();
+    assertEquals(
+        List.of("container", "looted", "open"),
+        controls.stream().map(control -> control.key()).toList());
+    var container =
+        (design.inherent.reform.minecraft.client.ui.SubjectForms.Select<
+                StyleGraphicSubject, StyleGraphicSubject.Container>)
+            controls.get(0);
+    var looted =
+        (design.inherent.reform.minecraft.client.ui.SubjectForms.Toggle<StyleGraphicSubject>)
+            controls.get(1);
+    var open =
+        (design.inherent.reform.minecraft.client.ui.SubjectForms.Toggle<StyleGraphicSubject>)
+            controls.get(2);
+    assertEquals(3, container.visibleRows());
+    assertEquals(
+        java.util.Set.of(StyleGraphicSubject.Container.values()),
+        container.choices().stream()
+            .map(choice -> choice.value())
+            .collect(java.util.stream.Collectors.toSet()));
+    var initial = new StyleGraphicSubject(StyleGraphicSubject.Container.BARREL, false, false, 0);
+    var combinations = new java.util.HashSet<StyleGraphicSubject>();
+    for (var choice : container.choices())
+      for (boolean used : List.of(false, true))
+        for (boolean opened : List.of(false, true)) {
+          var value = container.lens().replace().apply(initial, choice.value());
+          value = looted.lens().replace().apply(value, used);
+          value = open.lens().replace().apply(value, opened);
+          assertEquals(choice.value(), value.container());
+          assertEquals(used, value.looted());
+          assertEquals(opened, value.opened());
+          combinations.add(value);
         }
-      }
-    }
+    assertEquals(12, combinations.size());
+    var partial = new StyleGraphicSubject(StyleGraphicSubject.Container.CHEST, false, false, 0.5f);
+    assertEquals(0.5f, looted.lens().replace().apply(partial, true).lid());
   }
 }
