@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGETS = ('fabric-1_21_1', 'neoforge-1_21_1', 'fabric-26_3', 'neoforge-26_3')
 PREVIEW_SUBJECTS = tuple((c, looted, opened) for c in ('CHEST', 'TRAPPED_CHEST', 'BARREL')
                          for looted in (False, True) for opened in ((False, True) if c == 'BARREL' else (False,)))
-EFFECT_CAPTURES = ('production-effects-failed', 'production-effects-retried',
+EFFECT_CAPTURES = ('semantic-appearance', 'semantic-audition',
+                   'production-effects-failed', 'production-effects-retried',
                    'production-effects-failed-technical', 'production-effects-failed-hidden',
                    'production-effects-retried-technical', 'production-effects-resources',
                    'production-effects-cancel-pending', 'production-effects-cancelled',
@@ -76,9 +77,9 @@ def require_stopped(fixture):
     raise ValueError(f'Fixture process {pid} may still be running; stop it before preparing {fixture}')
 
 
-def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False, production_locale=False, production_preparation=False, production_failure=False, unavailable_home=False):
-    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation, production_locale, production_preparation, production_failure, unavailable_home)) > 1:
-        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, --production-locale, --production-preparation, --production-failure, --unavailable-home, or --scene')
+def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected_private_sprites=None, reform_repository=None, gui_scale=2, graphics_only=False, preview_host=False, production_shutdown=False, production_viewport=False, production_close=False, production_effects=False, production_document=False, production_input=False, production_chooser=False, production_operation=False, production_locale=False, production_preparation=False, production_failure=False, unavailable_home=False, semantic_profiles=False):
+    if sum((graphics_only, preview_host, scene, production_shutdown, production_viewport, production_close, production_effects, production_document, production_input, production_chooser, production_operation, production_locale, production_preparation, production_failure, unavailable_home, semantic_profiles)) > 1:
+        raise ValueError('Choose one check: --graphics-only, --preview-host, --production-shutdown, --production-viewport, --production-close, --production-effects, --production-document, --production-input, --production-chooser, --production-operation, --production-locale, --production-preparation, --production-failure, --unavailable-home, --semantic-profiles, or --scene')
     if unavailable_home and (mode != 'native' or local_profile):
         raise ValueError('--unavailable-home requires native mode without a local profile')
     if production_failure and not local_profile:
@@ -214,6 +215,11 @@ def prepare(target, mode, fetch=False, scene=False, local_profile=None, expected
         input_marker.write_text('Actual invalid native input, valid sibling and real window reflow without persistence\n')
     else:
         input_marker.unlink(missing_ok=True)
+    semantic_marker = fixture / '.lootr-styled-semantic-profiles'
+    if semantic_profiles:
+        semantic_marker.write_text('Actual semantic product fields, auditions and native domain preview\n')
+    else:
+        semantic_marker.unlink(missing_ok=True)
     chooser_marker = fixture / '.lootr-styled-production-chooser'
     if production_chooser:
         chooser_marker.write_text('Actual reference search/inspection and window reflow without selection or persistence\n')
@@ -1054,6 +1060,7 @@ def main():
     parser.add_argument('--production-input', action='store_true', help='Check invalid native text and a valid sibling across actual window reflow')
     parser.add_argument('--production-locale', action='store_true', help='Check invalid native input across real language/font reload and restoration')
     parser.add_argument('--production-operation', action='store_true', help='Check running reload/disclosure through actual window reflow, then one real reload')
+    parser.add_argument('--semantic-profiles', action='store_true', help='Check semantic inline selection, read-only auditions, actual domain draws and retirement')
     parser.add_argument('--production-chooser', action='store_true', help='Check actual profile search/inspection across real window reflow without choosing')
     parser.add_argument('--production-failure', action='store_true', help='Check actual unsupported tint feedback and explicit healthy preview recovery with an owned local profile')
     parser.add_argument('--production-preparation', action='store_true', help='Check actual task entered-worker cancellation, native reload, hidden return, and late closure')
@@ -1067,7 +1074,7 @@ def main():
     parser.add_argument('--expected-private-sprites', type=int, help='Require an exact local-fixture private sprite count (0..128); default retains the existing minimum-six control')
     parser.add_argument('--reform-repository', type=Path, help='Staged Maven repository for the pinned unpublished re:form candidate')
     args = parser.parse_args()
-    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale, args.production_preparation, args.production_failure, args.unavailable_home)
+    fixture, product, command = prepare(args.target, args.mode, args.fetch, args.scene, args.local_profile, args.expected_private_sprites, args.reform_repository, args.gui_scale, args.graphics_only, args.preview_host, args.production_shutdown, args.production_viewport, args.production_close, args.production_effects, args.production_document, args.production_input, args.production_chooser, args.production_operation, args.production_locale, args.production_preparation, args.production_failure, args.unavailable_home, args.semantic_profiles)
     chooser_choice = None
     if args.production_chooser and args.local_profile:
         title = json.loads((args.local_profile / 'profile.json').read_text())['title']
@@ -1109,11 +1116,14 @@ def main():
             or ('productionEffects' in data) != args.production_effects
             or ('productionDocument' in data) != args.production_document
             or ('productionInput' in data) != args.production_input
+            or ('semanticProfiles' in data) != args.semantic_profiles
             or ('productionChooser' in data) != args.production_chooser
             or ('productionFailure' in data) != args.production_failure
             or ('productionOperation' in data) != args.production_operation
             or ('productionLocale' in data) != args.production_locale):
         raise RuntimeError(f'Client did not pass; inspect {fixture.relative_to(ROOT)}/launcher.log and report')
+    if args.semantic_profiles and data['semanticProfiles'].get('complete') is not True:
+        raise RuntimeError('Semantic profile fixture did not complete')
     require_runtime_artifacts(data, fixture)
     if data.get('nativeWidgetsComplete') is True:
         require_header_offers(data)
@@ -1183,7 +1193,7 @@ def main():
         require_preview_cleanup_modes(data)
         require_preview_review(data)
         require_preview_selection_states(data, fixture)
-    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'unavailable-home' if args.unavailable_home else 'production-failure' if args.production_failure else 'production-preparation' if args.production_preparation else 'production-locale' if args.production_locale else 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data.get('snapshots', [])), 'report': str(report.relative_to(ROOT))}))
+    print(json.dumps({'target': args.target, 'mode': args.mode, 'scope': 'semantic-profiles' if args.semantic_profiles else 'unavailable-home' if args.unavailable_home else 'production-failure' if args.production_failure else 'production-preparation' if args.production_preparation else 'production-locale' if args.production_locale else 'production-operation' if args.production_operation else 'production-chooser' if args.production_chooser else 'production-input' if args.production_input else 'production-document' if args.production_document else 'production-effects' if args.production_effects else 'production-close' if args.production_close else 'production-viewport' if args.production_viewport else 'production-shutdown' if args.production_shutdown else 'preview-host' if args.preview_host else 'graphics-only' if args.graphics_only else 'settings-and-resources', 'artifactSha256': digest(product), 'snapshots': len(data.get('snapshots', [])), 'report': str(report.relative_to(ROOT))}))
 
 
 if __name__ == '__main__':

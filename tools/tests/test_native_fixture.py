@@ -323,6 +323,17 @@ class NativeFixtureTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'Production operation'):
                 native_probe.require_production_operation({'productionOperation':{**value,'states':states}})
 
+    def test_semantic_profile_scope_is_exclusive_and_cleared(self):
+        marker = self.fixture / '.lootr-styled-semantic-profiles'
+        native_probe.prepare('neoforge-1_21_1', 'native', semantic_profiles=True)
+        self.assertTrue(marker.is_file())
+        for scope in ('scene', 'graphics_only', 'production_chooser', 'production_viewport'):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, 'Choose one check'):
+                native_probe.prepare('neoforge-1_21_1', 'native', semantic_profiles=True, **{scope: True})
+            self.assertTrue(marker.is_file())
+        native_probe.prepare('neoforge-1_21_1', 'native')
+        self.assertFalse(marker.exists())
+
     def test_production_chooser_scope_is_exclusive_and_cleared(self):
         marker = self.fixture / '.lootr-styled-production-chooser'
         native_probe.prepare('neoforge-1_21_1', 'native', production_chooser=True)

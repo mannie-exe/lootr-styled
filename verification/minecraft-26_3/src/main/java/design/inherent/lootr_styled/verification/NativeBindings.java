@@ -65,6 +65,12 @@ final class NativeBindings {
     return screen.keyPressed(new net.minecraft.client.input.KeyEvent(scan, key, 0));
   }
 
+  static boolean key(net.minecraft.client.gui.screens.Screen screen, String name) {
+    int scan = com.mojang.blaze3d.platform.InputConstants.getKey(name).getValue();
+    int key = org.lwjgl.sdl.SDLKeyboard.SDL_GetKeyFromScancode(scan, (short) 0, false);
+    return screen.keyPressed(new net.minecraft.client.input.KeyEvent(scan, key, 0));
+  }
+
   static boolean escape(net.minecraft.client.gui.screens.Screen screen) {
     int scan = com.mojang.blaze3d.platform.InputConstants.getKey("key.keyboard.escape").getValue();
     int key = org.lwjgl.sdl.SDLKeyboard.SDL_GetKeyFromScancode(scan, (short) 0, false);

@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
  */
 public final class NativeProbe {
   private static UiProbe ui;
+  private static SemanticProfilesProbe semanticProfiles;
   private static UnavailableHomeProbe unavailableHome;
   private static IsolatedGraphicProbe graphics;
   private static SharedGraphicHostProbe sharedHost;
@@ -65,6 +66,7 @@ public final class NativeProbe {
       if (productionDocument != null) progress += ":document=" + productionDocument.progress();
       if (productionInput != null) progress += ":input=" + productionInput.progress();
       if (productionChooser != null) progress += ":chooser=" + productionChooser.progress();
+      if (semanticProfiles != null) progress += ":semantic=" + semanticProfiles.progress();
       if (productionFailure != null) progress += ":failure=" + productionFailure.progress();
       if (productionOperation != null) progress += ":operation=" + productionOperation.progress();
       if (productionPreparation != null)
@@ -134,7 +136,11 @@ public final class NativeProbe {
       } else if (stage == 1 && reloaded) {
         snapshots.add(NativeBindings.capture(mc, mode));
         REPORT.add("snapshots", snapshots);
-        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-production-failure"))) {
+        if (Files.exists(mc.gameDirectory.toPath().resolve(".lootr-styled-semantic-profiles"))) {
+          semanticProfiles = new SemanticProfilesProbe(mc);
+          stage = 32;
+        } else if (Files.exists(
+            mc.gameDirectory.toPath().resolve(".lootr-styled-production-failure"))) {
           productionFailure = new ProductionFailureProbe(mc);
           stage = 30;
         } else if (Files.exists(
@@ -183,6 +189,12 @@ public final class NativeProbe {
           ui = new UiProbe();
           stage = 10;
         }
+      } else if (stage == 32) {
+        var observed = semanticProfiles.tick(mc);
+        if (observed == null) return;
+        REPORT.add("semanticProfiles", observed);
+        REPORT.addProperty("passed", true);
+        finish(mc, null);
       } else if (stage == 10) {
         var widgets = ui.tick(mc);
         if (widgets == null) return;
@@ -340,6 +352,7 @@ public final class NativeProbe {
         finish(mc, null);
       }
     } catch (Throwable error) {
+      if (semanticProfiles != null) REPORT.add("semanticProfiles", semanticProfiles.report());
       if (stage == 2) REPORT.add("scene", SceneProbe.snapshot());
       finish(mc, error);
     }
