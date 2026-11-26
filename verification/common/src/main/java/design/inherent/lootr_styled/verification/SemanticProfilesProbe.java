@@ -88,7 +88,9 @@ final class SemanticProfilesProbe {
         var expected =
             new ClientSettings(
                 original.enabled(), ClientSettings.VANILLA, original.artwork(), original.fresh());
-        if (!candidate().equals(expected) || !drawn("DRAFT", expected)) return null;
+        if (!candidate().equals(expected)
+            || !UiProbe.button(root, "Rotate left").active
+            || !drawn("DRAFT", expected)) return null;
         rotate("Rotate left", -15);
         next(17);
       }
@@ -148,7 +150,8 @@ final class SemanticProfilesProbe {
         var expected =
             new ClientSettings(
                 original.enabled(), ClientSettings.VANILLA, original.artwork(), original.fresh());
-        if (!drawn("AUDITION", expected)) return null;
+        if (!UiProbe.button(root, "Rotate right").active || !drawn("AUDITION", expected))
+          return null;
         rotate("Rotate right", 15);
         next(18);
       }
@@ -295,6 +298,17 @@ final class SemanticProfilesProbe {
   }
 
   private boolean drawn(String basis, ClientSettings expected) {
+    if (!focusPreview()) return false;
+    if (!SemanticProfileAudit.last(basis, expected)
+        || GraphicDrawAudit.state().rendered() <= drawBaseline
+        || host.retainedOutput().bytes() == 0) return false;
+    var graphic = GraphicDrawAudit.lastRendered().graphic().get();
+    if (graphic == null || graphic == lastGraphic.get()) return false;
+    lastGraphic = new java.lang.ref.WeakReference<>(graphic);
+    return true;
+  }
+
+  private boolean focusPreview() {
     var viewport =
         UiProbe.children(root).stream()
             .filter(AbstractWidget.class::isInstance)
@@ -316,12 +330,6 @@ final class SemanticProfilesProbe {
       panel.mouseScrolled(x, root.height / 2.0, 0, -4);
       return false;
     }
-    if (!SemanticProfileAudit.last(basis, expected)
-        || GraphicDrawAudit.state().rendered() <= drawBaseline
-        || host.retainedOutput().bytes() == 0) return false;
-    var graphic = GraphicDrawAudit.lastRendered().graphic().get();
-    if (graphic == null || graphic == lastGraphic.get()) return false;
-    lastGraphic = new java.lang.ref.WeakReference<>(graphic);
     return true;
   }
 
@@ -339,10 +347,17 @@ final class SemanticProfilesProbe {
             camera.yaw() + yaw, camera.pitch(), camera.zoom(), camera.panX(), camera.panY());
     rotatedGraphic = sample.graphic();
     drawBaseline = sample.sequence();
-    NativeBindings.press(UiProbe.button(root, label));
+    var control = UiProbe.button(root, label);
+    if (!control.active
+        || !UiProbe.focusControl(root, control)
+        || focusedLeaf() != control
+        || !NativeBindings.activateFocused(root))
+      throw new IllegalStateException("Current native camera control refused: " + label);
+    focusPreview();
   }
 
   private boolean cameraRedrawn() {
+    if (!focusPreview()) return false;
     var sample = GraphicDrawAudit.lastRendered();
     return sample.sequence() > drawBaseline
         && rotatedGraphic.get() != null
@@ -397,6 +412,16 @@ final class SemanticProfilesProbe {
     result.add("captures", captures);
     result.add("gestures", gestures);
     result.add("cameraChecks", cameraChecks);
+    if (expectedCamera != null) {
+      var sample = GraphicDrawAudit.lastRendered();
+      var diagnostic = new JsonObject();
+      diagnostic.addProperty("expected", expectedCamera.toString());
+      diagnostic.addProperty("lastDrawn", sample.camera().toString());
+      diagnostic.addProperty("drawBaseline", drawBaseline);
+      diagnostic.addProperty("lastDrawSequence", sample.sequence());
+      diagnostic.addProperty("sameGraphic", sample.graphic().get() == rotatedGraphic.get());
+      result.add("cameraObservation", diagnostic);
+    }
     if (host != null) {
       result.addProperty("retainedInputBytes", host.retainedInput().bytes());
       result.addProperty("retainedOutputBytes", host.retainedOutput().bytes());
