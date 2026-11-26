@@ -31,11 +31,17 @@ The pinned EMF 3.3.12/ETF 7.2.7/Fresh Objects 2.1.2 inputs and their hashes are 
 
 ## Development settings interface
 
-Development uses the engineering inputs in [the pin manifest](../gradle/reform.json). Current checks and retained targeted checks are listed separately; a newer pin does not refresh historical native evidence. The final local candidate is unpublished. Public dependency resolution and hosted delivery remain deliberately deferred.
+Development uses the engineering inputs in [the pin manifest](../gradle/reform.json). Current checks and retained targeted checks are listed separately; a newer pin does not refresh historical native evidence. The selected development candidate is unpublished. Public dependency resolution and hosted delivery remain coordinated release gates.
 
 The input pairs below name the Lootr: Styled and re:form engineering candidates, respectively: `31 / 96` means `0.2.0-reform-0.4-dev.31` with `0.4.0-dev.96`. Each row retains its actual inputs. Native checks run on macOS through the independent packaged consumer described in [development](development.md#native-client-fixtures).
 
-### Current packaged checks
+### Semantic integration checks
+
+The `0.2.0-reform-semantic-dev.2` candidate uses exact re:form `0.4.0-dev.140`. Its four-target build passes 883 Java tests and 92 tool tests. Actual initial client runs on all four targets verify the original Appearance fields, exact complete-draft Models selection and restoration, and separate read-only Models and Artwork auditions in Profiles. Each run observes four domain provider entries and real native draws. Edited rotation survives profile and audition-role replacement without another preparation for rotation alone. Home and close retire the graphic interest; all three tracked resource ledgers finish at zero, with saved settings and resource generation unchanged. All four clients exit normally.
+
+These checks do not establish all twelve subject states, compact-window behavior, optional renderer combinations, repeated boots, or final public readiness for the semantic candidate. Those scopes retain their actual earlier inputs below. The shared height and environment layout work remains in progress; short views use scrolling.
+
+### Earlier packaged checks
 
 | Check                                               | Inputs          | Targets                           | Observed result                                                                                                                                                                                                   |
 | --------------------------------------------------- | --------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
