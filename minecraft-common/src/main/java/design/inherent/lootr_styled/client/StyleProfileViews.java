@@ -167,7 +167,7 @@ final class StyleProfileViews {
                 "control",
                 browser,
                 UiBindings.local(expanded),
-                text("Edit " + caption + " ID"),
+                text(caption + " ID"),
                 new CompletionParts(
                     picker.suggestions(ReferenceSuggestions.Policy.STANDARD),
                     text("Profile ID suggestions"),
