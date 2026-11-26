@@ -6,6 +6,7 @@ import design.inherent.lootr_styled.client.*;
 import design.inherent.lootr_styled.profile.ClientSettings;
 import design.inherent.reform.minecraft.client.*;
 import design.inherent.reform.presentation.DestinationId;
+import design.inherent.reform.presentation.graphics.GraphicCamera;
 import design.inherent.reform.presentation.graphics.GraphicLimits;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +35,10 @@ final class SemanticProfilesProbe {
   private FrameCapture capture;
   private int stage, phaseTicks;
   private long drawBaseline;
+  private GraphicCamera expectedCamera;
+  private java.lang.ref.WeakReference<ClientMeshGraphic> rotatedGraphic =
+      new java.lang.ref.WeakReference<>(null);
+  private final JsonArray cameraChecks = new JsonArray();
   private java.lang.ref.WeakReference<ClientMeshGraphic> lastGraphic =
       new java.lang.ref.WeakReference<>(null);
 
@@ -84,8 +89,8 @@ final class SemanticProfilesProbe {
             new ClientSettings(
                 original.enabled(), ClientSettings.VANILLA, original.artwork(), original.fresh());
         if (!candidate().equals(expected) || !drawn("DRAFT", expected)) return null;
-        queries().getFirst().setValue("Default");
-        next(4);
+        rotate("Rotate left", -15);
+        next(17);
       }
       case 4 -> {
         if (chooseDown("Default")) next(5);
@@ -96,6 +101,7 @@ final class SemanticProfilesProbe {
       }
       case 6 -> {
         if (!candidate().equals(original) || !drawn("DRAFT", original)) return null;
+        requireCamera("Appearance replacement");
         capture = new FrameCapture(root);
         next(7);
       }
@@ -143,9 +149,8 @@ final class SemanticProfilesProbe {
             new ClientSettings(
                 original.enabled(), ClientSettings.VANILLA, original.artwork(), original.fresh());
         if (!drawn("AUDITION", expected)) return null;
-        drawBaseline = GraphicDrawAudit.state().rendered();
-        NativeBindings.press(UiProbe.button(root, "Try for Artwork"));
-        next(13);
+        rotate("Rotate right", 15);
+        next(18);
       }
       case 13 -> {
         if (!candidate().equals(original))
@@ -154,6 +159,7 @@ final class SemanticProfilesProbe {
             new ClientSettings(
                 original.enabled(), original.models(), ClientSettings.VANILLA, original.fresh());
         if (!drawn("AUDITION", expected)) return null;
+        requireCamera("Audition role replacement");
         capture = new FrameCapture(root);
         next(14);
       }
@@ -171,6 +177,23 @@ final class SemanticProfilesProbe {
               "Unexpected preparation count or live workflow after close");
         next(16);
         return report();
+      }
+      case 17 -> {
+        if (!cameraRedrawn()) return null;
+        if (SemanticProfileAudit.count() != 1)
+          throw new IllegalStateException("Appearance rotation prepared another scene");
+        requireCamera("Appearance rotation");
+        queries().getFirst().setValue("Default");
+        next(4);
+      }
+      case 18 -> {
+        if (!cameraRedrawn()) return null;
+        if (SemanticProfileAudit.count() != 3)
+          throw new IllegalStateException("Audition rotation prepared another scene");
+        requireCamera("Audition rotation");
+        drawBaseline = GraphicDrawAudit.state().rendered();
+        NativeBindings.press(UiProbe.button(root, "Try for Artwork"));
+        next(13);
       }
       default -> throw new IllegalStateException("Unknown semantic fixture phase");
     }
@@ -308,6 +331,39 @@ final class SemanticProfilesProbe {
         && host.nativeOwnership().bytes() == 0;
   }
 
+  private void rotate(String label, double yaw) {
+    var sample = GraphicDrawAudit.lastRendered();
+    var camera = sample.camera();
+    expectedCamera =
+        new GraphicCamera(
+            camera.yaw() + yaw, camera.pitch(), camera.zoom(), camera.panX(), camera.panY());
+    rotatedGraphic = sample.graphic();
+    drawBaseline = sample.sequence();
+    NativeBindings.press(UiProbe.button(root, label));
+  }
+
+  private boolean cameraRedrawn() {
+    var sample = GraphicDrawAudit.lastRendered();
+    return sample.sequence() > drawBaseline
+        && rotatedGraphic.get() != null
+        && sample.graphic().get() == rotatedGraphic.get()
+        && sample.camera().equals(expectedCamera);
+  }
+
+  private void requireCamera(String check) {
+    var actual = GraphicDrawAudit.lastRendered().camera();
+    if (!actual.equals(expectedCamera))
+      throw new IllegalStateException(check + " reset the edited camera: " + actual);
+    var row = new JsonObject();
+    row.addProperty("check", check);
+    row.addProperty("yaw", actual.yaw());
+    row.addProperty("pitch", actual.pitch());
+    row.addProperty("zoom", actual.zoom());
+    row.addProperty("panX", actual.panX());
+    row.addProperty("panY", actual.panY());
+    cameraChecks.add(row);
+  }
+
   private void navigate(ClientDestination target) {
     var attempt = workflow.navigation().open(target);
     pending =
@@ -340,6 +396,7 @@ final class SemanticProfilesProbe {
     result.add("capturedInputs", SemanticProfileAudit.report());
     result.add("captures", captures);
     result.add("gestures", gestures);
+    result.add("cameraChecks", cameraChecks);
     if (host != null) {
       result.addProperty("retainedInputBytes", host.retainedInput().bytes());
       result.addProperty("retainedOutputBytes", host.retainedOutput().bytes());
